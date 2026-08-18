@@ -17,13 +17,10 @@ import urllib.request
 print(f"Python: {sys.version.split()[0]}  平台: {sys.platform}")
 
 # ---------- 1. 依赖 ----------
-# 模块名 -> pip 包名
+# 模块名 -> pip 包名（已去 langchain，直接依赖 ollama SDK + chromadb）
 REQUIRED = {
-    "langchain_ollama": "langchain_ollama",
-    "langchain_chroma": "langchain_chroma",
-    "langchain_community": "langchain_community",
-    "langchain_text_splitters": "langchain_text_splitters",
-    "langchain_core": "langchain_core",
+    "ollama": "ollama",
+    "chromadb": "chromadb",
     "streamlit": "streamlit",
     "dotenv": "python-dotenv",
     "pypdf": "pypdf",
@@ -41,7 +38,7 @@ if missing:
     print("✗ 缺依赖：", ", ".join(missing))
     print("  修复：pip install -r requirements.txt")
 else:
-    print("✓ 依赖齐全（langchain / streamlit / pypdf / python-docx / sentence-transformers）")
+    print("✓ 依赖齐全（ollama / chromadb / streamlit / pypdf / python-docx / sentence-transformers）")
 
 # ---------- 2. Ollama 与模型 ----------
 OLLAMA_URL = "http://localhost:11434/api/tags"

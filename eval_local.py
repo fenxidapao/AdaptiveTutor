@@ -11,7 +11,7 @@ eval_local.py — 本地自实现 RAG 评估（W3 兜底方案）
     4. context_recall    上下文召回：标准答案里的事实是否都被检索到的上下文覆盖
 
 特点：
-  - 零额外依赖（不装 ragas / datasets / nest_asyncio），只复用 langchain_ollama
+  - 零额外依赖（不装 ragas / datasets / nest_asyncio），只复用 rag_core.ollama_chat
   - 四个指标 = 你自己的代码，自实现评估
   - 复用 rag_core.retrieve_and_rerank 与 build_rag_chain，保证『评估用的来源』=『线上用的来源』
   - 输出 eval_results.csv + 控制台汇总
@@ -30,15 +30,10 @@ from rag_core import (
     retrieve_and_rerank,
     load_and_chunk_documents,
     get_vector_store,
+    ollama_chat,
 )
-from langchain_ollama import ChatOllama
 
-# 裁判模型：温度设 0，逼它稳定输出可解析的 JSON
-_JUDGE = ChatOllama(
-    model=config.LLM_MODEL,
-    temperature=0.0,
-    base_url=config.OLLAMA_BASE_URL,
-)
+# 裁判模型：温度设 0，逼它稳定输出可解析的 JSON（复用 rag_core.ollama_chat，零额外依赖）
 
 EVAL_CSV = os.path.join(
     os.path.dirname(__file__), os.environ.get("EVAL_CSV_NAME", "eval_results.csv")
@@ -79,15 +74,13 @@ def _extract_json(text: str):
 
 def _judge_once(system: str, user: str, retries: int = 2):
     """让裁判模型回答一次，返回解析后的 dict；失败重试，最终仍失败返回 {}。"""
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
     for _ in range(retries + 1):
         try:
-            resp = _JUDGE.invoke(
-                [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ]
-            )
-            content = getattr(resp, "content", str(resp))
+            content = ollama_chat(messages, temperature=0.0)
             parsed = _extract_json(content)
             if parsed is not None:
                 return parsed

@@ -51,8 +51,8 @@ def check_reranker_cache():
 def check_deps():
     """关键依赖是否可导入。返回 (ok: bool, msg: str)。"""
     required = [
-        "langchain_ollama",
-        "langchain_chroma",
+        "ollama",
+        "chromadb",
         "streamlit",
         "sentence_transformers",
         "pypdf",

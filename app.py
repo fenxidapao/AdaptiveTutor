@@ -15,8 +15,9 @@ import os
 import json
 
 # reranker 权重（bge-reranker-v2-m3）加载需访问 HuggingFace。本机 huggingface.co 不可达会
-# 超时卡死（页面一直转）。必须在 import rag_core / langchain（会间接 import huggingface_hub）
-# 之前设置——否则 huggingface_hub 在导入时就把 HF_ENDPOINT 捕获为默认 huggingface.co。
+# 超时卡死（页面一直转）。故在 import 任何可能拉起 sentence_transformers / huggingface_hub 的
+# 模块之前设置——reranker.py 在首次调用时才 import sentence_transformers（间接 import huggingface_hub），
+# 一旦它捕获到默认 HF_ENDPOINT=huggingface.co 就会卡死。
 # 默认走镜像；若本机已缓存权重则强制离线，彻底不碰网络（权重已下载在 ~/.cache/huggingface）。
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 _rerank_cache = os.path.expanduser(
