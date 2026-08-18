@@ -66,7 +66,7 @@ streamlit run app.py
 # 方式一：双击 start.bat（已写好正确解释器路径）
 # 方式二：手动
 cd E:\WorkBuddy工作空间\2026-08-16-17-06-49\CourseRAG
-C:\Users\user\.workbuddy\binaries\python\envs\evalverify\Scripts\python.exe -m streamlit run app.py
+C:\Users\.workbuddy\binaries\python\envs\evalverify\Scripts\python.exe -m streamlit run app.py
 ```
 
 ⚠️ 不要用 `CourseRAG/rag_env`（仅 9 个包的空壳）或别的项目的 venv（缺 torchvision），否则 `ModuleNotFoundError`。
