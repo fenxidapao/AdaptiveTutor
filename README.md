@@ -3,9 +3,9 @@
 基于 **本地 Ollama** 的垂直领域 RAG 应用，面向「计算机/数学专业课、课本知识问答」场景。
 数据全程不出本机，不依赖任何云端 API。
 
-> 技术栈：自实现 RAG 核心（Ollama 嵌入/生成 + Chroma 向量库 + bge-reranker 精排）+ Streamlit
+> 技术栈：自实现 RAG 核心（Ollama 嵌入/生成 + Chroma 向量库 + **自实现 BM25 + RRF 混合检索** + bge-reranker 精排）+ Streamlit
 > 定位：个人项目（AI 应用开发方向），在已跑通的 RAG-KnowBot 基础上做工程化改造与垂直落地。
-> 注：已彻底去除 LangChain 全家桶，关键组件（切分 / 加载 / 嵌入 / 检索链）均为自实现，依赖仅剩 `ollama` + `chromadb` + `sentence-transformers`。
+> 注：已彻底去除 LangChain 全家桶，关键组件（切分 / 加载 / 嵌入 / 检索链 / 词面检索）均为自实现；BM25、RRF 融合仅用标准库实现，**零新依赖**，依赖仅剩 `ollama` + `chromadb` + `sentence-transformers`。
 
 ---
 
@@ -13,24 +13,31 @@
 
 - 📚 多格式课程资料接入（PDF / TXT / MD）
 - ✂️ 递归语义切分（带重叠窗口，避免切断上下文）
-- 🔍 **两段式检索（reranker 默认开）**：向量召回 top-50（双塔粗排） + bge-reranker 精排 top-5（单塔交互细排；难 query 正确块常排 30+，靠扩大候选池 + reranker 纠正向量召回失败，见「评估基线」）
-- 📌 **引用溯源（工程化）**：来源带相关性分数与原文偏移，可展开核对，也可直接喂评估
+- 🔍 **混合检索（向量 + 自实现 BM25 + RRF 融合，reranker 默认开）**：向量召回 top-50（双塔粗排）后，对同一批候选做 BM25 词面打分，再用倒数排名融合（RRF）互补向量与词面信号，最后可选 bge-reranker 精排 top-5（单塔交互细排；难 query 正确块常排 30+，靠扩大候选池 + reranker 纠正向量召回失败，见「评估基线」）。BM25 与 RRF 纯标准库实现，零新依赖。
+- 📌 **引用溯源（工程化）**：来源带相关性分数与原文偏移，可展开核对，也可直接喂评估；回答正文内联 `[n]` 上标（半角/全角均可），点击可跳转对应来源（P1-2）
 - 💬 本地流式问答界面（Streamlit）
 - 📊 **本地自实现 RAG 评估**：本机 Ollama 当裁判，四个核心指标测检索/回答质量，零额外依赖
+- 🪵 **查询日志（P1-3）**：每轮对话后追加 `.query_log.jsonl`，记录模式 / 来源 / 接地判定 / 引用标记，便于事后回溯检索质量
+- ➕ **增量索引 + 去重（P1-4）**：稳定 id（`md5(source::start_index)`）自动去重，上传仅增量 upsert 新文件；按 source 删除单文档，其余不受影响，不再全量重建
+- ✅ **核心算法单测（P2-1）**：零依赖 `test_core.py` 覆盖 BM25 排序 / RRF 融合去重 / 稳定 id 去重 / 接地判定 / 日志格式，脱离 chromadb/ollama/streamlit 亦可在任意干净 Python 环境实跑
 - 🔒 配置外置 `.env`，模型名/路径/调参不再写死代码
 
 ## 目录结构
 
 ```
 CourseRAG/
-├── config.py          # 所有参数集中从 .env 读取（配置外置）
-├── rag_core.py        # RAG 核心：加载切分 / 嵌入建库 / 检索+重排 / 拼链
-├── reranker.py        # bge-reranker 跨编码器重排（两段式检索的精排段；默认开——难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败）
-├── app.py             # Streamlit 演示界面（含来源展示）
-├── eval_local.py      # W3：本地自实现评估（Ollama 当裁判，4 指标，零额外依赖；取代已废弃的 eval.py）
+├── config.py          # 所有参数集中从 .env 读取（配置外置；含 HYBRID_ENABLED / BM25_TOP_K）
+├── rag_core.py        # RAG 核心：加载切分 / 嵌入建库 / 混合检索(hybrid_retrieve) + 重排 / 增量索引(add_documents/delete_by_source) / 拼链
+├── rag_search_utils.py# 零依赖纯算法（P2-1 抽出）：分词 / BM25 / RRF 融合 / 稳定 id，供 test_core 独立测试
+├── reranker.py        # bge-reranker 跨编码器重排（混合检索的精排段；默认开——难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败）
+├── query_log.py       # P1-3 查询日志：每轮落 .query_log.jsonl
+├── app.py             # Streamlit 演示界面（含来源展示与内联 [n] 引用跳转）
+├── test_core.py       # P2-1 核心算法单测（零依赖，可在任意干净 Python 环境实跑）
+├── eval_local.py      # 本地自实现评估（Ollama 当裁判，4 指标，零额外依赖；取代已废弃的 eval.py）
 ├── eval_data.py       # 评估小样本（question + reference 标准答案）
 ├── data/              # 课程资料（示例：数据结构、数据库系统）
 ├── chroma_db/         # 向量库持久化目录（自动生成，已 gitignore）
+├── .query_log.jsonl   # 查询日志（自动生成，已 gitignore）
 ├── .env.example       # 配置模板
 └── requirements.txt
 ```
@@ -54,7 +61,8 @@ ollama pull llama3.1:8b
 # 4. 运行界面（或双击 start.bat）
 streamlit run app.py
 # 浏览器打开 http://localhost:8501
-# 侧栏确认 data/ 下示例 md 存在 → 点「索引 / 更新」→ 问「什么是 ACID？」应带来源回答
+# 侧栏确认 data/ 下示例 md 存在 → 点「🔄 全量重建索引（data/ 全部）」→ 问「什么是 ACID？」应带来源回答
+# 检索模式：快速=纯向量 top-5（秒级）；精确=向量 top-50 + BM25 融合（+ bge-reranker 精排）top-5（救难 query）
 ```
 
 ## 一键启动
@@ -94,13 +102,17 @@ streamlit run app.py
 ## 架构（离线构建 / 在线问答）
 
 ```
-数据接入 → 切分(800/150) → 嵌入(nomic-embed-text) → Chroma 持久化
+数据接入 → 切分(500/80) → 嵌入(nomic-embed-text) → Chroma 持久化
                                                     ↓
-问题 → 嵌入 → 向量召回 top-10（双塔粗排）
+问题 → 嵌入 → 向量召回 top-50（双塔粗排）
+                  ↓
+          [自实现 BM25 词面打分（同批候选，标准库实现）]
+                  ↓
+          [RRF 倒数排名融合 → 向量 + 词面信号互补]
                   ↓
             [bge-reranker 精排 top-5]（单塔交互；现已默认开——难 query 正确块常排 30+，靠 RETRIEVE_K=50 + reranker 纠回）
                   ↓
-            拼 Prompt → llama3.1:8b 生成 → 回答 + 来源引用（带分数/偏移）
+            拼 Prompt（含 [n] 来源编号）→ llama3.1:8b 生成 → 回答（内联 [n] 可点跳源）+ 来源引用（带分数/偏移）
 ```
 
 ## 相对 RAG-KnowBot 的改造
@@ -109,7 +121,7 @@ streamlit run app.py
 |---|---|---|
 | 配置 | 硬编码在文件顶部 | 全部外置 `.env` |
 | 模块化 | 单文件 | `config` / `rag_core` / `reranker` 分离 |
-| 检索 | 单阶段向量召回 top-5 | 两段式：向量召回 top-10 + reranker 精排 top-5（可选） |
+| 检索 | 单阶段向量召回 top-5 | 混合检索：向量召回 top-50 + 自实现 BM25+RRF 融合（+ reranker 精排 top-5 可选） |
 | 引用 | 折叠面板贴片段 | 结构化：排名 + 相关性分数 + 原文偏移 |
 | 评估 | 无 | 本地自实现评估（Ollama 当裁判：faithfulness / answer_relevancy / context_precision / context_recall） |
 | 领域 | 通用 demo | 垂直：专业课/课本问答 |
@@ -207,8 +219,13 @@ python eval_local.py
 
 ## 路线图（进行中）
 
+- [x] **P1-1 混合检索**：自实现 BM25 + RRF 融合（向量 + 词面互补），零新依赖（config 新增 `HYBRID_ENABLED` / `BM25_TOP_K`）
+- [x] **P1-2 内联引用**：回答正文 `[n]` 上标（半角/全角可点跳源），链复用同一份 docs 消除重复检索与来源不一致
+- [x] **P1-3 查询日志**：每轮落 `.query_log.jsonl`（模式 / 来源 / 接地判定 / 引用标记）
+- [x] **P1-4 增量索引 + 去重**：稳定 id 自动去重，上传仅增量 upsert，按 source 删单文档（不再全量重建）
+- [x] **P2-1 核心算法单测**：零依赖 `test_core.py`，脱离 LLM 栈亦可实跑（7 用例全绿）
 - [x] 最小可跑闭环 + 配置外置 + 引用溯源
-- [x] 接入 bge-reranker 重排并实测（两段式检索；代码已验证可启用，难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败，现默认开）
+- [x] 接入 bge-reranker 重排并实测（混合检索；代码已验证可启用，难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败，现默认开）
 - [x] 引用溯源工程化（分数 + 偏移，可喂评估）
 - [x] 本地自实现 RAG 评估（小样本测检索/回答质量，本机 Ollama 当裁判，零额外依赖）
 - [x] 中文 prompt + 中文感知切分（W4：prompt 改为中文防幻觉指令；切分器加中文分隔符。指标未明显提升，但暴露了跨主题检索拉错文档的真问题）
@@ -216,5 +233,5 @@ python eval_local.py
 
 ## 说明
 
-- 删除 `data/` 中文件后会用剩余文档整体重建索引；生产环境建议改为「移入回收站 + 二次确认」。
-- reranker 已验证可启用：HF 镜像（hf-mirror.com）在本机可达，`bge-reranker-v2-m3` 权重已下载（约 2.2GB）。**默认 `RERANKER_ENABLED=true`**（难 query 正确块常排 30+，需 RETRIEVE_K=50 + reranker 纠回；33 样本整体增益≈0 但救难 query）。启动 app.py 须带 `HF_ENDPOINT=https://hf-mirror.com`（或离线），否则权重加载会去 huggingface.co 超时。
+- **索引管理（P1-4）**：侧栏「🔄 全量重建索引（data/ 全部）」走 `get_vector_store(chunks)` 整体重建；上传文件走增量 upsert（稳定 id 自动去重）；删除单文档只按 source 从索引移除该文档，**其余文档不受影响**，不再全量重建。生产环境建议删除前「移入回收站 + 二次确认」。
+- 混合检索默认开（`HYBRID_ENABLED=true`）：精确模式默认即为「向量 + BM25 融合」，即使 `RERANKER_ENABLED=false` 也非纯向量；reranker 已验证可启用：HF 镜像（hf-mirror.com）在本机可达，`bge-reranker-v2-m3` 权重已下载（约 2.2GB）。**默认 `RERANKER_ENABLED=true`**（难 query 正确块常排 30+，需 RETRIEVE_K=50 + reranker 纠回；33 样本整体增益≈0 但救难 query）。启动 app.py 须带 `HF_ENDPOINT=https://hf-mirror.com`（或离线），否则权重加载会去 huggingface.co 超时。
