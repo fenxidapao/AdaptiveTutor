@@ -1,0 +1,35 @@
+# ===== 依赖锁版本（基于已验证可用的 evalverify 环境，2026-08-18 锁定）=====
+# 风险说明：
+#  - langchain 全家桶必须版本一致，混装会触发 is_data_content_block 等符号冲突
+#    （langchain_ollama / _chroma / _community / _text_splitters / _core 须同线）。
+#  - torch / transformers 是 sentence-transformers 的传递依赖且体积大（各 GB 级）。
+#    当前机器轮子齐全、锁精确版零风险；若换机器 Python 版本与下列精确 wheel 不兼容
+#    导致 pip 失败，可把对应 == 放宽为 >= 下限再装。
+#  - 注：pypdf 现已装入 evalverify（6.16.1），PDF 接入开箱可用。
+
+# ---- langchain 全家桶（一致性关键，精确锁定）----
+langchain_core==1.5.5
+langchain_ollama==1.1.0
+langchain_text_splitters==1.1.2
+langchain_community==0.4.2
+langchain_chroma==1.1.0
+
+# ---- 应用直接依赖 ----
+streamlit==1.61.1
+python-dotenv==1.2.2
+pypdf==6.16.1   # PyPDFLoader 必需（PDF 后端）；已装入 evalverify，PDF 接入开箱可用
+python-docx==1.2.0   # .docx 课程资料支持（python-docx 提取文本层；旧版 .doc 需先转 .docx）
+
+# ---- reranker（可选，需一次性下载权重 ~2.2GB）----
+sentence-transformers==5.7.0
+# torch / transformers 为传递依赖且体积大：用「有上限的下限」而非精确版，
+# 提升换机器 pip 安装成功率（不同 Python 版本的精确轮子可能缺失）；
+# 上限锁大版本，避免跨大版本行为漂移导致 reranker 异常。
+torch>=2.13.0,<3
+transformers>=5.15.0,<6
+
+# ===== 评估（W3）：放弃 ragas——它与 langchain 0.3 全家桶不兼容（0.2.x 与 0.1.22 都会在 import 时
+# 拉取已移除的 langchain_community.chat_models.vertexai，且 pip 会把 0.1.22 自动升回 0.2.x）。
+# 改用 eval_local.py：本机 Ollama 当裁判，自己实现 faithfulness / answer_relevancy /
+# context_precision / context_recall 四个指标。零额外依赖，只复用 langchain_ollama。
+# 因此本项目评估不需要 datasets / nest_asyncio / ragas 任何额外包。
