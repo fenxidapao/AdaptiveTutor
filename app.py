@@ -238,8 +238,8 @@ if prompt := st.chat_input("问任何专业课问题..."):
             accurate = st.session_state.mode == "accurate"
             k = config.RETRIEVE_K if accurate else config.RERANKER_TOP_N
 
-            # ---- P0-3 分阶段进度 ----
-            with st.status("正在检索…", expanded=True) as status:
+            # ---- P0-3 分阶段进度（覆盖 检索+重排+生成，结束显式标记完成）----
+            with st.status("正在处理…", expanded=True) as status:
                 status.update(label="① 向量召回 top-%d …" % k)
                 docs = retrieve_vector(prompt, k=k)
                 if accurate and config.RERANKER_ENABLED:
@@ -249,30 +249,33 @@ if prompt := st.chat_input("问任何专业课问题..."):
                     docs = docs[: config.RERANKER_TOP_N]
                 status.update(label="③ 生成回答…", state="running")
 
-            # 引用溯源结构
-            citations = []
-            for rank, doc in enumerate(docs, 1):
-                source = Path(doc.metadata.get("source", "unknown")).name
-                content = doc.page_content.strip()
-                score = doc.metadata.get("rerank_score")
-                start = doc.metadata.get("start_index")
-                citations.append({
-                    "rank": rank,
-                    "source": source,
-                    "content": content,
-                    "score": score,
-                    "start_index": start,
-                })
+                # 引用溯源结构
+                citations = []
+                for rank, doc in enumerate(docs, 1):
+                    source = Path(doc.metadata.get("source", "unknown")).name
+                    content = doc.page_content.strip()
+                    score = doc.metadata.get("rerank_score")
+                    start = doc.metadata.get("start_index")
+                    citations.append({
+                        "rank": rank,
+                        "source": source,
+                        "content": content,
+                        "score": score,
+                        "start_index": start,
+                    })
 
-            # 构建带历史记忆的链并生成
-            rag_result = build_rag_chain(
-                custom_prompt=st.session_state.custom_prompt,
-                history=history_text,
-            )
-            chain = rag_result["chain"]
-            response = chain.invoke(prompt)
-            full_response = response
+                # 构建带历史记忆的链并生成
+                rag_result = build_rag_chain(
+                    custom_prompt=st.session_state.custom_prompt,
+                    history=history_text,
+                )
+                chain = rag_result["chain"]
+                response = chain.invoke(prompt)
+                full_response = response
+                # 显式标记完成，避免阶段标签「③ 生成回答…」残留为 running
+                status.update(label="✅ 回答完成", state="complete")
 
+            # 流式回显（在状态框外，避免与阶段进度混淆）
             for i in range(len(full_response)):
                 message_placeholder.markdown(full_response[: i + 1] + "▋")
             message_placeholder.markdown(full_response)
