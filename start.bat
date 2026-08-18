@@ -1,17 +1,52 @@
 @echo off
 REM ============================================================
-REM  CourseRAG 一键启动（本机自用）
-REM  唯一已验证可用的 Python 环境：evalverify venv
-REM  （含 torch/torchvision/langchain/sentence-transformers 全家桶）
-REM  若你自建了本地 venv，把下面 PY 改成你的 python.exe 路径即可。
+REM  CourseRAG launcher (portable)
+REM  Python detection order:
+REM   1. .\venv\Scripts\python.exe   (local venv you created)
+REM   2. %COURSERAG_PYTHON%          (env var pointing to any python.exe)
+REM   3. python on PATH              (fallback, must have deps)
+REM  Requires: Ollama running with nomic-embed-text + llama3.1:8b
+REM  No hardcoded usernames / paths -> works on any machine.
 REM ============================================================
 setlocal
-set "PY=C:\Users\user\.workbuddy\binaries\python\envs\evalverify\Scripts\python.exe"
 set "ROOT=%~dp0"
-cd /d "%ROOT%"
 
-echo [CourseRAG] 请确保 Ollama 已运行（终端执行 ollama serve），
-echo            且已拉取 nomic-embed-text 与 llama3.1:8b。
-echo [CourseRAG] 正在启动 Streamlit ...
-"%PY%" -m streamlit run app.py
+if exist "%ROOT%venv\Scripts\python.exe" (
+    set "PY=%ROOT%venv\Scripts\python.exe"
+    goto :check
+)
+if defined COURSERAG_PYTHON (
+    set "PY=%COURSERAG_PYTHON%"
+    goto :check
+)
+where python >nul 2>&1
+if not errorlevel 1 (
+    set "PY=python"
+    goto :check
+)
+
+echo [CourseRAG] ERROR: no Python interpreter found.
+echo   Option A: create a local venv
+echo     python -m venv venv
+echo     venv\Scripts\pip install -r requirements.txt
+echo   Option B: set env var to your python.exe
+echo     set COURSERAG_PYTHON=C:\path\to\python.exe
+goto :eof
+
+:check
+REM verify the chosen python actually has the required packages
+"%PY%" -c "import streamlit, ollama, chromadb" >nul 2>&1
+if errorlevel 1 (
+    echo [CourseRAG] ERROR: chosen Python lacks dependencies.
+    echo   Interpreter: %PY%
+    echo   Fix: %PY% -m pip install -r requirements.txt
+    echo   Or set COURSERAG_PYTHON to a venv that already has them.
+    goto :eof
+)
+
+echo [CourseRAG] Using Python: %PY%
+echo [CourseRAG] Make sure Ollama is running (ollama serve) with models pulled.
+echo [CourseRAG] Starting Streamlit on http://localhost:8501 ...
+cd /d "%ROOT%"
+"%PY%" -m streamlit run app.py --server.port 8501
 pause

@@ -3,8 +3,9 @@
 基于 **本地 Ollama** 的垂直领域 RAG 应用，面向「计算机/数学专业课、课本知识问答」场景。
 数据全程不出本机，不依赖任何云端 API。
 
-> 技术栈：LangChain + Chroma + Ollama + Streamlit
+> 技术栈：自实现 RAG 核心（Ollama 嵌入/生成 + Chroma 向量库 + bge-reranker 精排）+ Streamlit
 > 定位：个人项目（AI 应用开发方向），在已跑通的 RAG-KnowBot 基础上做工程化改造与垂直落地。
+> 注：已彻底去除 LangChain 全家桶，关键组件（切分 / 加载 / 嵌入 / 检索链）均为自实现，依赖仅剩 `ollama` + `chromadb` + `sentence-transformers`。
 
 ---
 
@@ -37,10 +38,9 @@ CourseRAG/
 ## 快速开始
 
 ```powershell
-# 1. 准备环境（可复用你已有的 rag_env，或新建）
-cd E:\WorkBuddy工作空间\2026-08-16-17-06-49\CourseRAG
-python -m venv rag_env
-.\rag_env\Scripts\Activate.ps1
+# 1. 准备环境（创建本地 venv，目录名统一用 venv）
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
 # 2. 配置
@@ -51,38 +51,45 @@ ollama serve
 ollama pull nomic-embed-text
 ollama pull llama3.1:8b
 
-# 4. 运行界面
+# 4. 运行界面（或双击 start.bat）
 streamlit run app.py
 # 浏览器打开 http://localhost:8501
 # 侧栏确认 data/ 下示例 md 存在 → 点「索引 / 更新」→ 问「什么是 ACID？」应带来源回答
 ```
 
-## 一键启动（本机自用，推荐）
+## 一键启动
 
-> 本项目**唯一已验证可用的 Python 环境**是 `evalverify` venv（含 torch/torchvision/langchain/sentence-transformers 全家桶）。
-> 仓库自带 `start.bat`，双击即用：
+仓库自带 `start.bat`，**双击即用**，会自动按以下顺序探测 Python 解释器：
+
+1. 项目内 `.\venv\Scripts\python.exe`（推荐，你自己建的本地 venv）
+2. 环境变量 `%COURSERAG_PYTHON%`（指向任意 `python.exe`）
+3. 系统 `PATH` 里的 `python`
 
 ```powershell
-# 方式一：双击 start.bat（已写好正确解释器路径）
-# 方式二：手动
-cd E:\WorkBuddy工作空间\2026-08-16-17-06-49\CourseRAG
-C:\Users\.workbuddy\binaries\python\envs\evalverify\Scripts\python.exe -m streamlit run app.py
+# 方式一：双击 start.bat
+# 方式二：手动（先激活你的 venv）
+.\venv\Scripts\Activate.ps1
+python -m streamlit run app.py
 ```
 
-⚠️ 不要用 `CourseRAG/rag_env`（仅 9 个包的空壳）或别的项目的 venv（缺 torchvision），否则 `ModuleNotFoundError`。
+> 首次使用请先 `python -m venv venv` + `pip install -r requirements.txt` 准备好环境，
+> 并确保 Ollama 已启动且拉取 `nomic-embed-text` 与 `llama3.1:8b`。
+> 脚本已去除所有硬编码路径与中文注释（GBK 编码兼容），在任意 Windows 机器上双击即可运行。
 
-### 干净部署（换机器 / 从头装）
+### 干净部署（换机器 / 给别人用 / 从头装）
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-pip install -r requirements.txt   # langchain 全家桶已精确锁定；torch/transformers 有上下限
+pip install -r requirements.txt
 ollama pull nomic-embed-text
 ollama pull llama3.1:8b
 streamlit run app.py
 ```
 
-`requirements.txt` 的版本锁是关键：langchain 全家桶必须同线，混装会触发 `is_data_content_block` 等符号冲突。
+依赖已精简为 `ollama` + `chromadb` + `sentence-transformers`（已彻底去除 langchain 全家桶），
+`requirements.txt` 显式锁定 `ollama==0.6.2` 与 `chromadb==1.5.9`，降低换机器安装失败的机率。
+注意：别人使用时仍需**自备 Ollama 与模型权重**（无法打包进仓库），这是本地 RAG 的固有前提。
 
 ## 架构（离线构建 / 在线问答）
 
@@ -112,15 +119,15 @@ streamlit run app.py
 
 > ⚠️ 关于 RAGAS：曾尝试用 RAGAS，但它 0.1.22 / 0.2.x 在 import 时会拉取
 > `langchain_community.chat_models.vertexai`，而 langchain_community 0.3.x 已移除该符号，
-> 无法与本项目 langchain 0.3 全家桶共存（pip 还会把 0.1.22 自动升回 0.2.x）。
+> 无法共存（pip 还会把 0.1.22 自动升回 0.2.x）。
 > 故**放弃 RAGAS**，改成本机 Ollama 当裁判，**自己实现**四个指标——零额外依赖，反而更贴合
-> "AI 应用开发·自己实现关键组件"的工程取舍说明。
+> "AI 应用开发·自己实现关键组件"的工程取舍说明。本项目已彻底去除 langchain，评估脚本仅依赖 Ollama。
 
 纯本地评估，**不碰 HuggingFace**：裁判 LLM 用本机 Ollama（temperature=0 逼稳定输出 JSON），
 embedding 用 nomic-embed-text。
 
 ```powershell
-# 评估脚本只复用 langchain_ollama，无需 ragas/datasets/nest_asyncio
+# 评估脚本只用本机 Ollama 当裁判，无需 ragas/datasets/nest_asyncio/langchain
 # 建议先确保 .env 里 RERANKER_ENABLED=false（纯向量召回基线）
 python eval_local.py
 # 控制台打印四项指标均值，逐题明细（回答/上下文/分数/裁判理由）保存到 eval_results.csv
