@@ -28,6 +28,16 @@ import re
 import hashlib
 from pathlib import Path
 
+# 纯检索算法（零依赖）抽到 rag_search_utils，便于独立单测（见 test_core.py）；
+# 这里重新导出，对外接口 / 内部调用（hybrid_retrieve、add_documents）均不变。
+from rag_search_utils import (
+    _tokenize,
+    _BM25,
+    _bm25_rank,
+    _rrf_fuse,
+    _stable_ids,
+)
+
 import ollama
 import chromadb
 
@@ -279,16 +289,6 @@ def chunk_file(path):
     return docs
 
 
-def _stable_ids(chunks):
-    """稳定 id = md5(source::start_index)。同一文件同一块 → 同一 id，upsert 天然去重。"""
-    return [
-        hashlib.md5(
-            f"{d.metadata['source']}::{d.metadata['start_index']}".encode("utf-8")
-        ).hexdigest()
-        for d in chunks
-    ]
-
-
 def add_documents(new_chunks):
     """
     P1-4 增量 upsert：只插入/覆盖给定块，不删除已有库。
@@ -341,88 +341,6 @@ def retrieve_vector(question, k=None):
 
 
 # ====================== 3.1 混合检索（P1-1：向量 + 自实现 BM25，RRF 融合） ======================
-def _tokenize(text: str):
-    """中英文混合分词，零新依赖：
-    - 连续拉丁/数字串（ACID、2NF、transaction）作为一个 token（转小写）
-    - 每个 CJK 汉字作为独立 unigram（无 jieba，但足以覆盖课程精确术语的词面对齐）
-    """
-    text = (text or "").lower()
-    tokens = re.findall(r"[a-z0-9]+", text)
-    tokens += re.findall(r"[一-鿿]", text)
-    return tokens
-
-
-class _BM25:
-    """Okapi BM25（自实现，无外部依赖）。在给定候选文档集合上打分。"""
-
-    def __init__(self, docs, k1=1.5, b=0.75):
-        self.k1 = k1
-        self.b = b
-        self.doc_tokens = [_tokenize(d.page_content) for d in docs]
-        self.n = len(self.doc_tokens)
-        self.doc_lens = [len(t) for t in self.doc_tokens]
-        self.avgdl = (sum(self.doc_lens) / self.n) if self.n else 0.0
-        self.df = {}
-        for toks in self.doc_tokens:
-            for t in set(toks):
-                self.df[t] = self.df.get(t, 0) + 1
-
-    def scores(self, query: str):
-        q_tokens = _tokenize(query)
-        if not q_tokens or self.n == 0:
-            return [0.0] * self.n
-        out = []
-        for i, toks in enumerate(self.doc_tokens):
-            dl = self.doc_lens[i]
-            freq = {}
-            for t in toks:
-                freq[t] = freq.get(t, 0) + 1
-            score = 0.0
-            for qt in set(q_tokens):
-                f = freq.get(qt, 0)
-                if f == 0 or qt not in self.df:
-                    continue
-                idf = math.log((self.n - self.df[qt] + 0.5) / (self.df[qt] + 0.5) + 1)
-                score += idf * (f * (self.k1 + 1)) / (
-                    f + self.k1 * (1 - self.b + self.b * dl / self.avgdl)
-                )
-            out.append(score)
-        return out
-
-
-def _bm25_rank(question, docs, top_n=None):
-    """对 docs（同一批向量候选）做 BM25 词面打分，返回按分数降序的 Document 列表。"""
-    if not docs:
-        return []
-    bm25 = _BM25(docs)
-    scores = bm25.scores(question)
-    ranked = sorted(range(len(docs)), key=lambda i: scores[i], reverse=True)
-    if top_n:
-        ranked = ranked[:top_n]
-    return [docs[i] for i in ranked]
-
-
-def _rrf_fuse(ranked_lists, top_n, rrf_k=60):
-    """倒数排名融合（Reciprocal Rank Fusion）。
-    ranked_lists: 多个已按相关性降序排列的 Document 列表（排名从 0 起）。
-    同一文档用 (source, start_index) 去重，融合分 = Σ 1/(rank + rrf_k)，降序取 top_n。
-    融合分写回 doc.metadata['hybrid_score']（供 UI 在 reranker 关闭时展示）。
-    """
-    fused = {}
-    for rl in ranked_lists:
-        for rank, doc in enumerate(rl):
-            key = (doc.metadata.get("source"), doc.metadata.get("start_index"))
-            entry = fused.get(key)
-            if entry is None:
-                entry = {"doc": doc, "score": 0.0}
-                fused[key] = entry
-            entry["score"] += 1.0 / (rank + rrf_k)
-    items = sorted(fused.values(), key=lambda x: x["score"], reverse=True)
-    if top_n:
-        items = items[:top_n]
-    for it in items:
-        it["doc"].metadata["hybrid_score"] = round(it["score"], 4)
-    return [it["doc"] for it in items]
 
 
 def hybrid_retrieve(question, k=config.RETRIEVE_K):
