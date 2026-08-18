@@ -32,6 +32,13 @@ RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")  # 多�
 RETRIEVE_K = int(os.getenv("RETRIEVE_K", "50"))       # 向量召回候选数（扩到 50：难 query 正确块常排 30+，池不够捞不到；配合 reranker 精排纠回）
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", "5"))  # 重排后保留、进 LLM 的条数
 
+# ---------- 混合检索（P1-1：向量 + 自实现 BM25，RRF 融合）----------
+# 课程资料大量精确术语（ACID / 2NF / 死锁 / 事务隔离级别），纯向量对词面匹配不如 BM25。
+# hybrid = 向量召回 top-K 候选 → BM25 在同一批候选上做词面打分 → RRF 倒数排名融合。
+# BM25 自实现（零新依赖，更贴「自实现核心组件」的工程取舍说明）；融合分数落 metadata['hybrid_score']。
+HYBRID_ENABLED = os.getenv("HYBRID_ENABLED", "true").lower() == "true"
+BM25_TOP_K = int(os.getenv("BM25_TOP_K", "50"))  # BM25 打分的候选池大小（复用向量 top-K，不必扫全库）
+
 # ---------- 路径 ----------
 DATA_DIR = os.getenv("DATA_DIR", "./data")
 PERSIST_DIRECTORY = os.getenv("PERSIST_DIRECTORY", "./chroma_db")

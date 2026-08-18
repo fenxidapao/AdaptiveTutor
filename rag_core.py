@@ -16,10 +16,15 @@ rag_core.py — RAG 核心（W1 三件套 + W2 重排增强 + 引用溯源封装
 
 对外接口保持稳定（app.py / eval_local.py 无需改动）：
   load_and_chunk_documents / get_vector_store / retrieve_vector /
-  retrieve_and_rerank / build_rag_chain（返回 {'chain','retrieve_and_rerank'}）/
-  ollama_chat（供 eval_local 当裁判复用）
+  retrieve_and_rerank（P1-1 起内部支持 hybrid 第一段）/ hybrid_retrieve（向量+BM25+RRF）/
+  build_rag_chain（返回 {'chain','retrieve_and_rerank'}）/ ollama_chat（供 eval_local 当裁判复用）
+  RagChain.invoke(question, docs=None)：docs 可不传（自行检索）或由调用方传入以复用同一份来源
+  P1-4 增量索引：chunk_file(path) / add_documents(chunks)（稳定 id 增量 upsert 去重）/
+  delete_by_source(source)（按 source 删单文档）。get_vector_store(chunks) 仍保留为全量重建入口。
 """
 import os
+import math
+import re
 import hashlib
 from pathlib import Path
 
@@ -259,6 +264,65 @@ def get_vector_store(chunks=None):
     return _vector_store
 
 
+# ====================== 2.1 增量索引 + 去重（P1-4） ======================
+def chunk_file(path):
+    """切分单个文件为 Document 列表（P1-4 增量索引用；metadata 同 load_and_chunk_documents）。"""
+    path = Path(path)
+    text = _load_text(path)
+    if not text or not text.strip():
+        return []
+    docs = []
+    for chunk, start in _split_with_index(text, config.CHUNK_SIZE, config.CHUNK_OVERLAP, _SEPARATORS):
+        docs.append(
+            Document(page_content=chunk, metadata={"source": str(path), "start_index": start})
+        )
+    return docs
+
+
+def _stable_ids(chunks):
+    """稳定 id = md5(source::start_index)。同一文件同一块 → 同一 id，upsert 天然去重。"""
+    return [
+        hashlib.md5(
+            f"{d.metadata['source']}::{d.metadata['start_index']}".encode("utf-8")
+        ).hexdigest()
+        for d in chunks
+    ]
+
+
+def add_documents(new_chunks):
+    """
+    P1-4 增量 upsert：只插入/覆盖给定块，不删除已有库。
+    稳定 id = md5(source::start_index)，因此重复上传同一文件 → 同 id 覆盖，不产生重复块。
+    返回实际 upsert 的块数。
+    """
+    if not new_chunks:
+        return 0
+    ef = get_embeddings()
+    client = _get_chroma_client()
+    col = client.get_or_create_collection(_COLLECTION_NAME, embedding_function=ef)
+    ids = _stable_ids(new_chunks)
+    col.upsert(
+        ids=ids,
+        documents=[d.page_content for d in new_chunks],
+        metadatas=[d.metadata for d in new_chunks],
+    )
+    global _vector_store
+    _vector_store = col
+    print(f"Incremental upsert: {len(new_chunks)} chunks (dedup by stable id).")
+    return len(new_chunks)
+
+
+def delete_by_source(source):
+    """
+    P1-4 按源文件删除（删除该 source 的全部块）。
+    source 用绝对路径字符串，须与切分时 metadata['source'] 完全一致。
+    只移除该文档，其余文档不受影响（对比旧的『删文件即全量重建』）。
+    """
+    col = get_vector_store()  # 确保集合已加载
+    col.delete(where={"source": str(source)})
+    print(f"Deleted chunks where source={source}")
+
+
 # ====================== 3. 检索 + 重排（两段式） ======================
 def retrieve_vector(question, k=None):
     """
@@ -276,22 +340,126 @@ def retrieve_vector(question, k=None):
     ]
 
 
+# ====================== 3.1 混合检索（P1-1：向量 + 自实现 BM25，RRF 融合） ======================
+def _tokenize(text: str):
+    """中英文混合分词，零新依赖：
+    - 连续拉丁/数字串（ACID、2NF、transaction）作为一个 token（转小写）
+    - 每个 CJK 汉字作为独立 unigram（无 jieba，但足以覆盖课程精确术语的词面对齐）
+    """
+    text = (text or "").lower()
+    tokens = re.findall(r"[a-z0-9]+", text)
+    tokens += re.findall(r"[一-鿿]", text)
+    return tokens
+
+
+class _BM25:
+    """Okapi BM25（自实现，无外部依赖）。在给定候选文档集合上打分。"""
+
+    def __init__(self, docs, k1=1.5, b=0.75):
+        self.k1 = k1
+        self.b = b
+        self.doc_tokens = [_tokenize(d.page_content) for d in docs]
+        self.n = len(self.doc_tokens)
+        self.doc_lens = [len(t) for t in self.doc_tokens]
+        self.avgdl = (sum(self.doc_lens) / self.n) if self.n else 0.0
+        self.df = {}
+        for toks in self.doc_tokens:
+            for t in set(toks):
+                self.df[t] = self.df.get(t, 0) + 1
+
+    def scores(self, query: str):
+        q_tokens = _tokenize(query)
+        if not q_tokens or self.n == 0:
+            return [0.0] * self.n
+        out = []
+        for i, toks in enumerate(self.doc_tokens):
+            dl = self.doc_lens[i]
+            freq = {}
+            for t in toks:
+                freq[t] = freq.get(t, 0) + 1
+            score = 0.0
+            for qt in set(q_tokens):
+                f = freq.get(qt, 0)
+                if f == 0 or qt not in self.df:
+                    continue
+                idf = math.log((self.n - self.df[qt] + 0.5) / (self.df[qt] + 0.5) + 1)
+                score += idf * (f * (self.k1 + 1)) / (
+                    f + self.k1 * (1 - self.b + self.b * dl / self.avgdl)
+                )
+            out.append(score)
+        return out
+
+
+def _bm25_rank(question, docs, top_n=None):
+    """对 docs（同一批向量候选）做 BM25 词面打分，返回按分数降序的 Document 列表。"""
+    if not docs:
+        return []
+    bm25 = _BM25(docs)
+    scores = bm25.scores(question)
+    ranked = sorted(range(len(docs)), key=lambda i: scores[i], reverse=True)
+    if top_n:
+        ranked = ranked[:top_n]
+    return [docs[i] for i in ranked]
+
+
+def _rrf_fuse(ranked_lists, top_n, rrf_k=60):
+    """倒数排名融合（Reciprocal Rank Fusion）。
+    ranked_lists: 多个已按相关性降序排列的 Document 列表（排名从 0 起）。
+    同一文档用 (source, start_index) 去重，融合分 = Σ 1/(rank + rrf_k)，降序取 top_n。
+    融合分写回 doc.metadata['hybrid_score']（供 UI 在 reranker 关闭时展示）。
+    """
+    fused = {}
+    for rl in ranked_lists:
+        for rank, doc in enumerate(rl):
+            key = (doc.metadata.get("source"), doc.metadata.get("start_index"))
+            entry = fused.get(key)
+            if entry is None:
+                entry = {"doc": doc, "score": 0.0}
+                fused[key] = entry
+            entry["score"] += 1.0 / (rank + rrf_k)
+    items = sorted(fused.values(), key=lambda x: x["score"], reverse=True)
+    if top_n:
+        items = items[:top_n]
+    for it in items:
+        it["doc"].metadata["hybrid_score"] = round(it["score"], 4)
+    return [it["doc"] for it in items]
+
+
+def hybrid_retrieve(question, k=config.RETRIEVE_K):
+    """向量召回 top-k 候选 → BM25 在同一批候选上词面打分 → RRF 融合取 top-N。
+    纯离线、零新依赖（BM25 自实现）。返回融合后 top-N（RERANKER_TOP_N）的 Document 列表。
+    """
+    vector_docs = retrieve_vector(question, k=k)  # 向量粗排候选池
+    if not vector_docs:
+        return []
+    bm25_docs = _bm25_rank(question, vector_docs, top_n=config.BM25_TOP_K)
+    return _rrf_fuse([vector_docs, bm25_docs], top_n=config.RERANKER_TOP_N)
+
+
 def retrieve_and_rerank(question, force_no_rerank=False):
     """
-    召回 RETRIEVE_K 条候选 → （可选）bge-reranker 精排 → 取 top N。
-    返回按相关性排序的 Document 列表，每个 doc.metadata 含 rerank_score（若启用）。
-    UI 用它做引用展示；RAG 链也用它拼 context——保证『看到的来源』就是『喂给模型的来源』。
-    force_no_rerank=True 时无视配置强制走纯向量（「快速模式」用）。
+    统一检索入口（UI 与 RAG 链共用，保证『看到的来源』=『喂给模型的来源』）：
+      - force_no_rerank=True：纯向量 top-N（「快速模式」/ 评估纯向量对照），不进 hybrid 也不进 reranker。
+      - 否则：
+          HYBRID_ENABLED=True  → 先做向量+BM25 的 RRF 融合得到 top-N 候选；
+                                若 RERANKER_ENABLED=True 再对候选做 bge-reranker 精排。
+          HYBRID_ENABLED=False → 原两段式（向量 top-K → reranker top-N）；reranker 关则纯向量 top-N。
+    返回按相关性排序的 Document 列表；reranker 开启时 metadata 含 rerank_score，否则含 hybrid_score。
     """
-    docs = retrieve_vector(question)
+    if force_no_rerank:
+        # 纯向量对照：直接取 top-N，保证 A/B 差值纯粹反映 reranker/hybrid 的贡献。
+        return retrieve_vector(question, k=config.RERANKER_TOP_N)
 
-    if config.RERANKER_ENABLED and not force_no_rerank:
-        docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
+    if config.HYBRID_ENABLED:
+        docs = hybrid_retrieve(question)  # 已融合出 top-N
+        if config.RERANKER_ENABLED:
+            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
     else:
-        # 基线对照：召回候选已按向量相似度从高到低排序，直接截取前 TOP_N 条，
-        # 保证 OFF 与 ON 喂给 LLM 的文档数一致（都是 RERANKER_TOP_N），
-        # 让 A/B 差值纯粹反映 reranker 的贡献，不被"上下文条数不同"污染。
-        docs = docs[: config.RERANKER_TOP_N]
+        docs = retrieve_vector(question, k=config.RETRIEVE_K)
+        if config.RERANKER_ENABLED:
+            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
+        else:
+            docs = docs[: config.RERANKER_TOP_N]
     return docs
 
 
@@ -300,20 +468,30 @@ SYSTEM_RULES = """你是一位严谨、准确的高校课程助教，专门解�
 请严格遵守以下规则：
 1. 只能依据下面提供的【上下文】作答，严禁使用上下文之外的知识，也不得凭记忆编造。
 2. 合理使用 Markdown（加粗、列表等）让回答清晰易读。
-3. 若【上下文】信息不足、前后矛盾，或包含玩笑/错误内容，请直接说明"根据提供的资料无法回答"，不要猜测。
+3. 仅当【上下文】确实未提供回答所需信息、或上下文内部相互矛盾时，才说明"根据提供的资料无法回答"；不要猜测。注意：即使上下文描述的是示例、虚构或假设性概念，只要其中已给出明确答案，就必须基于上下文如实作答，不得以此为由拒答。
 4. 回答语言必须与用户提问保持一致（用户用中文提问，就用中文回答）。
-5. 回答要紧扣问题，避免堆砌与问题无关的内容。"""
+5. 回答要紧扣问题，避免堆砌与问题无关的内容。
+6. 回答中每提及一条来自【上下文】的具体事实，必须紧跟来源标注 [n]（半角方括号，n 为下方『已知来源』中的编号，即上下文第 n 段）；同一句可标多个如 [1][2]。仅当某事实确实无法对应任何来源时才不标。严禁编造超出范围的序号（n 必须 ≤ 已知来源条数）。"""
 
 
-def _build_prompt(rules, history, context, question):
-    """拼装最终 prompt（与去 langchain 前 ChatPromptTemplate 的模板逐字一致）。"""
+def _build_prompt(rules, history, context, question, sources=None):
+    """拼装最终 prompt（与去 langchain 前 ChatPromptTemplate 的模板逐字一致）。
+    sources: 可选，已编号的『已知来源』列表（P1-2 内联引用用），与 context 段落顺序一一对应。
+    """
+    sources_block = ""
+    if sources:
+        sources_block = (
+            "\n\n【已知来源】（共 %d 条，回答中引用事实请用 [n] 标注对应序号；"
+            "n 即下方编号，也是上方上下文第 n 段）\n%s"
+            % (len(sources), "\n".join(sources))
+        )
     return f"""{rules}
 
 （以下是之前的对话，仅作上下文参考；回答仍须严格以【上下文】为准）
 {history}
 
 上下文：
-{context}
+{context}{sources_block}
 
 问题：
 {question}
@@ -328,9 +506,20 @@ class RagChain:
         self.custom_prompt = custom_prompt
         self.history = history
 
-    def invoke(self, question):
-        docs = retrieve_and_rerank(question)
+    def invoke(self, question, docs=None):
+        # docs 由调用方预计算时直接复用（UI 用同一份做引用，避免重复检索/来源不一致）；
+        # 不传则自行检索（eval_local 等场景），保持向后兼容。
+        if docs is None:
+            docs = retrieve_and_rerank(question)
         context = "\n\n".join(d.page_content for d in docs)
+
+        # P1-2 内联引用：把检索到的块按 1..N 编号，供 prompt 要求 LLM 用 [n] 标注来源。
+        # 编号顺序与 context 段落顺序一致，app.py 引用区与之一一对应。
+        sources = []
+        for i, d in enumerate(docs, 1):
+            name = Path(d.metadata.get("source", "unknown")).name
+            off = d.metadata.get("start_index")
+            sources.append(f"{i}. {name}（offset={off}）")
 
         if self.custom_prompt and self.custom_prompt.strip():
             rules = f"""{SYSTEM_RULES}
@@ -340,7 +529,7 @@ class RagChain:
         else:
             rules = SYSTEM_RULES
 
-        prompt = _build_prompt(rules, self.history, context, question)
+        prompt = _build_prompt(rules, self.history, context, question, sources=sources)
         return ollama_chat(
             [{"role": "user", "content": prompt}], temperature=config.LLM_TEMPERATURE
         )
