@@ -57,6 +57,33 @@ streamlit run app.py
 # 侧栏确认 data/ 下示例 md 存在 → 点「索引 / 更新」→ 问「什么是 ACID？」应带来源回答
 ```
 
+## 一键启动（本机自用，推荐）
+
+> 本项目**唯一已验证可用的 Python 环境**是 `evalverify` venv（含 torch/torchvision/langchain/sentence-transformers 全家桶）。
+> 仓库自带 `start.bat`，双击即用：
+
+```powershell
+# 方式一：双击 start.bat（已写好正确解释器路径）
+# 方式二：手动
+cd E:\WorkBuddy工作空间\2026-08-16-17-06-49\CourseRAG
+C:\Users\user\.workbuddy\binaries\python\envs\evalverify\Scripts\python.exe -m streamlit run app.py
+```
+
+⚠️ 不要用 `CourseRAG/rag_env`（仅 9 个包的空壳）或别的项目的 venv（缺 torchvision），否则 `ModuleNotFoundError`。
+
+### 干净部署（换机器 / 从头装）
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt   # langchain 全家桶已精确锁定；torch/transformers 有上下限
+ollama pull nomic-embed-text
+ollama pull llama3.1:8b
+streamlit run app.py
+```
+
+`requirements.txt` 的版本锁是关键：langchain 全家桶必须同线，混装会触发 `is_data_content_block` 等符号冲突。
+
 ## 架构（离线构建 / 在线问答）
 
 ```

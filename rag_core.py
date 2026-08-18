@@ -91,17 +91,27 @@ def get_vector_store(chunks=None):
 
 
 # ====================== 3. 检索 + 重排（两段式） ======================
-def retrieve_and_rerank(question):
+def retrieve_vector(question, k=None):
+    """
+    仅做向量召回（双塔粗排），返回 top-k 个 Document（已按相似度降序）。
+    单独暴露出来，供 app.py 分阶段显示进度（先召回、再重排），也供「快速模式」直出。
+    """
+    k = k or config.RETRIEVE_K
+    vector_store = get_vector_store()
+    retriever = vector_store.as_retriever(search_kwargs={"k": k})
+    return retriever.invoke(question)
+
+
+def retrieve_and_rerank(question, force_no_rerank=False):
     """
     召回 RETRIEVE_K 条候选 → （可选）bge-reranker 精排 → 取 top N。
     返回按相关性排序的 Document 列表，每个 doc.metadata 含 rerank_score（若启用）。
     UI 用它做引用展示；RAG 链也用它拼 context——保证『看到的来源』就是『喂给模型的来源』。
+    force_no_rerank=True 时无视配置强制走纯向量（「快速模式」用）。
     """
-    vector_store = get_vector_store()
-    retriever = vector_store.as_retriever(search_kwargs={"k": config.RETRIEVE_K})
-    docs = retriever.invoke(question)
+    docs = retrieve_vector(question)
 
-    if config.RERANKER_ENABLED:
+    if config.RERANKER_ENABLED and not force_no_rerank:
         docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
     else:
         # 基线对照：召回候选已按向量相似度从高到低排序，直接截取前 TOP_N 条，
@@ -112,10 +122,11 @@ def retrieve_and_rerank(question):
 
 
 # ====================== 4. 拼 RAG 链（含引用） ======================
-def build_rag_chain(custom_prompt=None):
+def build_rag_chain(custom_prompt=None, history=""):
     """
     返回 {'chain': 可 invoke 的链, 'retrieve_and_rerank': 检索+重排函数}
     retriever 不再单独暴露，统一走 retrieve_and_rerank，保证 UI 与链来源一致。
+    history: 最近若干轮对话文本（由 app.py 拼好传入），让助手有上下文记忆。
     """
     llm = ChatOllama(
         model=config.LLM_MODEL,
@@ -133,7 +144,7 @@ def build_rag_chain(custom_prompt=None):
 4. 回答语言必须与用户提问保持一致（用户用中文提问，就用中文回答）。
 5. 回答要紧扣问题，避免堆砌与问题无关的内容。"""
 
-    # 用户补充要求：追加在规则之后，再统一接 Context/Question/Answer 三段，避免重复拼接
+    # 用户补充要求：追加在规则之后，再统一接 History/Context/Question/Answer 段，避免重复拼接
     if custom_prompt and custom_prompt.strip():
         rules = f"""{SYSTEM_RULES}
 
@@ -143,6 +154,9 @@ def build_rag_chain(custom_prompt=None):
         rules = SYSTEM_RULES
 
     template = f"""{rules}
+
+（以下是之前的对话，仅作上下文参考；回答仍须严格以【上下文】为准）
+{{history}}
 
 上下文：
 {{context}}
@@ -162,7 +176,11 @@ def build_rag_chain(custom_prompt=None):
     retrieval = RunnableLambda(lambda q: retrieve_and_rerank(q))
 
     chain = (
-        {"context": retrieval | format_docs, "question": RunnablePassthrough()}
+        {
+            "context": retrieval | format_docs,
+            "question": RunnablePassthrough(),
+            "history": lambda _: history,  # 构建链时捕获，app.py 每次提问重建链并传入
+        }
         | prompt
         | llm
         | StrOutputParser()
