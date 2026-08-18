@@ -18,6 +18,10 @@ rag_env/
 # 本地对话历史（运行时生成，勿提交）
 .chat_history.json
 
+# 查询 / 接地日志（P1-3 运行时生成，勿提交）
+.query_log.jsonl
+.query_log.json
+
 # 旧版 / 中间态评估 CSV（仅保留 *_new.csv 两份真实证据）
 eval_results_off_multi*.csv
 eval_results_on_multi*.csv
