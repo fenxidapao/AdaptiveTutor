@@ -8,12 +8,19 @@ __pycache__/
 
 # 本地 venv（42MB 空壳，勿提交；统一用 evalverify）
 rag_env/
+venv/
 
 # 运行 / 诊断日志（勿提交）
 *.log
 
 # 工具链数据（WorkBuddy 内部，勿提交）
 .workbuddy/
+resume-output/
+
+# 内部复盘 / 交接文档（公开仓库不需要，保留在本地即可）
+CourseRAG-交接文档-*.md
+CourseRAG-对话总结-*.md
+eval_compare.md
 
 # 本地对话历史（运行时生成，勿提交）
 .chat_history.json

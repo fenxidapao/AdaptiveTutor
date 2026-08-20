@@ -1,5 +1,10 @@
 # CourseRAG · 专业课/课本问答助手
 
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.61-FF4B4B?logo=streamlit&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+
 基于 **本地 Ollama** 的垂直领域 RAG 应用，面向「计算机/数学专业课、课本知识问答」场景。
 数据全程不出本机，不依赖任何云端 API。
 
@@ -32,6 +37,12 @@ CourseRAG/
 ├── reranker.py        # bge-reranker 跨编码器重排（混合检索的精排段；默认开——难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败）
 ├── query_log.py       # P1-3 查询日志：每轮落 .query_log.jsonl
 ├── app.py             # Streamlit 演示界面（含来源展示与内联 [n] 引用跳转）
+├── main.py            # FastAPI 服务入口（部署层，与 app.py 共用同一套 rag_core）
+├── api_schemas.py     # FastAPI 请求/响应 Pydantic 模型（Swagger 文档自动生成）
+├── requirements-api.txt  # API 服务最小依赖（不含 streamlit / torch，供 Docker 镜像）
+├── Dockerfile         # 多阶段构建（python:3.11-slim）
+├── docker-compose.yml # 一键部署：Ollama + API 双服务
+├── .dockerignore      # 镜像排除项（data/、chroma_db/、.env 等）
 ├── test_core.py       # P2-1 核心算法单测（零依赖，可在任意干净 Python 环境实跑）
 ├── eval_local.py      # 本地自实现评估（Ollama 当裁判，4 指标，零额外依赖；取代已废弃的 eval.py）
 ├── eval_data.py       # 评估小样本（question + reference 标准答案）
@@ -99,7 +110,128 @@ streamlit run app.py
 `requirements.txt` 显式锁定 `ollama==0.6.2` 与 `chromadb==1.5.9`，降低换机器安装失败的机率。
 注意：别人使用时仍需**自备 Ollama 与模型权重**（无法打包进仓库），这是本地 RAG 的固有前提。
 
+## API 服务（FastAPI + Docker 部署）
+
+> 部署层封装（2026-08-20 新增）：把 `rag_core` 的「索引构建 / 检索 / 重排 / 生成」暴露为 RESTful 端点，
+> 与 Streamlit 界面**共用同一套核心模块**（`retrieve_and_rerank` / `build_rag_chain`），无重复逻辑，
+> 保证「界面看到的来源 = API 返回的来源」。交互式文档：启动后访问 `http://localhost:8000/docs`。
+
+### 端点一览
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/` | 服务元信息（模型 / 端点清单） |
+| GET | `/health` | 依赖 / Ollama / Reranker 权重自检（复用 `health.py`） |
+| POST | `/query` | 问答：检索 + 重排 + 生成，返回回答 + `[n]` 引用来源 + 耗时 |
+| POST | `/retrieve` | 仅检索 + 重排（不生成），供前端预检索 / 调试 / 评估 |
+| GET | `/documents` | 列出 `data/` 文档与各自块数 |
+| POST | `/documents` | 上传课程资料（multipart）→ 保存 + 增量索引（稳定 id 去重） |
+| DELETE | `/documents/{name}` | 删除文件 + 只从索引移除该 source 的块 |
+| POST | `/index/rebuild` | 全量重建索引（`data/` 全部） |
+| GET | `/index/stats` | 向量库块数 / 源文档数 |
+
+> **关于「模型 API 密钥」**：本项目走**本地 Ollama**（数据不出本机是核心卖点），
+> 没有云端 API 密钥。真正的运行时配置只有 `OLLAMA_BASE_URL`、模型名、RAG 调参与 `HF_ENDPOINT`
+> （见 `.env`）。若未来切云端模型，只需在 `config.py` 增加对应 key 并改 `rag_core` 的调用层。
+
+### 本地运行（与 Streamlit 同机）
+
+```powershell
+# 1. 装 API 依赖（与 requirements.txt 版本对齐；若已装过核心依赖则只需 fastapi 三项）
+pip install -r requirements-api.txt
+
+# 2. 启动（需 Ollama 已运行且模型已拉取，见「快速开始」）
+uvicorn main:app --host 0.0.0.0 --port 8000
+# 浏览器打开 http://localhost:8000/docs（Swagger UI）
+```
+
+### Docker 一键部署（推荐）
+
+```bash
+# 1. 构建并启动双服务（Ollama + API）
+docker compose up -d --build
+
+# 2. 首次拉模型（模型权重 ~5GB，持久化在 ollama_models 卷，重起不重拉）
+docker compose exec ollama ollama pull nomic-embed-text llama3.1:8b
+
+# 3. 验证
+curl http://localhost:8000/health
+# 打开 http://localhost:8000/docs
+```
+
+部署说明：
+- **镜像内 `RERANKER_ENABLED=false`**（默认）：镜像只装 API 最小依赖（`requirements-api.txt`），
+  不含 torch / sentence-transformers（各 GB 级，且 CPU 上单题 ~115s 不实用）。
+  需要 reranker 时用本地方式运行（`pip install -r requirements.txt` + `.env` 开 `RERANKER_ENABLED=true`），
+  或自行在 Dockerfile 追加 `RUN pip install sentence-transformers` 并挂载权重卷。
+- `./data`（课程资料）与 `./chroma_db`（向量库）通过卷挂载进容器，宿主机直接增删文件即可；
+  已索引的库在容器内**路径一致**（均为相对 `./data` / `./chroma_db`），无需重建。
+- API 启动时自动预热向量库（空库 + 有资料时自动重建），Ollama 未就绪不会阻塞服务启动，
+  `/health` 会明确报告缺什么。
+
+### 验证（curl 示例）
+
+```bash
+# 健康检查
+curl http://localhost:8000/health
+
+# 快速问答（纯向量 top-5，秒级）
+curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
+  -d '{"question":"什么是 ACID？","mode":"fast"}'
+
+# 精确问答（向量 + BM25 融合 + reranker 精排，救难 query；本地环境 reranker 默认开）
+curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
+  -d '{"question":"2NF 和 3NF 的区别是什么？","mode":"accurate"}'
+
+# 仅检索（不生成，返回来源列表）
+curl -X POST http://localhost:8000/retrieve -H "Content-Type: application/json" \
+  -d '{"question":"死锁的四个必要条件","mode":"accurate"}'
+
+# 上传课程资料（增量索引）
+curl -X POST http://localhost:8000/documents -F "file=@./data/我的笔记.md"
+
+# 列出文档 / 查看索引统计
+curl http://localhost:8000/documents
+curl http://localhost:8000/index/stats
+```
+
+`/query` 响应结构（`answer` 中的 `[n]` 对应 `citations` 的 `rank`，可直接渲染跳转）：
+
+```json
+{
+  "answer": "ACID 是事务的四个特性……[1][2]",
+  "mode": "fast",
+  "citations": [
+    {"rank": 1, "source": "数据库系统笔记.md", "content": "……", "score": 0.31, "start_index": 1024}
+  ],
+  "latency_ms": 1523,
+  "grounded": true
+}
+```
+
 ## 架构（离线构建 / 在线问答）
+
+```mermaid
+flowchart TB
+    subgraph 离线构建
+        A[课程资料<br/>PDF / TXT / MD / DOCX] --> B[递归语义切分<br/>500字符 + 80重叠]
+        B --> C[嵌入<br/>nomic-embed-text]
+        C --> D[(Chroma 向量库<br/>增量索引 + 稳定id去重)]
+    end
+
+    subgraph 在线问答
+        Q[用户问题] --> E[向量召回 top-50<br/>双塔粗排]
+        E --> F[BM25 词面打分<br/>同一批候选]
+        F --> G[RRF 倒数排名融合]
+        G --> H[bge-reranker 精排 top-5<br/>单塔交互]
+        H --> I[拼 Prompt<br/>含 [n] 来源编号]
+        I --> J[llama3.1:8b 生成<br/>内联 [n] 引用]
+        J --> K[回答 + 来源溯源<br/>分数 / 偏移]
+    end
+
+    D -.-> E
+    Q -->|快速模式<br/>纯向量 top-5| E
+```
 
 ```
 数据接入 → 切分(500/80) → 嵌入(nomic-embed-text) → Chroma 持久化
@@ -229,7 +361,7 @@ python eval_local.py
 - [x] 引用溯源工程化（分数 + 偏移，可喂评估）
 - [x] 本地自实现 RAG 评估（小样本测检索/回答质量，本机 Ollama 当裁判，零额外依赖）
 - [x] 中文 prompt + 中文感知切分（W4：prompt 改为中文防幻觉指令；切分器加中文分隔符。指标未明显提升，但暴露了跨主题检索拉错文档的真问题）
-- [ ] （可选）FastAPI 接口 + Docker
+- [ ] （可选）FastAPI 接口 + Docker ✅ 已完成（2026-08-20）：`main.py` / `api_schemas.py` / `Dockerfile` / `docker-compose.yml` / `requirements-api.txt`，见「API 服务」章节
 
 ## 说明
 

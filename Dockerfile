@@ -1,0 +1,36 @@
+# ===== Stage 1: 依赖安装 =====
+# 多阶段构建：Stage 1 只装 Python 依赖，Stage 2 拷贝 site-packages，
+# 最终镜像不含 pip 缓存 / 编译工具链，体积更小。
+FROM python:3.11-slim AS deps
+
+WORKDIR /app
+# 先只拷依赖清单，充分利用 Docker 层缓存（改代码不用重装依赖）
+COPY requirements-api.txt ./
+RUN pip install --no-cache-dir -r requirements-api.txt
+
+# ===== Stage 2: 运行镜像 =====
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    # 镜像内未装 torch/sentence-transformers，reranker 必须关（本地跑才开）
+    RERANKER_ENABLED=false \
+    HF_ENDPOINT=https://hf-mirror.com
+
+# 从 deps 阶段拷贝已装好的依赖（避免重复安装）
+COPY --from=deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+
+# 拷贝应用代码（.dockerignore 已排除 data/ chroma_db/ .env 等本地数据）
+COPY . .
+
+# 运行时数据目录（data/ 与 chroma_db/ 由 docker-compose 卷挂载覆盖）
+RUN mkdir -p data chroma_db
+
+EXPOSE 8000
+
+# 容器内健康检查：探活 /health，Ollama 未就绪时服务照常启动、由 /health 报告状态
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)" || exit 1
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -48,16 +48,20 @@ def check_reranker_cache():
     return False, "reranker 权重未缓存：首次启用会联网下载 ~2.2GB（app.py 已默认走镜像）"
 
 
-def check_deps():
-    """关键依赖是否可导入。返回 (ok: bool, msg: str)。"""
-    required = [
-        "ollama",
-        "chromadb",
-        "streamlit",
-        "sentence_transformers",
-        "pypdf",
-        "docx",
-    ]
+_DEFAULT_DEPS = [
+    "ollama",
+    "chromadb",
+    "streamlit",
+    "sentence_transformers",
+    "pypdf",
+    "docx",
+]
+
+
+def check_deps(required=None):
+    """关键依赖是否可导入。返回 (ok: bool, msg: str)。
+    required 可传入自定义依赖清单（如 API 服务只需核心栈，无需 streamlit/torch）。"""
+    required = required or _DEFAULT_DEPS
     missing = []
     for mod in required:
         try:
@@ -69,10 +73,10 @@ def check_deps():
     return True, "依赖齐全"
 
 
-def collect_status():
-    """汇总所有检查，返回 [(label, ok, msg), ...]，供 UI 渲染。"""
+def collect_status(deps=None):
+    """汇总所有检查，返回 [(label, ok, msg), ...]，供 UI / API 渲染。"""
     return [
-        ("依赖", *check_deps()),
+        ("依赖", *check_deps(deps)),
         ("Ollama", *check_ollama()),
         ("Reranker 权重", *check_reranker_cache()),
     ]
