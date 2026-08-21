@@ -126,14 +126,17 @@ with st.sidebar:
 
     # ---- P0-3 检索模式（P1-1：精确模式叠加 向量+BM25 混合检索）----
     st.subheader("⚙️ 检索模式")
+    # 文案跟随实际配置动态显示：reranker 未启用时如实标注"无精排"，避免误导用户（测试发现的问题）
+    _rerank_label = "+ bge-reranker 精排" if config.RERANKER_ENABLED else "（无 reranker）"
     mode = st.radio(
         "选择检索模式",
         ["fast", "accurate"],
         index=0 if st.session_state.mode == "fast" else 1,
-        format_func=lambda m: "快速（纯向量 ~19s）" if m == "fast" else "精确（向量+BM25+reranker）",
+        format_func=lambda m: "快速（纯向量 ~19s）" if m == "fast" else f"精确（向量 + BM25 {_rerank_label}）",
         help="快速：纯向量 top-5，秒级响应，适合大多数问题。"
-        "精确：向量召回 top-50 + 自实现 BM25 词面召回，RRF 融合后再经 bge-reranker 精排，"
-        "单题约 1~2 分钟，专治「ACID / 2NF / 死锁」等纯向量词面匹配弱的精确术语难 query。",
+        "精确：向量召回 top-50 + 自实现 BM25 词面召回，RRF 融合"
+        + ("后再经 bge-reranker 精排，" if config.RERANKER_ENABLED else "（当前未启用 reranker），")
+        + "专治「ACID / 2NF / 死锁」等纯向量词面匹配弱的精确术语难 query。",
     )
     st.session_state.mode = mode
     if mode == "accurate":
@@ -228,11 +231,14 @@ with st.sidebar:
     st.subheader("💬 对话")
     if st.button("🧹 清空对话", key="clear_btn"):
         st.session_state.messages = []
-        if HISTORY_FILE.exists():
-            try:
-                HISTORY_FILE.unlink()
-            except Exception:
-                pass
+        # 修复（测试发现）：改为写入空数组而非 unlink——Windows 下文件被占用时
+        # unlink 会静默失败（except: pass），导致下次 load_history 又把旧对话读回。
+        # 写空数组是幂等操作，无论文件是否存在/是否被占用都能保证清空。
+        try:
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump([], f)
+        except Exception:
+            pass
         st.rerun()
 
 # ==================== 主区域 ====================
