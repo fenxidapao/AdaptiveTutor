@@ -46,6 +46,8 @@ CourseRAG/
 ├── test_core.py       # P2-1 核心算法单测（零依赖，可在任意干净 Python 环境实跑）
 ├── eval_local.py      # 本地自实现评估（Ollama 当裁判，4 指标，零额外依赖；取代已废弃的 eval.py）
 ├── eval_data.py       # 评估小样本（question + reference 标准答案）
+├── run_ab.py          # 混合检索 A/B 断点续跑 runner（中断后重跑自动续，隔离 reranker 测 BM25 纯贡献）
+├── compare_hybrid.py  # 混合检索 vs 纯向量 A/B 对比（整体 + 区别类子集 + 逐题 Δ + 报告）
 ├── data/              # 课程资料（示例：数据结构、数据库系统）
 ├── chroma_db/         # 向量库持久化目录（自动生成，已 gitignore）
 ├── .query_log.jsonl   # 查询日志（自动生成，已 gitignore）
@@ -346,6 +348,27 @@ python eval_local.py
 - 注意：① 裁判为 8b 自身既生成又打分，faithfulness 绝对值偏保守、有自评价偏差，**看差值而非绝对值**；② precision 收益在题目间分布不均（多数题 Δprec=0，集中在少数「正确块原本排名靠后」的题，如 2NF/+1.0、虚拟内存/+0.604、立即寻址/+0.804），与「召回池内重排」机制一致；③ 代价：reranker 在 CPU 上跑 2.2GB 跨编码器，单题耗时约为 OFF 的 5 倍（~115s vs ~19s）。
 
 明细见 `eval_results_off_new.csv` / `eval_results_on_new.csv`，差值脚本 `compare.py`，结论 `eval_compare.md`。
+
+### 混合检索 vs 纯向量（59 样本，2026-08-21 实测）
+
+隔离 reranker（`RERANKER_ENABLED=false`）后，对比 **纯向量 top-5** 与 **向量 top-50 + 自实现 BM25 + RRF 融合 top-5**，用于量化 BM25 词面召回的纯贡献。
+
+| 指标 | 纯向量 | 混合 | 差值 |
+|---|---|---|---|
+| faithfulness | 0.635 | 0.648 | +0.013 |
+| answer_relevancy | 0.919 | 0.983 | +0.064 |
+| context_precision | 0.673 | 0.724 | +0.051 |
+| context_recall | 0.654 | 0.641 | -0.012 |
+
+区别类子集（17 题，含 区别/不同/比较/分别/差异/对比/区分/异同）：answer_relevancy **+0.094**（最亮眼）、context_precision +0.007、context_recall -0.036。
+
+**实测结论（诚实版，勿夸大）：**
+- 混合检索的收益集中在**排序层**：answer_relevancy +0.064、context_precision +0.051，精确术语 / 区别类 query 上相关性收益更明显（+0.094）——正确块在向量 rank 6~50 时，被 BM25 词面对齐顶回 top-5。
+- **context_recall 不升反降（-0.012）**：本实现 BM25 只在向量 top-50 候选池内做 RRF 重排、**不扩大候选集**（见 `rag_core.hybrid_retrieve`），召回集合未变；且被顶进的词面匹配块偶尔挤掉真正承载标准答案事实的块。**故 README 不声称「混合提升召回」**——召回增强需 BM25 全库独立召回通道，属后续可选方向。
+- 收益幅度远小于 reranker（对比上方 59 样本表：reranker 四项全正、recall +0.096）：混合检索是排序优化器，reranker 才是召回纠正器。
+- 8b 裁判噪声同前，看差值不看绝对值。
+
+明细见 `eval_results_vector.csv` / `eval_results_hybrid.csv`，runner（断点续跑）`run_ab.py`，对比脚本 `compare_hybrid.py`，结论 `eval_compare_hybrid.md`。
 
 > **扩展语料说明（已全量评测）**：`data/` 已扩至 **12 篇**（新增排序算法 / 图与最短路径 / 关系代数与 SQL / 函数依赖与范式 / OS 内存管理 / 计网 IP 与子网路由 / 组成原理指令系统与寻址），`eval_data.py` 扩至 **59 条**，`config.py` 已调 `CHUNK_SIZE=500 / CHUNK_OVERLAP=80 / RETRIEVE_K=50`（候选池扩到 50，让排 30+ 的难 query 正确块也能进池，reranker 才能纠回）。该扩展的 OFF/ON 全量对比**已于 2026-08-18 执行完毕**（见上方「59 样本评估基线」），**最终结论以 59 样本全量为准**；上方 33 样本表作为子集参考保留。重跑命令见交接文档第 4 节（ON 轮须带 `HF_ENDPOINT=https://hf-mirror.com`）。
 
