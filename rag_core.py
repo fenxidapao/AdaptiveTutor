@@ -246,6 +246,7 @@ def get_vector_store(chunks=None):
             metadatas=[d.metadata for d in chunks],
         )
         _vector_store = col
+        _invalidate_all_chunks()  # 全量重建后 BM25 通道缓存强制刷新
         print("Vector store created and saved.")
         return _vector_store
 
@@ -309,6 +310,7 @@ def add_documents(new_chunks):
     global _vector_store
     _vector_store = col
     print(f"Incremental upsert: {len(new_chunks)} chunks (dedup by stable id).")
+    _invalidate_all_chunks()
     return len(new_chunks)
 
 
@@ -320,6 +322,7 @@ def delete_by_source(source):
     """
     col = get_vector_store()  # 确保集合已加载
     col.delete(where={"source": str(source)})
+    _invalidate_all_chunks()
     print(f"Deleted chunks where source={source}")
 
 
@@ -340,17 +343,53 @@ def retrieve_vector(question, k=None):
     ]
 
 
-# ====================== 3.1 混合检索（P1-1：向量 + 自实现 BM25，RRF 融合） ======================
+# ====================== 3.1 混合检索（向量 + BM25 双通道，RRF 融合） ======================
+_all_chunks_cache = None
+_all_chunks_count = -1
+
+
+def _invalidate_all_chunks():
+    """增删文档后调用：强制下次查询重新拉取全库（BM25 通道同步最新语料）。"""
+    global _all_chunks_cache, _all_chunks_count
+    _all_chunks_cache = None
+    _all_chunks_count = -1
+
+
+def _get_all_chunks():
+    """从向量库拉取全部块（含 metadata），供 BM25 全库独立召回使用。
+
+    带缓存：collection.count() 变化时自动刷新（增删/重建索引后 count 必变），
+    避免每次查询都全库拉取。返回 List[Document]（page_content + metadata）。
+    """
+    global _all_chunks_cache, _all_chunks_count
+    col = get_vector_store()
+    cnt = col.count()
+    if _all_chunks_cache is None or cnt != _all_chunks_count:
+        data = col.get(include=["documents", "metadatas"])
+        _all_chunks_cache = [
+            Document(page_content=t, metadata=m if m is not None else {})
+            for t, m in zip(data["documents"], data["metadatas"])
+        ]
+        _all_chunks_count = cnt
+    return _all_chunks_cache
 
 
 def hybrid_retrieve(question, k=config.RETRIEVE_K):
-    """向量召回 top-k 候选 → BM25 在同一批候选上词面打分 → RRF 融合取 top-N。
-    纯离线、零新依赖（BM25 自实现）。返回融合后 top-N（RERANKER_TOP_N）的 Document 列表。
+    """真混合检索：两个独立召回通道，各自全库召回 top-K，RRF 融合取 top-N。
+
+    - 通道 A：向量召回（双塔粗排，语义匹配）—— Chroma 全库
+    - 通道 B：BM25 词面召回（精确术语匹配，如 ACID / 2NF / 死锁）—— 对全库打分
+    两路结果用倒数排名融合（RRF）互补，返回 top-N（RERANKER_TOP_N）。
+
+    相比 v1「向量 top-50 池内 BM25 重排」的根本区别：
+    旧版 BM25 只对已召回的 50 块重排，正确块若不在向量 top-50 就永远捞不到；
+    新版 BM25 对全库打分，正确块即使向量排名很低，只要词面匹配也能独立召回进池。
     """
-    vector_docs = retrieve_vector(question, k=k)  # 向量粗排候选池
+    vector_docs = retrieve_vector(question, k=k)  # 通道 A：向量全库 top-K
     if not vector_docs:
         return []
-    bm25_docs = _bm25_rank(question, vector_docs, top_n=config.BM25_TOP_K)
+    all_chunks = _get_all_chunks()
+    bm25_docs = _bm25_rank(question, all_chunks, top_n=config.BM25_TOP_K)  # 通道 B：BM25 全库 top-K
     return _rrf_fuse([vector_docs, bm25_docs], top_n=config.RERANKER_TOP_N)
 
 
@@ -385,6 +424,8 @@ def retrieve_and_rerank(question, force_no_rerank=False):
 SYSTEM_RULES = """你是一位严谨、准确的高校课程助教，专门解答专业课与课本问题。
 请严格遵守以下规则：
 1. 只能依据下面提供的【上下文】作答，严禁使用上下文之外的知识，也不得凭记忆编造。
+   重要：若【上下文】缺少回答所需的某些信息，请直接说明"根据提供的资料无法回答/无法完整回答（缺 XX）"，
+   绝不要用你自己的通用知识去补全答案——宁可少答，不可错答。
 2. 合理使用 Markdown（加粗、列表等）让回答清晰易读。
 3. 仅当【上下文】确实未提供回答所需信息、或上下文内部相互矛盾时，才说明"根据提供的资料无法回答"；不要猜测。注意：即使上下文描述的是示例、虚构或假设性概念，只要其中已给出明确答案，就必须基于上下文如实作答，不得以此为由拒答。
 4. 回答语言必须与用户提问保持一致（用户用中文提问，就用中文回答）。

@@ -1,0 +1,10 @@
+# ===== Docker 完整版额外依赖（reranker 精排）=====
+# 仅当构建镜像时 WITH_RERANKER=true 才会安装（见 Dockerfile）。
+# 体积说明：sentence-transformers + CPU 版 torch 约 +1.5~2GB 镜像体积，
+# 换取「精确模式 = 向量+BM25 融合 + bge-reranker 精排」的完整能力。
+#
+# torch 用 CPU 版（--index-url 指定），镜像内无 CUDA 运行时，避免拉 ~3GB 的 CUDA wheel：
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# 与 requirements.txt 版本策略一致：核心锁定，torch/transformers 用「有上限的下限」。
+sentence-transformers==5.7.0
+transformers>=5.15.0,<6

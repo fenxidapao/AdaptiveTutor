@@ -16,9 +16,9 @@
 
 ## 功能
 
-- 📚 多格式课程资料接入（PDF / TXT / MD）
+- 📚 多格式课程资料接入（PDF / TXT / MD / DOCX）
 - ✂️ 递归语义切分（带重叠窗口，避免切断上下文）
-- 🔍 **混合检索（向量 + 自实现 BM25 + RRF 融合，reranker 默认开）**：向量召回 top-50（双塔粗排）后，对同一批候选做 BM25 词面打分，再用倒数排名融合（RRF）互补向量与词面信号，最后可选 bge-reranker 精排 top-5（单塔交互细排；难 query 正确块常排 30+，靠扩大候选池 + reranker 纠正向量召回失败，见「评估基线」）。BM25 与 RRF 纯标准库实现，零新依赖。
+- 🔍 **真混合检索（向量全库 + BM25 全库双通道，RRF 融合，reranker 可选）**：向量召回（双塔粗排）与自实现 BM25 词面召回（精确术语如 ACID / 2NF）**各自对全库独立召回** top-50，再用倒数排名融合（RRF）互补两路信号，最后可选 bge-reranker 精排 top-5（单塔交互细排）。BM25 与 RRF 纯标准库实现，零新依赖；正确块即使向量排名靠后，只要词面匹配也能被 BM25 通道独立捞回（对比旧版"向量池内重排"的根本改进，见「评估基线·混合检索」）。
 - 📌 **引用溯源（工程化）**：来源带相关性分数与原文偏移，可展开核对，也可直接喂评估；回答正文内联 `[n]` 上标（半角/全角均可），点击可跳转对应来源（P1-2）
 - 💬 本地流式问答界面（Streamlit）
 - 📊 **本地自实现 RAG 评估**：本机 Ollama 当裁判，四个核心指标测检索/回答质量，零额外依赖
@@ -147,25 +147,30 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 # 浏览器打开 http://localhost:8000/docs（Swagger UI）
 ```
 
-### Docker 一键部署（推荐）
+### Docker 一键部署（双模式）
 
 ```bash
-# 1. 构建并启动双服务（Ollama + API）
+# 模式一 · slim（默认）：轻量，无 reranker，精确模式=向量+BM25 混合
 docker compose up -d --build
 
-# 2. 首次拉模型（模型权重 ~5GB，持久化在 ollama_models 卷，重起不重拉）
+# 模式二 · full（完整版）：含 bge-reranker 精排（镜像 +~2GB，首次需下载权重 ~2.2GB）
+docker compose --profile full up -d --build
+
+# 首次拉模型（无论哪种模式都要做一次；模型 ~5GB，持久化在 ollama_models 卷）
 docker compose exec ollama ollama pull nomic-embed-text llama3.1:8b
 
-# 3. 验证
-curl http://localhost:8000/health
-# 打开 http://localhost:8000/docs
+# 验证
+curl http://localhost:8000/health   # slim（8000）
+curl http://localhost:8001/health   # full（8001）
 ```
 
 部署说明：
-- **镜像内 `RERANKER_ENABLED=false`**（默认）：镜像只装 API 最小依赖（`requirements-api.txt`），
-  不含 torch / sentence-transformers（各 GB 级，且 CPU 上单题 ~115s 不实用）。
-  需要 reranker 时用本地方式运行（`pip install -r requirements.txt` + `.env` 开 `RERANKER_ENABLED=true`），
-  或自行在 Dockerfile 追加 `RUN pip install sentence-transformers` 并挂载权重卷。
+- **双模式通过 `Dockerfile` 的 `WITH_RERANKER` build-arg 控制**（`docker-compose.yml` 已透传）：
+  - `api`（默认 slim）：只装 API 最小依赖（`requirements-api.txt`），镜像小、启动快；
+    精确模式 = 向量 + BM25 混合（无精排）。
+  - `api-full`（`--profile full`）：追加安装 CPU 版 torch + `sentence-transformers`
+    （`requirements-rerank.txt`），`RERANKER_ENABLED=true`，精确模式 = 向量 + BM25 + bge-reranker 精排；
+    reranker 权重缓存挂 `huggingface_cache` 卷，宿主机已下载过权重则复用，免二次下载。
 - `./data`（课程资料）与 `./chroma_db`（向量库）通过卷挂载进容器，宿主机直接增删文件即可；
   已索引的库在容器内**路径一致**（均为相对 `./data` / `./chroma_db`），无需重建。
 - API 启动时自动预热向量库（空库 + 有资料时自动重建），Ollama 未就绪不会阻塞服务启动，
@@ -349,7 +354,12 @@ python eval_local.py
 
 明细见 `eval_results_off_new.csv` / `eval_results_on_new.csv`，差值脚本 `compare.py`，结论 `eval_compare.md`。
 
-### 混合检索 vs 纯向量（59 样本，2026-08-21 实测）
+### 混合检索 vs 纯向量（59 样本，2026-08-21 实测 · v1 池内重排版）
+
+> ⚠️ **版本说明**：本节数据测的是 **v1 混合检索**（BM25 只在向量 top-50 候选池内重排）。
+> 2026-08-21 已升级为 **v2 真混合检索**（BM25 对全库独立召回，双通道 RRF 融合），
+> 修复了本节结论中指出的「不扩大候选集」局限（见下方「实测结论」第 2 条）。
+> v2 的 A/B 重测待执行；本节保留为 v1 的行为基线。
 
 隔离 reranker（`RERANKER_ENABLED=false`）后，对比 **纯向量 top-5** 与 **向量 top-50 + 自实现 BM25 + RRF 融合 top-5**，用于量化 BM25 词面召回的纯贡献。
 
@@ -362,9 +372,10 @@ python eval_local.py
 
 区别类子集（17 题，含 区别/不同/比较/分别/差异/对比/区分/异同）：answer_relevancy **+0.094**（最亮眼）、context_precision +0.007、context_recall -0.036。
 
-**实测结论（诚实版，勿夸大）：**
+**实测结论（v1 诚实版，勿夸大）：**
 - 混合检索的收益集中在**排序层**：answer_relevancy +0.064、context_precision +0.051，精确术语 / 区别类 query 上相关性收益更明显（+0.094）——正确块在向量 rank 6~50 时，被 BM25 词面对齐顶回 top-5。
-- **context_recall 不升反降（-0.012）**：本实现 BM25 只在向量 top-50 候选池内做 RRF 重排、**不扩大候选集**（见 `rag_core.hybrid_retrieve`），召回集合未变；且被顶进的词面匹配块偶尔挤掉真正承载标准答案事实的块。**故 README 不声称「混合提升召回」**——召回增强需 BM25 全库独立召回通道，属后续可选方向。
+- **context_recall 不升反降（-0.012）**：v1 的 BM25 只在向量 top-50 候选池内做 RRF 重排、**不扩大候选集**，召回集合未变；且被顶进的词面匹配块偶尔挤掉真正承载标准答案事实的块。
+- **v2 修复路径**：BM25 改为对**全库**独立召回（`rag_core.hybrid_retrieve` 双通道），正确块即使向量排名靠后，只要词面匹配也能被 BM25 通道捞回——预期 context_recall 由负转平/正，待 A/B 重测验证。
 - 收益幅度远小于 reranker（对比上方 59 样本表：reranker 四项全正、recall +0.096）：混合检索是排序优化器，reranker 才是召回纠正器。
 - 8b 裁判噪声同前，看差值不看绝对值。
 

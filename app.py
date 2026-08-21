@@ -147,7 +147,7 @@ with st.sidebar:
 
     # ---- 上传课程资料 ----
     st.subheader("上传课程资料")
-    uploaded_files = st.file_uploader("PDF / TXT / MD", type=["pdf", "txt", "md"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("PDF / TXT / MD / DOCX", type=["pdf", "txt", "md", "docx"], accept_multiple_files=True)
     if uploaded_files:
         data_dir = Path(config.DATA_DIR)
         data_dir.mkdir(exist_ok=True)

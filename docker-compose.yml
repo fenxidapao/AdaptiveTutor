@@ -1,9 +1,16 @@
 # ============================================================
 # CourseRAG 一键部署：Ollama（推理/嵌入）+ API 服务（FastAPI）
 # 用法：
+#   # 默认 slim：轻量（无 reranker，精确模式=向量+BM25 混合），端口 8000
 #   docker compose up -d --build
-#   docker compose exec ollama ollama pull nomic-embed-text llama3.1:8b   # 首次拉模型
-#   curl http://localhost:8000/health
+#
+#   # 完整版（含 bge-reranker 精排，镜像 +~2GB，首次需下载权重 ~2.2GB），端口 8001
+#   docker compose --profile full up -d --build
+#
+#   首次拉模型（无论哪种模式都要做一次）：
+#   docker compose exec ollama ollama pull nomic-embed-text llama3.1:8b
+#   验证：curl http://localhost:8000/health  （slim）
+#        curl http://localhost:8001/health  （full）
 # ============================================================
 services:
   ollama:
@@ -21,8 +28,13 @@ services:
       retries: 5
       start_period: 10s
 
+  # ===== 默认 slim（无 reranker）：镜像小、启动快 =====
+  # 精确模式 = 向量+BM25 混合（无 bge 精排）；需要精排请用 --profile full
   api:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_RERANKER: "false"
     container_name: coursrag-api
     depends_on:
       ollama:
@@ -32,7 +44,7 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: nomic-embed-text
       LLM_MODEL: llama3.1:8b
-      # 镜像未装 torch/sentence-transformers → 容器内不启用 reranker
+      # slim 镜像未装 torch/sentence-transformers → 容器内不启用 reranker
       RERANKER_ENABLED: "false"
       HF_ENDPOINT: https://hf-mirror.com
       DATA_DIR: /app/data
@@ -45,5 +57,37 @@ services:
       - "8000:8000"                   # API 端口（Swagger UI: http://localhost:8000/docs）
     restart: unless-stopped
 
+  # ===== 完整版（profile: full）：含 bge-reranker 精排 =====
+  # 用法：docker compose --profile full up -d --build
+  api-full:
+    profiles: ["full"]
+    build:
+      context: .
+      args:
+        WITH_RERANKER: "true"
+    container_name: coursrag-api-full
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_MODEL: nomic-embed-text
+      LLM_MODEL: llama3.1:8b
+      # 完整版镜像已装 torch → 容器内开启 reranker（精确模式=向量+BM25+精排）
+      RERANKER_ENABLED: "true"
+      HF_ENDPOINT: https://hf-mirror.com
+      DATA_DIR: /app/data
+      PERSIST_DIRECTORY: /app/chroma_db
+      QUERY_LOG_PATH: /app/.query_log.jsonl
+    volumes:
+      - ./data:/app/data
+      - ./chroma_db:/app/chroma_db
+      # reranker 权重缓存卷：宿主机已下载过 bge-reranker-v2-m3 时复用，免二次下载
+      - huggingface_cache:/root/.cache/huggingface
+    ports:
+      - "8001:8000"                   # 与 slim 版 8000 区分
+    restart: unless-stopped
+
 volumes:
   ollama_models:
+  huggingface_cache:

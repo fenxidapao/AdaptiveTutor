@@ -1,21 +1,37 @@
 # ===== Stage 1: 依赖安装 =====
 # 多阶段构建：Stage 1 只装 Python 依赖，Stage 2 拷贝 site-packages，
 # 最终镜像不含 pip 缓存 / 编译工具链，体积更小。
+# 双模式：
+#   WITH_RERANKER=false（默认）→ 仅 API 最小依赖（slim，不含 torch，reranker 关闭）
+#   WITH_RERANKER=true        → 追加 sentence-transformers + CPU torch（完整版，reranker 开启）
+# 构建示例：docker build --build-arg WITH_RERANKER=true -t coursrag-api:full .
+#          docker compose --profile full up -d --build   （compose 见 docker-compose.yml）
 FROM python:3.11-slim AS deps
+
+ARG WITH_RERANKER=false
+ENV WITH_RERANKER=$WITH_RERANKER
 
 WORKDIR /app
 # 先只拷依赖清单，充分利用 Docker 层缓存（改代码不用重装依赖）
 COPY requirements-api.txt ./
-RUN pip install --no-cache-dir -r requirements-api.txt
+COPY requirements-rerank.txt ./
+RUN pip install --no-cache-dir -r requirements-api.txt \
+    && if [ "$WITH_RERANKER" = "true" ]; then \
+         pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+         && pip install --no-cache-dir -r requirements-rerank.txt; \
+       fi
 
 # ===== Stage 2: 运行镜像 =====
 FROM python:3.11-slim AS runtime
 
+ARG WITH_RERANKER=false
+ENV WITH_RERANKER=$WITH_RERANKER
+
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    # 镜像内未装 torch/sentence-transformers，reranker 必须关（本地跑才开）
-    RERANKER_ENABLED=false \
+    # 镜像内 reranker 开关跟随构建参数：slim=false / full=true
+    RERANKER_ENABLED=$WITH_RERANKER \
     HF_ENDPOINT=https://hf-mirror.com
 
 # 从 deps 阶段拷贝已装好的依赖（避免重复安装）
