@@ -42,3 +42,18 @@ BM25_TOP_K = int(os.getenv("BM25_TOP_K", "50"))  # BM25 通道独立召回数（
 # ---------- 路径 ----------
 DATA_DIR = os.getenv("DATA_DIR", "./data")
 PERSIST_DIRECTORY = os.getenv("PERSIST_DIRECTORY", "./chroma_db")
+
+# ---------- 加载（T6: 扫描版 PDF 检测） ----------
+# 均字符/页 低于此阈值视为无文字层（扫描版），建库时告警跳过而非静默空索引。
+PDF_MIN_CHARS_PER_PAGE = int(os.getenv("PDF_MIN_CHARS_PER_PAGE", "30"))
+
+# ---------- 评估裁判（T2: 独立裁判，2026-08-22） ----------
+# 生成用 LLM_MODEL（llama3.1:8b）；裁判默认用独立模型，避免「同模型既生成又打分」的自评价偏差。
+#   JUDGE_PROVIDER=local    → Ollama 本地独立模型（JUDGE_MODEL 指定，如 qwen2.5:7b，数据不出本机）
+#   JUDGE_PROVIDER=deepseek → DeepSeek API（需 JUDGE_API_KEY；效果强，但数据出本机，谨慎用）
+JUDGE_PROVIDER = os.getenv("JUDGE_PROVIDER", "local")
+# 2026-08-22 定稿：3b vs 7b 十题实测（judge_compare_3b7b.json）后选 7b——
+# 拆分完整、判定符合语义、能识别检索失败场景；3b 会把无关内容判 True。
+JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:7b")
+JUDGE_API_KEY = os.getenv("JUDGE_API_KEY", "")
+JUDGE_API_BASE = os.getenv("JUDGE_API_BASE", "https://api.deepseek.com/v1")

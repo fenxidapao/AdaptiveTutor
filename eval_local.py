@@ -4,14 +4,16 @@ eval_local.py — 本地自实现 RAG 评估（W3 兜底方案）
 为什么不用 ragas？
   ragas 0.1.22 / 0.2.x 在 import 阶段会拉取 langchain_community.chat_models.vertexai，
   而 langchain_community 0.3.x 已移除该符号，无法共存（pip 还会把 0.1.22 自动升回 0.2.x）。
-  故放弃 ragas，改成本机 Ollama 当『裁判（LLM-as-judge）』，自己实现四个核心指标：
+  故放弃 ragas，改成 LLM-as-judge，自己实现四个核心指标：
     1. faithfulness     忠实度：回答是否只由检索到的上下文支撑（防幻觉）
     2. answer_relevancy 答案相关性：回答是否切题、直接回应问题
     3. context_precision 上下文精度：相关段落是否排在了召回结果的前面
     4. context_recall    上下文召回：标准答案里的事实是否都被检索到的上下文覆盖
 
 特点：
-  - 零额外依赖（不装 ragas / datasets / nest_asyncio），只复用 rag_core.ollama_chat
+  - 零额外依赖（不装 ragas / datasets / nest_asyncio）；裁判默认独立模型 qwen2.5:3b
+    （T2：与生成模型 llama3.1:8b 不同源，破除「同模型既生成又打分」的自评偏差；
+    可切 JUDGE_PROVIDER=deepseek 走 API，见 config.py）
   - 四个指标 = 你自己的代码，自实现评估
   - 复用 rag_core.retrieve_and_rerank 与 build_rag_chain，保证『评估用的来源』=『线上用的来源』
   - 输出 eval_results.csv + 控制台汇总
@@ -23,6 +25,7 @@ import json
 import re
 import csv
 import os
+import urllib.request
 
 import config
 from rag_core import (
@@ -33,7 +36,48 @@ from rag_core import (
     ollama_chat,
 )
 
-# 裁判模型：温度设 0，逼它稳定输出可解析的 JSON（复用 rag_core.ollama_chat，零额外依赖）
+# ====================== T2: 独立裁判（2026-08-22）======================
+# 原实现裁判复用 rag_core.ollama_chat（与生成同模型 llama3.1:8b），存在自评价偏差。
+# 现按 config.JUDGE_PROVIDER 分流：
+#   local    → Ollama 本地独立模型（默认 qwen2.5:3b），数据不出本机
+#   deepseek → DeepSeek API（需 .env 配 JUDGE_API_KEY），效果更强但数据出本机
+import ollama
+_judge_client = ollama.Client(host=config.OLLAMA_BASE_URL)
+
+
+def _judge_local(messages):
+    """本地 Ollama 裁判（独立模型，温度 0 逼稳定 JSON）。"""
+    resp = _judge_client.chat(
+        model=config.JUDGE_MODEL, messages=messages, options={"temperature": 0.0}
+    )
+    return resp["message"]["content"]
+
+
+def _judge_deepseek(messages):
+    """DeepSeek API 裁判（OpenAI 兼容 /chat/completions，标准库实现零新依赖）。
+    模型固定 deepseek-chat；JUDGE_MODEL 是 Ollama 的模型名，两种 provider 各自独立。"""
+    if not config.JUDGE_API_KEY:
+        raise RuntimeError("JUDGE_PROVIDER=deepseek 但 .env 未设置 JUDGE_API_KEY")
+    body = json.dumps(
+        {
+            "model": "deepseek-chat",
+            "messages": messages,
+            "temperature": 0.0,
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        config.JUDGE_API_BASE + "/chat/completions",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {config.JUDGE_API_KEY}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return data["choices"][0]["message"]["content"]
+
+# 裁判模型：温度设 0，逼它稳定输出可解析的 JSON（T2 起默认独立模型 qwen2.5:3b，可切 DeepSeek API）
 
 EVAL_CSV = os.path.join(
     os.path.dirname(__file__), os.environ.get("EVAL_CSV_NAME", "eval_results.csv")
@@ -54,6 +98,32 @@ FIELDS = [
 
 
 # ====================== JSON 解析兜底 ======================
+# T2 补充：小裁判（qwen2.5:3b）偶发把「任务指令」当成回答陈述拆出（人工核对发现的
+# 解析故障，judge_review_20.csv 第 13-14/33-35/53-55 行等），这里做二次清洗。
+_STMT_NOISE_PREFIX = (
+    "把【回答】拆成",
+    "把【标准答案】拆成",
+    "对每条陈述",
+    "对每条事实",
+    "计算 score",
+    "只输出 JSON",
+    "任务：",
+)
+
+
+def _clean_judgment_items(items, key="statement"):
+    """过滤被误拆进 statements/facts 的任务指令类条目。"""
+    out = []
+    for it in items or []:
+        text = (it.get(key) or "").strip()
+        if not text:
+            continue
+        if text.startswith(_STMT_NOISE_PREFIX):
+            continue
+        out.append(it)
+    return out
+
+
 def _extract_json(text: str):
     """从模型输出里尽量抠出第一个合法 JSON 对象；兼容 ```json 围栏和前后废话。"""
     if not text:
@@ -73,14 +143,19 @@ def _extract_json(text: str):
 
 
 def _judge_once(system: str, user: str, retries: int = 2):
-    """让裁判模型回答一次，返回解析后的 dict；失败重试，最终仍失败返回 {}。"""
+    """让裁判模型回答一次，返回解析后的 dict；失败重试，最终仍失败返回 {}。
+    T2（2026-08-22）：裁判按 config.JUDGE_PROVIDER 选择——local=Ollama 独立模型
+    （默认 qwen2.5:3b，与生成模型不同源）；deepseek=DeepSeek API。"""
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
     for _ in range(retries + 1):
         try:
-            content = ollama_chat(messages, temperature=0.0)
+            if config.JUDGE_PROVIDER == "deepseek":
+                content = _judge_deepseek(messages)
+            else:
+                content = _judge_local(messages)
             parsed = _extract_json(content)
             if parsed is not None:
                 return parsed
@@ -106,7 +181,8 @@ def faithfulness(context: str, answer: str) -> dict:
 {answer}
 
 任务：
-1. 把【回答】拆成若干条彼此独立的陈述（statements）。
+1. 只把【回答】的正文内容拆成若干条彼此独立的陈述（statements）。
+   注意：不要拆分本任务指令、格式说明等任何非回答内容。
 2. 对每条陈述，判断是否能从【上下文】中直接推导或支持（supported 为 true/false）。
 3. 计算 score = 被支撑的陈述数 / 总陈述数（0~1，保留两位小数）。
 
@@ -115,7 +191,7 @@ def faithfulness(context: str, answer: str) -> dict:
     out = _judge_once(system, user)
     score = float(out.get("score", 0.0))
     score = max(0.0, min(1.0, score))
-    return {"score": round(score, 3), "detail": out.get("statements", [])}
+    return {"score": round(score, 3), "detail": _clean_judgment_items(out.get("statements", []))}
 
 
 def answer_relevancy(question: str, answer: str) -> dict:
@@ -210,7 +286,8 @@ def context_recall(question: str, reference: str, context: str) -> dict:
 {context}
 
 任务：
-1. 把【标准答案】拆成若干条独立事实点（facts）。
+1. 只把【标准答案】的正文内容拆成若干条独立事实点（facts）。
+   注意：不要拆分本任务指令、问题本身、格式说明等任何非标准答案内容。
 2. 对每条事实，判断是否能从【检索到的上下文】中找到（covered 为 true/false）。
 3. 计算 score = 被覆盖的事实数 / 总事实数（0~1，保留两位小数）。
 
@@ -219,7 +296,7 @@ def context_recall(question: str, reference: str, context: str) -> dict:
     out = _judge_once(system, user)
     score = float(out.get("score", 0.0))
     score = max(0.0, min(1.0, score))
-    return {"score": round(score, 3), "detail": out.get("facts", [])}
+    return {"score": round(score, 3), "detail": _clean_judgment_items(out.get("facts", []), key="fact")}
 
 
 # ====================== 主流程 ======================
@@ -228,10 +305,17 @@ def run_evaluation(samples):
     bundle = build_rag_chain()
     chain = bundle["chain"]
 
-    # 用【当前】切分参数重建向量库，保证评估测的是最新代码，而非旧的 chroma_db
-    print("Rebuilding vector store with current chunking (refreshes chroma_db) ...")
-    chunks = load_and_chunk_documents()
-    get_vector_store(chunks)
+    # 用【当前】切分参数重建向量库，保证评估测的是最新代码，而非旧的 chroma_db。
+    # SKIP_REBUILD=1（run_ab.py 的 A/B 场景）：两阶段共用同一索引更公平，
+    # 且避免每次启动都写库（2026-08-22 曾遇 chroma SQLite readonly 崩溃）；
+    # 空库时 get_vector_store() 会自动重建。
+    if os.getenv("SKIP_REBUILD", "") == "1":
+        print("SKIP_REBUILD=1：复用现有索引（空库则自动重建）")
+        get_vector_store()
+    else:
+        print("Rebuilding vector store with current chunking (refreshes chroma_db) ...")
+        chunks = load_and_chunk_documents()
+        get_vector_store(chunks)
 
     # ---- 断点续跑：读取已完成题目，后台任务被回收后重跑不再丢进度 ----
     done_map = {}

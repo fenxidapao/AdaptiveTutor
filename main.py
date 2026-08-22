@@ -63,7 +63,7 @@ from rag_core import (
 )
 
 # 允许的上传扩展名（与 rag_core._load_text 支持的后缀保持一致）
-ALLOWED_SUFFIXES = {".pdf", ".txt", ".md", ".docx"}
+ALLOWED_SUFFIXES = {".pdf", ".txt", ".md", ".docx", ".pptx"}
 
 
 # ==================== 通用工具 ====================

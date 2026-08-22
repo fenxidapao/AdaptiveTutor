@@ -3,8 +3,13 @@
 
 # 向量库 / 缓存 / 编译产物
 chroma_db/
+chroma_db_backup*/
+chroma_db_broken*/
 __pycache__/
 *.pyc
+
+# 教材 / 课件源文件（版权受限 PDF/PPTX，不入库；本地放 data/教材/，见 EVALUATION.md 语料说明）
+data/教材/
 
 # 本地 venv（42MB 空壳，勿提交；统一用 evalverify）
 rag_env/
@@ -36,3 +41,4 @@ eval_results_v1_baseline.csv
 eval_results_v3_baseline_stored.csv
 eval_results_off_2doc.csv
 eval_results.csv
+eval_results_*_v1_backup.csv

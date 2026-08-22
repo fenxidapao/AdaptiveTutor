@@ -16,7 +16,7 @@
 
 ## 功能
 
-- 📚 多格式课程资料接入（PDF / TXT / MD / DOCX）
+- 📚 多格式课程资料接入（PDF / PPTX / TXT / MD / DOCX；扫描版 PDF 自动告警跳过，不静默空索引）
 - ✂️ 递归语义切分（带重叠窗口，避免切断上下文）
 - 🔍 **真混合检索（向量全库 + BM25 全库双通道，RRF 融合，reranker 可选）**：向量召回（双塔粗排）与自实现 BM25 词面召回（精确术语如 ACID / 2NF）**各自对全库独立召回** top-50，再用倒数排名融合（RRF）互补两路信号，最后可选 bge-reranker 精排 top-5（单塔交互细排）。BM25 与 RRF 纯标准库实现，零新依赖；正确块即使向量排名靠后，只要词面匹配也能被 BM25 通道独立捞回（对比旧版"向量池内重排"的根本改进，见「评估基线·混合检索」）。
 - 📌 **引用溯源（工程化）**：来源带相关性分数与原文偏移，可展开核对，也可直接喂评估；回答正文内联 `[n]` 上标（半角/全角均可），点击可跳转对应来源（P1-2）
@@ -48,7 +48,7 @@ CourseRAG/
 ├── eval_data.py       # 评估小样本（question + reference 标准答案）
 ├── run_ab.py          # 混合检索 A/B 断点续跑 runner（中断后重跑自动续，隔离 reranker 测 BM25 纯贡献）
 ├── compare_hybrid.py  # 混合检索 vs 纯向量 A/B 对比（整体 + 区别类子集 + 逐题 Δ + 报告）
-├── data/              # 课程资料（示例：数据结构、数据库系统）
+├── data/              # 课程资料（示例 md + 教材/ 子目录：真实教材 PDF/PPTX 课件）
 ├── chroma_db/         # 向量库持久化目录（自动生成，已 gitignore）
 ├── .query_log.jsonl   # 查询日志（自动生成，已 gitignore）
 ├── .env.example       # 配置模板
@@ -294,7 +294,7 @@ python eval_local.py
 两次 `context_precision` / `faithfulness` 的差值，就是 reranker 在你的数据上价值的硬证据——
 这比"拍脑袋说 reranker 有用"有说服力得多。
 
-评估样本在 `eval_data.py`（基于 `data/` 两篇笔记的真实知识点），扩文档后往里追加即可。
+评估样本在 `eval_data.py`（基于 `data/` 课程笔记的真实知识点），扩文档后往里追加即可。
 
 ### 评估基线（21 样本，W4，reranker 关，纯向量召回）
 
@@ -354,30 +354,29 @@ python eval_local.py
 
 明细见 `eval_results_off_new.csv` / `eval_results_on_new.csv`，差值脚本 `compare.py`，结论 `eval_compare.md`。
 
-### 混合检索 vs 纯向量（59 样本，2026-08-21 实测 · v1 池内重排版）
+### 混合检索 vs 纯向量（59 样本，2026-08-22 实测 · v2 真混合检索 · 新语料 556 块）
 
-> ⚠️ **版本说明**：本节数据测的是 **v1 混合检索**（BM25 只在向量 top-50 候选池内重排）。
-> 2026-08-21 已升级为 **v2 真混合检索**（BM25 对全库独立召回，双通道 RRF 融合），
-> 修复了本节结论中指出的「不扩大候选集」局限（见下方「实测结论」第 2 条）。
-> v2 的 A/B 重测待执行；本节保留为 v1 的行为基线。
+> ⚠️ **版本说明**：本节为 **v2 真混合检索**（向量全库 + BM25 全库双通道，RRF 融合）在**新语料 556 块**上的实测；
+> 裁判为独立模型 **qwen2.5:7b**（与生成模型 llama3.1:8b 不同源，破除自评偏差）。
+> v1 旧版（BM25 池内重排，8b 自评，旧语料 25 块）数据见 `eval_compare_hybrid.md` 历史记录。
 
-隔离 reranker（`RERANKER_ENABLED=false`）后，对比 **纯向量 top-5** 与 **向量 top-50 + 自实现 BM25 + RRF 融合 top-5**，用于量化 BM25 词面召回的纯贡献。
+隔离 reranker（`RERANKER_ENABLED=false`）后，对比 **纯向量 top-5** 与 **向量全库 + 自实现 BM25 全库 + RRF 融合 top-5**，量化 BM25 词面召回的纯贡献。
 
 | 指标 | 纯向量 | 混合 | 差值 |
 |---|---|---|---|
-| faithfulness | 0.635 | 0.648 | +0.013 |
-| answer_relevancy | 0.919 | 0.983 | +0.064 |
-| context_precision | 0.673 | 0.724 | +0.051 |
-| context_recall | 0.654 | 0.641 | -0.012 |
+| faithfulness | 0.750 | 0.827 | +0.077 |
+| answer_relevancy | 0.529 | 0.625 | +0.096 |
+| context_precision | 0.479 | 0.599 | +0.120 |
+| context_recall | 0.766 | 0.894 | +0.128 |
 
-区别类子集（17 题，含 区别/不同/比较/分别/差异/对比/区分/异同）：answer_relevancy **+0.094**（最亮眼）、context_precision +0.007、context_recall -0.036。
+区别类子集（17 题，含 区别/不同/比较/分别/差异/对比/区分/异同）：四项全正向，answer_relevancy **+0.116**、context_recall **+0.102**。
 
-**实测结论（v1 诚实版，勿夸大）：**
-- 混合检索的收益集中在**排序层**：answer_relevancy +0.064、context_precision +0.051，精确术语 / 区别类 query 上相关性收益更明显（+0.094）——正确块在向量 rank 6~50 时，被 BM25 词面对齐顶回 top-5。
-- **context_recall 不升反降（-0.012）**：v1 的 BM25 只在向量 top-50 候选池内做 RRF 重排、**不扩大候选集**，召回集合未变；且被顶进的词面匹配块偶尔挤掉真正承载标准答案事实的块。
-- **v2 修复路径**：BM25 改为对**全库**独立召回（`rag_core.hybrid_retrieve` 双通道），正确块即使向量排名靠后，只要词面匹配也能被 BM25 通道捞回——预期 context_recall 由负转平/正，待 A/B 重测验证。
-- 收益幅度远小于 reranker（对比上方 59 样本表：reranker 四项全正、recall +0.096）：混合检索是排序优化器，reranker 才是召回纠正器。
-- 8b 裁判噪声同前，看差值不看绝对值。
+**实测结论（v2，含诚实边界）：**
+- **四项指标全部正向，context_recall 由 v1 的 -0.012 转正为 +0.128**：BM25 通道对全库独立召回，把「向量 top-50 之外但词面匹配」的正确块捞回——直接验证了 v2 设计假设（对比 v1 局限：BM25 只在向量池内重排，召回集合不变）。
+- 收益同时落在排序层（context_precision +0.120）与召回层（context_recall +0.128），回答相关性 +0.096。
+- **绝对值注意**：answer_relevancy 绝对值（0.529/0.625）偏低是 7b 裁判判定偏严 + 大语料（556 块）下检索拉错文档共同导致；**看 A/B 差值（同裁判同语料）不看绝对值**。
+- 裁判为独立模型 qwen2.5:7b（与生成不同源），仍有小模型判定噪声。
+- 语料为 556 块（12 篇课程笔记 + 真实教材/课件 PDF/PPTX），外推到更大语料需谨慎。
 
 明细见 `eval_results_vector.csv` / `eval_results_hybrid.csv`，runner（断点续跑）`run_ab.py`，对比脚本 `compare_hybrid.py`，结论 `eval_compare_hybrid.md`。
 
@@ -395,7 +394,7 @@ python eval_local.py
 - [x] 引用溯源工程化（分数 + 偏移，可喂评估）
 - [x] 本地自实现 RAG 评估（小样本测检索/回答质量，本机 Ollama 当裁判，零额外依赖）
 - [x] 中文 prompt + 中文感知切分（W4：prompt 改为中文防幻觉指令；切分器加中文分隔符。指标未明显提升，但暴露了跨主题检索拉错文档的真问题）
-- [ ] （可选）FastAPI 接口 + Docker ✅ 已完成（2026-08-20）：`main.py` / `api_schemas.py` / `Dockerfile` / `docker-compose.yml` / `requirements-api.txt`，见「API 服务」章节
+- [x] FastAPI 接口 + Docker（2026-08-20 已完成）：`main.py` / `api_schemas.py` / `Dockerfile` / `docker-compose.yml` / `requirements-api.txt`，见「API 服务」章节
 
 ## 说明
 

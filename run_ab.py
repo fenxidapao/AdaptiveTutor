@@ -58,6 +58,7 @@ def run_stage(stage):
     env.update(stage["env"])
     env["RERANKER_ENABLED"] = "false"      # 关键：隔离 BM25 贡献
     env["EVAL_CSV_NAME"] = stage["csv"]
+    env["SKIP_REBUILD"] = "1"              # A/B 两阶段共用同一索引（避免每次启动写库崩 SQLite）
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         done = done_count(csv_path)

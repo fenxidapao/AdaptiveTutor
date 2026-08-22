@@ -71,13 +71,45 @@ _SEPARATORS = ["\n\n", "\n", "。", "；", "！", "？", "，", "、", " ", ""]
 
 
 def _load_text(path: Path):
-    """按后缀加载单文件为纯文本；不支持或读取失败返回 None（跳过不中断建库）。"""
+    """按后缀加载单文件为纯文本；不支持或读取失败返回 None（跳过不中断建库）。
+
+    T6（2026-08-22）：PDF 加载后做文字层检测——扫描版 PDF（无文字层）此前会
+    静默返回空内容、对检索零贡献且无提示（data/教材 实测 7/7 全中）。现在均字符
+    低于 config.PDF_MIN_CHARS_PER_PAGE 时告警并跳过；另新增 .pptx 课件支持。
+    """
     suffix = path.suffix.lower()
     try:
         if suffix == ".pdf":
             from pypdf import PdfReader
             reader = PdfReader(str(path))
-            return "\n".join((p.extract_text() or "") for p in reader.pages)
+            pages = [(p.extract_text() or "") for p in reader.pages]
+            avg = (sum(len(t.strip()) for t in pages) / len(pages)) if pages else 0
+            if avg < config.PDF_MIN_CHARS_PER_PAGE:
+                print(
+                    f"[warn] 跳过疑似扫描版/无文字层 PDF: {path.name} "
+                    f"(均 {avg:.0f} 字符/页，阈值 {config.PDF_MIN_CHARS_PER_PAGE})"
+                )
+                return None
+            return "\n".join(pages)
+        if suffix == ".pptx":
+            # T6: PPTX 课件支持——zipfile 读 slide XML 提取 <a:t> 文本，按页拼接
+            import zipfile
+            import re as _re
+            with zipfile.ZipFile(str(path)) as z:
+                slides = sorted(
+                    (x for x in z.namelist() if _re.match(r"ppt/slides/slide\d+\.xml$", x)),
+                    key=lambda x: int(_re.findall(r"\d+", x)[0]),
+                )
+                parts = []
+                for s in slides:
+                    xml = z.read(s).decode("utf-8", "ignore")
+                    texts = [t.strip() for t in _re.findall(r"<a:t>([^<]*)</a:t>", xml) if t.strip()]
+                    parts.append("\n".join(texts))
+                text = "\n\n".join(parts)
+                if len(text.strip()) < config.PDF_MIN_CHARS_PER_PAGE:
+                    print(f"[warn] 跳过无文字内容的 PPTX: {path.name}")
+                    return None
+                return text
         if suffix in (".txt", ".md"):
             return path.read_text(encoding="utf-8")
         if suffix == ".docx":
@@ -165,7 +197,7 @@ def load_and_chunk_documents(directory=config.DATA_DIR):
     for path in sorted(directory.rglob("*")):
         if not path.is_file():
             continue
-        if path.suffix.lower() not in (".pdf", ".txt", ".md", ".docx"):
+        if path.suffix.lower() not in (".pdf", ".txt", ".md", ".docx", ".pptx"):
             continue
         text = _load_text(path)
         if not text or not text.strip():
