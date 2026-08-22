@@ -258,6 +258,45 @@ def _split_structured(text, chunk_size, chunk_overlap, separators):
     return out
 
 
+# ====================== 1.6 乱码清洗（2026-08-22）======================
+# 微信小程序教材 PDF 的部分页面（章节小结/图表/课后练习）存在 CID 字体编码乱码
+# （pypdf 提取出 阿拉伯/天城文/控制字符 等无意义字符，如 "֥ؓ ஥ഺb"）。
+# 诊断：303 页 372 块中 29 块 >30% 乱码、251 块 >10%（广泛混入）。
+# 处理：乱码占比 > GARBLED_DROP_THRESHOLD → 整块丢弃；否则剥离乱码字符保留正文。
+# 注：剥离改变文本长度，start_index 仍保留原文偏移（引用定位容忍少量偏差）。
+
+def _is_good_char(ch):
+    code = ord(ch)
+    return (
+        (0x4E00 <= code <= 0x9FFF) or (0x3400 <= code <= 0x4DBF)  # CJK 基本+扩展A
+        or (0x3000 <= code <= 0x303F) or (0xFF00 <= code <= 0xFFEF)  # CJK/全角标点
+        or (0x20 <= code <= 0x7E) or (0x2010 <= code <= 0x206F)  # ASCII/通用标点
+        or (0x00A0 <= code <= 0x00FF) or (0x2018 <= code <= 0x201F)  # 拉丁补充/引号
+        or (0x2190 <= code <= 0x22FF)  # 箭头/数学运算符（教材公式）
+    )
+
+
+def clean_garbled_chunk(text):
+    """乱码清洗：返回清洗后文本；返回 None 表示整块丢弃（乱码占比超阈值）。"""
+    if not text:
+        return text
+    total = bad = 0
+    kept = []
+    for ch in text:
+        if ch.isspace():
+            kept.append(ch)
+            continue
+        total += 1
+        if _is_good_char(ch):
+            kept.append(ch)
+        else:
+            bad += 1
+    ratio = bad / total if total else 0.0
+    if ratio > config.GARBLED_DROP_THRESHOLD:
+        return None
+    return "".join(kept)
+
+
 def load_and_chunk_documents(directory=config.DATA_DIR):
     # 支持 PDF / DOCX / TXT / MD；TXT/MD 强制 utf-8（Windows 中文坑，直接写死避免再踩）
     directory = Path(directory)
@@ -273,10 +312,13 @@ def load_and_chunk_documents(directory=config.DATA_DIR):
         for chunk, start, chapter in _split_structured(
             text, config.CHUNK_SIZE, config.CHUNK_OVERLAP, _SEPARATORS
         ):
+            cleaned = clean_garbled_chunk(chunk)  # 乱码清洗：None=丢弃
+            if cleaned is None:
+                continue
             meta = {"source": str(path), "start_index": start}
             if chapter:
                 meta["chapter"] = chapter  # T8: 所属章节标题（md 有标题时）
-            documents.append(Document(page_content=chunk, metadata=meta))
+            documents.append(Document(page_content=cleaned, metadata=meta))
     print(f"Loaded and chunked {len(documents)} pieces from documents.")
     return documents
 
@@ -405,10 +447,13 @@ def chunk_file(path):
     for chunk, start, chapter in _split_structured(
         text, config.CHUNK_SIZE, config.CHUNK_OVERLAP, _SEPARATORS
     ):
+        cleaned = clean_garbled_chunk(chunk)  # 乱码清洗：None=丢弃
+        if cleaned is None:
+            continue
         meta = {"source": str(path), "start_index": start}
         if chapter:
             meta["chapter"] = chapter
-        docs.append(Document(page_content=chunk, metadata=meta))
+        docs.append(Document(page_content=cleaned, metadata=meta))
     return docs
 
 

@@ -66,3 +66,9 @@ JUDGE_API_BASE = os.getenv("JUDGE_API_BASE", "https://api.deepseek.com/v1")
 # nomic-embed-text 中文基线相似度偏高）→ 阈值取语料内 p5，误拒≈5%，漏拒部分语料外问题；
 # 因此实现为「低置信提示」而非硬拒答。改阈值后重跑 _thr_scan.py 校准。
 LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))
+
+# ---------- 乱码清洗（2026-08-22：微信小程序 PDF CID 字体乱码） ----------
+# 块级乱码字符占比 > 此阈值 → 整块丢弃（内容已不可读，纯噪声）；
+# 否则剥离乱码字符保留正文。诊断：微信小程序 303 页 372 块中 29 块 >30%、
+# 251 块 >10% 混入乱码（广泛存在）→ 阈值 0.3 只丢最脏块。
+GARBLED_DROP_THRESHOLD = float(os.getenv("GARBLED_DROP_THRESHOLD", "0.3"))
