@@ -34,6 +34,7 @@ from rag_core import (
     get_vector_store,
     build_rag_chain,
     retrieve_and_rerank,
+    get_confidence,
     chunk_file,
     add_documents,
     delete_by_source,
@@ -314,7 +315,12 @@ if prompt := st.chat_input("问任何专业课问题..."):
                 for rank, doc in enumerate(docs, 1):
                     source = Path(doc.metadata.get("source", "unknown")).name
                     content = doc.page_content.strip()
-                    score = doc.metadata.get("rerank_score") or doc.metadata.get("hybrid_score")
+                    # T3: 分数展示优先级 rerank_score → hybrid_score → vector_score
+                    score = (
+                        doc.metadata.get("rerank_score")
+                        or doc.metadata.get("hybrid_score")
+                        or doc.metadata.get("vector_score")
+                    )
                     start = doc.metadata.get("start_index")
                     citations.append({
                         "rank": rank,
@@ -343,6 +349,14 @@ if prompt := st.chat_input("问任何专业课问题..."):
                 render_answer_html(full_response, len(citations), mid),
                 unsafe_allow_html=True,
             )
+
+            # ---- T3 低置信提示：top-1 向量相似度低于阈值 → 显式告知资料可能不足 ----
+            _conf = get_confidence(docs)
+            if _conf is not None and _conf < config.LOW_CONFIDENCE_THRESHOLD:
+                st.warning(
+                    f"⚠️ **资料可能不足**（相关度 {_conf:.2f} < 阈值 {config.LOW_CONFIDENCE_THRESHOLD}）。"
+                    "以下回答仅供参考，建议补充相关课程资料后重试。"
+                )
 
             st.session_state.messages.append({
                 "role": "assistant",

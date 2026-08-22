@@ -49,6 +49,9 @@ class QueryResponse(BaseModel):
     citations: list[Citation] = Field(..., description="检索 + 重排后的来源列表（按 rank 升序）")
     latency_ms: int = Field(..., description="端到端耗时（毫秒，含检索 + 生成）")
     grounded: bool = Field(..., description="接地判定（启发式：非空且未声称『无法回答』）")
+    low_confidence: bool = Field(
+        False, description="T3：top-1 向量相似度低于 LOW_CONFIDENCE_THRESHOLD，资料可能不足"
+    )
 
 
 class RetrieveRequest(BaseModel):

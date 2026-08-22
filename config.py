@@ -57,3 +57,10 @@ JUDGE_PROVIDER = os.getenv("JUDGE_PROVIDER", "local")
 JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:7b")
 JUDGE_API_KEY = os.getenv("JUDGE_API_KEY", "")
 JUDGE_API_BASE = os.getenv("JUDGE_API_BASE", "https://api.deepseek.com/v1")
+
+# ---------- 低置信阈值（T3: 拒答/提示机制，2026-08-22） ----------
+# top-1 向量相似度（cosine）低于此值 → 判定「资料可能不足」，UI 显式提示而非硬答。
+# 由 _thr_scan.py 实测：语料内 59 题 top1 p5=0.6896、语料外 10 题 max=0.7686（分布有重叠，
+# nomic-embed-text 中文基线相似度偏高）→ 阈值取语料内 p5，误拒≈5%，漏拒部分语料外问题；
+# 因此实现为「低置信提示」而非硬拒答。改阈值后重跑 _thr_scan.py 校准。
+LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))

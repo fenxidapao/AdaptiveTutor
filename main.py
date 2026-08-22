@@ -57,6 +57,7 @@ from rag_core import (
     build_rag_chain,
     chunk_file,
     delete_by_source,
+    get_confidence,
     get_vector_store,
     load_and_chunk_documents,
     retrieve_and_rerank,
@@ -209,12 +210,16 @@ def query(req: QueryRequest):
         # grounded 判定与 query_log._is_grounded 的启发式保持一致：
         # 非空 且 未声称「无法回答」→ 视为接地
         grounded = bool(answer.strip()) and "无法回答" not in answer
+        # T3：top-1 向量相似度低于阈值 → 资料可能不足（low_confidence=true，前端据此提示）
+        _conf = get_confidence(docs)
+        low_confidence = _conf is not None and _conf < config.LOW_CONFIDENCE_THRESHOLD
         return QueryResponse(
             answer=answer,
             mode=req.mode,
             citations=citations,
             latency_ms=int((time.time() - t0) * 1000),
             grounded=grounded,
+            low_confidence=low_confidence,
         )
     except HTTPException:
         raise

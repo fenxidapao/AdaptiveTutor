@@ -363,16 +363,23 @@ def retrieve_vector(question, k=None):
     """
     仅做向量召回（双塔粗排），返回 top-k 个 Document（已按相似度降序）。
     单独暴露出来，供 app.py 分阶段显示进度（先召回、再重排），也供「快速模式」直出。
+    T3（2026-08-22）：把 L2 distance 转 cosine 相似度写入 metadata['vector_score']，
+    作为统一置信度信号（拒答/低置信阈值用）。
     """
     k = k or config.RETRIEVE_K
     collection = get_vector_store()
     res = collection.query(query_texts=[question], n_results=k)
     texts = res["documents"][0]
     metas = res["metadatas"][0]
-    return [
-        Document(page_content=t, metadata=m if m is not None else {})
-        for t, m in zip(texts, metas)
-    ]
+    dists = (res.get("distances") or [[]])[0] if res.get("distances") else [None] * len(texts)
+    docs = []
+    for t, m, d in zip(texts, metas, dists):
+        meta = dict(m) if m else {}
+        if d is not None:
+            # 归一化向量下 L2^2 = 2(1-cos)，故 cosine ≈ 1 - d^2/2（nomic-embed-text 归一化）
+            meta["vector_score"] = round(1.0 - (d * d) / 2.0, 4)
+        docs.append(Document(page_content=t, metadata=meta))
+    return docs
 
 
 # ====================== 3.1 混合检索（向量 + BM25 双通道，RRF 融合） ======================
@@ -450,6 +457,15 @@ def retrieve_and_rerank(question, force_no_rerank=False):
         else:
             docs = docs[: config.RERANKER_TOP_N]
     return docs
+
+
+def get_confidence(docs):
+    """T3（2026-08-22）：取检索结果 top-1 的向量相似度（cosine）作为置信度信号。
+    各检索路径（快速/精确/hybrid/reranker）的 doc 都经过 retrieve_vector，vector_score 通常可得；
+    hybrid 下若 top-1 是纯 BM25 召回块（无 vector_score）返回 None，调用方按「不提示」处理。"""
+    if not docs:
+        return None
+    return docs[0].metadata.get("vector_score")
 
 
 # ====================== 4. 拼 RAG 链（含引用） ======================
