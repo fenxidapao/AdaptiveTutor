@@ -210,10 +210,18 @@ def test_documents_delete(client, monkeypatch):
 
 
 def test_safe_filename_rejects_traversal():
-    """路径穿越防护：_safe_filename 必须拒绝 .. / 分隔符 / 空名。"""
-    for bad in ("../evil.txt", "a/b.txt", "..", ".", "", "C:\\evil.txt"):
+    """路径穿越防护：_safe_filename 必须拒绝 .. / 分隔符 / 空名。
+
+    注意：路径穿越样例用 os.path.sep / os.path.altsep 跨平台构造——
+    写死 'C:\\evil.txt' 只在 Windows 上是穿越（反斜杠是分隔符），Linux 上
+    反斜杠是普通字符、Path.name 等于原串导致误判（CI 曾在此挂，2026-08-22）。
+    """
+    bad = ["..", ".", "", ".." + os.path.sep + "evil.txt"]
+    if os.path.altsep:  # Windows 的 altsep 是 '/'; POSIX 为 None
+        bad.append(".." + os.path.altsep + "evil.txt")
+    for name in bad:
         with pytest.raises(Exception):
-            main._safe_filename(bad)
+            main._safe_filename(name)
     # 合法纯文件名放行
     assert main._safe_filename("note.txt") == "note.txt"
 
