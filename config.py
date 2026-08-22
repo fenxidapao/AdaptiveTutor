@@ -20,8 +20,10 @@ LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 # ---------- RAG 调参（这些数为什么这么定）----------
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))       # 每块字符数（扩语料实验中调细，给 reranker 更多候选）
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "80"))  # 块间重叠，避免切断句子/上下文
+# 注意：实际评估基线为 800/150（.env 与 README 一致；2026-08-22 统一口径，
+# v2 A/B 等全部数字均在 CHUNK_SIZE=800 下测得）。勿再改回 500/80 以免与证据脱节。
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "800"))       # 每块字符数（教材正文段落约 200-800 字符）
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))  # 块间重叠，避免切断句子/上下文
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))  # 低温度压制幻觉
 
 # ---------- 重排 Reranker（召回多、精排少，两段式检索）----------

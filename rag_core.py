@@ -190,6 +190,74 @@ def _split_with_index(text, chunk_size, chunk_overlap, separators):
     return result
 
 
+# ====================== 1.5 结构感知切分（T8，2026-08-22）======================
+# 目标：代码块 / markdown 表格整体保护（不被 500 字符边界切断）；
+#       按标题（# ~ ######）分层，每块 metadata 带 chapter（所属章节标题）。
+# 实现：先把代码块/表格替换为哨兵串，切分后再还原；标题行作为节边界。
+import re as _re
+
+
+def _protect_blocks(text):
+    """代码块(```...```)与连续表格行整体替换为哨兵，返回 (替换后文本, {哨兵: 原文本})。"""
+    blocks = {}
+
+    def _repl_code(m):
+        key = f"§B{len(blocks)}§"
+        blocks[key] = m.group(0)
+        return key
+
+    text = _re.sub(r"```.*?```", _repl_code, text, flags=_re.S)
+
+    def _repl_table(m):
+        key = f"§B{len(blocks)}§"
+        blocks[key] = m.group(0)
+        return key
+
+    # 连续以 | 开头的行（markdown 表格）整体保护
+    text = _re.sub(r"(?:^\|.*\|\s*$(\n|$))+", _repl_table, text, flags=_re.M)
+    return text, blocks
+
+
+def _restore_blocks(text, blocks):
+    for k, v in blocks.items():
+        text = text.replace(k, v)
+    return text
+
+
+def _split_structured(text, chunk_size, chunk_overlap, separators):
+    """T8：结构感知切分。返回 [(chunk, start_index, chapter_or_None)]。
+    - 代码块/表格整体保护（哨兵替换→切分→还原，永不切断）
+    - 按标题分层：标题行作为节边界，块不跨章节；每节内走原 _split_with_index
+    - 无标题文档退化为单节（chapter=None），行为与旧版一致
+    """
+    protected, blocks = _protect_blocks(text)
+    lines = protected.split("\n")
+    sections = []  # (chapter, section_start_offset, section_text)
+    cur_title, cur_lines, cur_start = None, [], 0
+    offset = 0
+    for ln in lines:
+        m = _re.match(r"^#{1,6}\s+(.+?)\s*$", ln.strip())
+        if m:
+            if cur_lines:
+                sections.append((cur_title, cur_start, "\n".join(cur_lines)))
+            cur_title = m.group(1).strip()
+            cur_lines = [ln]
+            cur_start = offset
+        else:
+            cur_lines.append(ln)
+        offset += len(ln) + 1
+    if cur_lines:
+        sections.append((cur_title, cur_start, "\n".join(cur_lines)))
+
+    out = []
+    for chapter, sec_start, sec_text in sections:
+        if not sec_text.strip():
+            continue
+        for chunk, rel_start in _split_with_index(sec_text, chunk_size, chunk_overlap, separators):
+            out.append((_restore_blocks(chunk, blocks), sec_start + rel_start, chapter))
+    return out
+
+
 def load_and_chunk_documents(directory=config.DATA_DIR):
     # 支持 PDF / DOCX / TXT / MD；TXT/MD 强制 utf-8（Windows 中文坑，直接写死避免再踩）
     directory = Path(directory)
@@ -202,12 +270,13 @@ def load_and_chunk_documents(directory=config.DATA_DIR):
         text = _load_text(path)
         if not text or not text.strip():
             continue
-        for chunk, start in _split_with_index(
+        for chunk, start, chapter in _split_structured(
             text, config.CHUNK_SIZE, config.CHUNK_OVERLAP, _SEPARATORS
         ):
-            documents.append(
-                Document(page_content=chunk, metadata={"source": str(path), "start_index": start})
-            )
+            meta = {"source": str(path), "start_index": start}
+            if chapter:
+                meta["chapter"] = chapter  # T8: 所属章节标题（md 有标题时）
+            documents.append(Document(page_content=chunk, metadata=meta))
     print(f"Loaded and chunked {len(documents)} pieces from documents.")
     return documents
 
@@ -220,15 +289,33 @@ class _OllamaEmbeddingFunction:
     def __init__(self, client, model):
         self._client = client
         self._model = model
+        self._batch = 32  # 分批嵌入，避免大批量触发 Ollama llama-server 动态端口失效
 
     def name(self):
         # chromadb 1.5.x 要求嵌入函数提供 name()，用于持久化配置冲突校验
         return "ollama"
 
+    def _embed_batch(self, batch):
+        """单批嵌入 + 重试（Ollama 0.32.9 的 llama-server 动态端口在长任务中可能失效，
+        11434 会 307 重定向到新端口；失败重试走新端口即可恢复）。"""
+        import time as _time
+        last_err = None
+        for attempt in range(4):
+            try:
+                resp = self._client.embed(model=self._model, input=batch)
+                return resp["embeddings"]
+            except Exception as e:
+                last_err = e
+                _time.sleep(1.5 * (attempt + 1))
+        raise last_err
+
     def __call__(self, input):
-        # 建库时 chromadb 用此嵌入文档（input 为文本列表）
-        resp = self._client.embed(model=self._model, input=input)
-        return resp["embeddings"]
+        # 建库时 chromadb 用此嵌入文档（input 为文本列表）；分批防止长任务中断
+        items = list(input) if isinstance(input, (list, tuple)) else [input]
+        out = []
+        for i in range(0, len(items), self._batch):
+            out.extend(self._embed_batch(items[i : i + self._batch]))
+        return out
 
     def embed_query(self, input):
         # 查询时 chromadb 1.5.x 单独调 embed_query（input 为查询文本列表，非单字符串）
@@ -315,10 +402,13 @@ def chunk_file(path):
     if not text or not text.strip():
         return []
     docs = []
-    for chunk, start in _split_with_index(text, config.CHUNK_SIZE, config.CHUNK_OVERLAP, _SEPARATORS):
-        docs.append(
-            Document(page_content=chunk, metadata={"source": str(path), "start_index": start})
-        )
+    for chunk, start, chapter in _split_structured(
+        text, config.CHUNK_SIZE, config.CHUNK_OVERLAP, _SEPARATORS
+    ):
+        meta = {"source": str(path), "start_index": start}
+        if chapter:
+            meta["chapter"] = chapter
+        docs.append(Document(page_content=chunk, metadata=meta))
     return docs
 
 

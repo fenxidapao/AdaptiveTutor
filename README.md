@@ -221,7 +221,7 @@ curl http://localhost:8000/index/stats
 ```mermaid
 flowchart TB
     subgraph 离线构建
-        A[课程资料<br/>PDF / TXT / MD / DOCX] --> B[递归语义切分<br/>500字符 + 80重叠]
+        A[课程资料<br/>PDF / PPTX / TXT / MD / DOCX] --> B[递归语义切分<br/>800字符 + 150重叠]
         B --> C[嵌入<br/>nomic-embed-text]
         C --> D[(Chroma 向量库<br/>增量索引 + 稳定id去重)]
     end
@@ -241,7 +241,7 @@ flowchart TB
 ```
 
 ```
-数据接入 → 切分(500/80) → 嵌入(nomic-embed-text) → Chroma 持久化
+数据接入 → 切分(800/150) → 嵌入(nomic-embed-text) → Chroma 持久化
                                                     ↓
 问题 → 嵌入 → 向量召回 top-50（双塔粗排）
                   ↓
@@ -380,7 +380,7 @@ python eval_local.py
 
 明细见 `eval_results_vector.csv` / `eval_results_hybrid.csv`，runner（断点续跑）`run_ab.py`，对比脚本 `compare_hybrid.py`，结论 `eval_compare_hybrid.md`。
 
-> **扩展语料说明（已全量评测）**：`data/` 已扩至 **12 篇**（新增排序算法 / 图与最短路径 / 关系代数与 SQL / 函数依赖与范式 / OS 内存管理 / 计网 IP 与子网路由 / 组成原理指令系统与寻址），`eval_data.py` 扩至 **59 条**，`config.py` 已调 `CHUNK_SIZE=500 / CHUNK_OVERLAP=80 / RETRIEVE_K=50`（候选池扩到 50，让排 30+ 的难 query 正确块也能进池，reranker 才能纠回）。该扩展的 OFF/ON 全量对比**已于 2026-08-18 执行完毕**（见上方「59 样本评估基线」），**最终结论以 59 样本全量为准**；上方 33 样本表作为子集参考保留。重跑命令见交接文档第 4 节（ON 轮须带 `HF_ENDPOINT=https://hf-mirror.com`）。
+> **扩展语料说明（已全量评测）**：`data/` 已扩至 **12 篇**（新增排序算法 / 图与最短路径 / 关系代数与 SQL / 函数依赖与范式 / OS 内存管理 / 计网 IP 与子网路由 / 组成原理指令系统与寻址），`eval_data.py` 扩至 **59 条**，`config.py` 已调 `CHUNK_SIZE=800 / CHUNK_OVERLAP=150 / RETRIEVE_K=50`（候选池扩到 50，让排 30+ 的难 query 正确块也能进池，reranker 才能纠回）。该扩展的 OFF/ON 全量对比**已于 2026-08-18 执行完毕**（见上方「59 样本评估基线」），**最终结论以 59 样本全量为准**；上方 33 样本表作为子集参考保留。重跑命令见交接文档第 4 节（ON 轮须带 `HF_ENDPOINT=https://hf-mirror.com`）。
 
 ## 路线图（进行中）
 
