@@ -49,4 +49,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)" || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 注意：多阶段构建只拷了 site-packages，pip 装的可执行脚本（uvicorn 命令）
+# 不在 /usr/local/bin 下 → 必须用 python -m uvicorn（2026-08-22 实测踩坑）
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

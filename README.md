@@ -25,6 +25,7 @@
 - 🪵 **查询日志（P1-3）**：每轮对话后追加 `.query_log.jsonl`，记录模式 / 来源 / 接地判定 / 引用标记，便于事后回溯检索质量
 - ➕ **增量索引 + 去重（P1-4）**：稳定 id（`md5(source::start_index)`）自动去重，上传仅增量 upsert 新文件；按 source 删除单文档，其余不受影响，不再全量重建
 - ✅ **核心算法单测（P2-1）**：零依赖 `test_core.py` 覆盖 BM25 排序 / RRF 融合去重 / 稳定 id 去重 / 接地判定 / 日志格式，脱离 chromadb/ollama/streamlit 亦可在任意干净 Python 环境实跑
+- ✅ **集成测试 + CI（T9，2026-08-22）**：`test_api.py`（17 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护）+ `test_retrieval.py`（8 用例，检索链路冒烟，无 Ollama 自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 三套测试）
 - 🔒 配置外置 `.env`，模型名/路径/调参不再写死代码
 
 ## 目录结构
@@ -149,15 +150,18 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### Docker 一键部署（双模式）
 
+> **2026-08-22 变更**：compose 改为 **API 直连宿主 Ollama**（删除了容器内 ollama 服务）。
+> 原因：宿主已装 Ollama 且模型齐全，容器内再拉一套要重复下载 ~5GB 模型；
+> 且避免 11434 端口冲突。**前置条件：宿主 Ollama 已启动且模型已拉取。**
+> 实测验证（Windows Docker Desktop）：`host.docker.internal:11434` 直连宿主 Ollama 成功，
+> /health、/query（fast + accurate）、/retrieve 全部正常，容器加载宿主挂载的 697 块索引。
+
 ```bash
 # 模式一 · slim（默认）：轻量，无 reranker，精确模式=向量+BM25 混合
 docker compose up -d --build
 
 # 模式二 · full（完整版）：含 bge-reranker 精排（镜像 +~2GB，首次需下载权重 ~2.2GB）
 docker compose --profile full up -d --build
-
-# 首次拉模型（无论哪种模式都要做一次；模型 ~5GB，持久化在 ollama_models 卷）
-docker compose exec ollama ollama pull nomic-embed-text llama3.1:8b
 
 # 验证
 curl http://localhost:8000/health   # slim（8000）
@@ -171,10 +175,15 @@ curl http://localhost:8001/health   # full（8001）
   - `api-full`（`--profile full`）：追加安装 CPU 版 torch + `sentence-transformers`
     （`requirements-rerank.txt`），`RERANKER_ENABLED=true`，精确模式 = 向量 + BM25 + bge-reranker 精排；
     reranker 权重缓存挂 `huggingface_cache` 卷，宿主机已下载过权重则复用，免二次下载。
+- **Ollama 连接**：容器内 `OLLAMA_BASE_URL=http://host.docker.internal:11434` 直连宿主；
+  Linux 部署时改 `network_mode: host` 或把地址换成宿主 IP。
+  ⚠️ 若宿主 Ollama 只监听 127.0.0.1 导致容器连不上：设 `OLLAMA_HOST=0.0.0.0:11434` 重启 Ollama。
 - `./data`（课程资料）与 `./chroma_db`（向量库）通过卷挂载进容器，宿主机直接增删文件即可；
   已索引的库在容器内**路径一致**（均为相对 `./data` / `./chroma_db`），无需重建。
 - API 启动时自动预热向量库（空库 + 有资料时自动重建），Ollama 未就绪不会阻塞服务启动，
   `/health` 会明确报告缺什么。
+- **已知坑（2026-08-22 实测）**：多阶段构建只拷 site-packages，pip 装的可执行脚本不在
+  `/usr/local/bin` → Dockerfile CMD 必须用 `python -m uvicorn`（不能用裸 `uvicorn`）。
 
 ### 验证（curl 示例）
 
@@ -294,7 +303,7 @@ python eval_local.py
 两次 `context_precision` / `faithfulness` 的差值，就是 reranker 在你的数据上价值的硬证据——
 这比"拍脑袋说 reranker 有用"有说服力得多。
 
-评估样本在 `eval_data.py`（基于 `data/` 课程笔记的真实知识点），扩文档后往里追加即可。
+评估样本在 `eval_data.py`（基于 `data/` 课程笔记 + `data/教材/` 真实教材的知识点，现 100 条），扩文档后往里追加即可。
 
 ### 评估基线（21 样本，W4，reranker 关，纯向量召回）
 
@@ -354,33 +363,37 @@ python eval_local.py
 
 明细见 `eval_results_off_new.csv` / `eval_results_on_new.csv`，差值脚本 `compare.py`，结论 `eval_compare.md`。
 
-### 混合检索 vs 纯向量（59 样本，2026-08-22 实测 · v2 真混合检索 · 新语料 556 块）
+### 混合检索 vs 纯向量（100 样本，2026-08-22 实测 · v2 真混合检索 · 新语料 697 块）
 
-> ⚠️ **版本说明**：本节为 **v2 真混合检索**（向量全库 + BM25 全库双通道，RRF 融合）在**新语料 556 块**上的实测；
+> ⚠️ **版本说明**：本节为 **v2 真混合检索**（向量全库 + BM25 全库双通道，RRF 融合）在**新语料 697 块**上的实测；
 > 裁判为独立模型 **qwen2.5:7b**（与生成模型 llama3.1:8b 不同源，破除自评偏差）。
 > v1 旧版（BM25 池内重排，8b 自评，旧语料 25 块）数据见 `eval_compare_hybrid.md` 历史记录。
+> **上一版数据（59 题 × 556 块）见 `eval_compare_hybrid.md` 历史记录；本节为 2026-08-22 重测后的最新基线（100 题 × 697 块，含乱码清洗修复）。**
 
 隔离 reranker（`RERANKER_ENABLED=false`）后，对比 **纯向量 top-5** 与 **向量全库 + 自实现 BM25 全库 + RRF 融合 top-5**，量化 BM25 词面召回的纯贡献。
 
 | 指标 | 纯向量 | 混合 | 差值 |
 |---|---|---|---|
-| faithfulness | 0.750 | 0.827 | +0.077 |
-| answer_relevancy | 0.529 | 0.625 | +0.096 |
-| context_precision | 0.479 | 0.599 | +0.120 |
-| context_recall | 0.766 | 0.894 | +0.128 |
+| faithfulness | 0.718 | 0.805 | +0.087 |
+| answer_relevancy | 0.771 | 0.823 | +0.052 |
+| context_precision | 0.523 | 0.700 | +0.178 |
+| context_recall | 0.584 | 0.748 | +0.164 |
 
-区别类子集（17 题，含 区别/不同/比较/分别/差异/对比/区分/异同）：四项全正向，answer_relevancy **+0.116**、context_recall **+0.102**。
+区别类子集（27 题，含 区别/不同/比较/分别/差异/对比/区分/异同）：四项全正向，answer_relevancy **+0.095**、context_recall **+0.148**。
 
-**实测结论（v2，含诚实边界）：**
-- **四项指标全部正向，context_recall 由 v1 的 -0.012 转正为 +0.128**：BM25 通道对全库独立召回，把「向量 top-50 之外但词面匹配」的正确块捞回——直接验证了 v2 设计假设（对比 v1 局限：BM25 只在向量池内重排，召回集合不变）。
-- 收益同时落在排序层（context_precision +0.120）与召回层（context_recall +0.128），回答相关性 +0.096。
-- **绝对值注意**：answer_relevancy 绝对值（0.529/0.625）偏低是 7b 裁判判定偏严 + 大语料（556 块）下检索拉错文档共同导致；**看 A/B 差值（同裁判同语料）不看绝对值**。
+**实测结论（v2 重测，含诚实边界）：**
+- **四项指标全部正向，context_recall 由 v1 的 -0.012 转正为 +0.164**：BM25 通道对全库独立召回，把「向量 top-50 之外但词面匹配」的正确块捞回——直接验证了 v2 设计假设（对比 v1 局限：BM25 只在向量池内重排，召回集合不变）。
+- 收益同时落在排序层（context_precision **+0.178**）与召回层（context_recall **+0.164**），回答相关性 +0.052。
+- **与上一版（59 题 × 556 块：+0.077/+0.096/+0.120/+0.128）对比**：precision/recall 增益**扩大**（+0.120→+0.178、+0.128→+0.164），faithfulness/relevancy 略收窄——教材题（微信小程序/Linux 等术语密集）让 BM25 词面通道更有用武之地；faithfulness 增益收窄部分来自 697 块语料下向量基线本身更强（0.718 vs 旧 0.750 的差异需同语料内看 A/B 差值）。
+- **绝对值注意**：context_recall 绝对值（0.584/0.748）低于旧版（0.766/0.894），原因是 100 题里新增了 41 道教材题、正确块更分散，检索难度整体上升——**看 A/B 差值（同裁判同语料）不看绝对值**。
 - 裁判为独立模型 qwen2.5:7b（与生成不同源），仍有小模型判定噪声。
-- 语料为 556 块（12 篇课程笔记 + 真实教材/课件 PDF/PPTX），外推到更大语料需谨慎。
+- 语料为 697 块（12 篇课程笔记 + 真实教材/课件 PDF/PPTX），外推到更大语料需谨慎。
 
 明细见 `eval_results_vector.csv` / `eval_results_hybrid.csv`，runner（断点续跑）`run_ab.py`，对比脚本 `compare_hybrid.py`，结论 `eval_compare_hybrid.md`。
 
 > **扩展语料说明（已全量评测）**：`data/` 已扩至 **12 篇**（新增排序算法 / 图与最短路径 / 关系代数与 SQL / 函数依赖与范式 / OS 内存管理 / 计网 IP 与子网路由 / 组成原理指令系统与寻址），`eval_data.py` 扩至 **59 条**，`config.py` 已调 `CHUNK_SIZE=800 / CHUNK_OVERLAP=150 / RETRIEVE_K=50`（候选池扩到 50，让排 30+ 的难 query 正确块也能进池，reranker 才能纠回）。该扩展的 OFF/ON 全量对比**已于 2026-08-18 执行完毕**（见上方「59 样本评估基线」），**最终结论以 59 样本全量为准**；上方 33 样本表作为子集参考保留。重跑命令见交接文档第 4 节（ON 轮须带 `HF_ENDPOINT=https://hf-mirror.com`）。
+>
+> **2026-08-22 追加**：`eval_data.py` 已扩至 **100 条**（新增 41 条教材题：微信小程序/Streamlit/Linux/算法引论/学习笔记）；乱码清洗白名单修复（剔除拉丁伪字符残留）后语料 697 块。**重测已完成（2026-08-22 17:57）**：上方表格已更新为 100 题 × 697 块的最新基线。
 
 ## 路线图（进行中）
 
@@ -389,6 +402,7 @@ python eval_local.py
 - [x] **P1-3 查询日志**：每轮落 `.query_log.jsonl`（模式 / 来源 / 接地判定 / 引用标记）
 - [x] **P1-4 增量索引 + 去重**：稳定 id 自动去重，上传仅增量 upsert，按 source 删单文档（不再全量重建）
 - [x] **P2-1 核心算法单测**：零依赖 `test_core.py`，脱离 LLM 栈亦可实跑（7 用例全绿）
+- [x] **T9 集成测试 + CI（2026-08-22）**：API 端点测试 17 用例（TestClient + mock，无需 Ollama）+ 检索冒烟 8 用例（无 Ollama 自动 skip）+ GitHub Actions（3.11 矩阵，`python -m pytest test_core.py test_api.py` 全绿）
 - [x] 最小可跑闭环 + 配置外置 + 引用溯源
 - [x] 接入 bge-reranker 重排并实测（混合检索；代码已验证可启用，难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败，现默认开）
 - [x] 引用溯源工程化（分数 + 偏移，可喂评估）

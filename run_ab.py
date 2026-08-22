@@ -27,7 +27,7 @@ import subprocess
 
 PY = r"C:\Users\user\.workbuddy\binaries\python\envs\evalverify\Scripts\python.exe"
 ROOT = os.path.dirname(os.path.abspath(__file__))
-N_SAMPLES = 59  # eval_data.py 当前样本数；改样本后同步改这里
+N_SAMPLES = 100  # eval_data.py 当前样本数；改样本后同步改这里
 
 STAGES = [
     {"name": "vector", "csv": "eval_results_vector.csv",

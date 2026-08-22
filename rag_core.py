@@ -267,11 +267,16 @@ def _split_structured(text, chunk_size, chunk_overlap, separators):
 
 def _is_good_char(ch):
     code = ord(ch)
+    # 2026-08-22 修复：原白名单含 0x00A0-0x00FF（拉丁补充区），本意是放行西欧字母；
+    # 但 pypdf 对 CID 乱码的另一种映射就是产出 æ/ç/è 这类拉丁字符（实测 698 块中 54 块残留），
+    # 被当作"好字符"放行 → 污染嵌入。修复：拉丁补充区不再整段放行，
+    # 仅保留中文教材真实会用到的几个符号（· × ÷ ° 等）；真实西欧词句极少出现，损失可忽略。
     return (
         (0x4E00 <= code <= 0x9FFF) or (0x3400 <= code <= 0x4DBF)  # CJK 基本+扩展A
         or (0x3000 <= code <= 0x303F) or (0xFF00 <= code <= 0xFFEF)  # CJK/全角标点
         or (0x20 <= code <= 0x7E) or (0x2010 <= code <= 0x206F)  # ASCII/通用标点
-        or (0x00A0 <= code <= 0x00FF) or (0x2018 <= code <= 0x201F)  # 拉丁补充/引号
+        or (0x00B7 == code or 0x00D7 == code or 0x00F7 == code or 0x00B0 == code)  # ·×÷°（中文教材常用）
+        or (0x2018 <= code <= 0x201F)  # 引号
         or (0x2190 <= code <= 0x22FF)  # 箭头/数学运算符（教材公式）
     )
 

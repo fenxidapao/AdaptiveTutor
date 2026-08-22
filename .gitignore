@@ -42,3 +42,12 @@ eval_results_v3_baseline_stored.csv
 eval_results_off_2doc.csv
 eval_results.csv
 eval_results_*_v1_backup.csv
+# A/B 重测中间态 CSV（100 题新数据不入库；数字已固化在 README/EVALUATION）
+eval_results_vector.csv
+eval_results_hybrid.csv
+
+# 评估重测备份（旧 59 题 CSV/日志归档，2026-08-22）
+_eval_prev_59/
+
+# pytest 缓存
+.pytest_cache/

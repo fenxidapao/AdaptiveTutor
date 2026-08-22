@@ -71,4 +71,7 @@ LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))
 # 块级乱码字符占比 > 此阈值 → 整块丢弃（内容已不可读，纯噪声）；
 # 否则剥离乱码字符保留正文。诊断：微信小程序 303 页 372 块中 29 块 >30%、
 # 251 块 >10% 混入乱码（广泛存在）→ 阈值 0.3 只丢最脏块。
+# 2026-08-22 修复：_is_good_char 不再整段放行拉丁补充区（0x00A0-0x00FF）——
+# pypdf 对 CID 乱码的另一种映射是产出 æ/ç/è 等拉丁字符，原白名单误放行导致
+# 698 块中 54 块残留；剔除后块数 698→697（1 块此前侥幸保留的乱码块被正确丢弃）。
 GARBLED_DROP_THRESHOLD = float(os.getenv("GARBLED_DROP_THRESHOLD", "0.3"))
