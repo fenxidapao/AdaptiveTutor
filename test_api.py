@@ -237,6 +237,31 @@ def test_index_rebuild(client, monkeypatch):
     assert body["files"] == 1
 
 
+def test_index_rebuild_empty_data(client, monkeypatch):
+    """空知识库重建（P1 回归，2026-08-22）：data/ 无文档时 POST /index/rebuild
+    不应 500——get_vector_store([]) 对 chromadb 空 upsert 曾抛
+    'Non-empty lists are required'，已修复为返回空集合。"""
+    monkeypatch.setattr(main, "load_and_chunk_documents", lambda: [])
+    r = client.post("/index/rebuild")
+    # main.rebuild_index 对空 chunks 显式返回 400（有提示），而不是 500 崩溃
+    assert r.status_code == 400
+    assert "没有可索引的文档" in r.json()["detail"]
+
+
+def test_get_vector_store_empty_chunks(monkeypatch, tmp_path):
+    """P1 回归（2026-08-22）：rag_core.get_vector_store([]) 不应崩溃。
+
+    修复前：chromadb 对空 upsert 抛 ValueError('Non-empty lists are required')，
+    空 data/ 目录点「全量重建」直接崩。修复后：跳过 upsert、返回 count()==0 的空集合。
+    本用例隔离持久化目录，不依赖 Ollama（空 chunks 不触发嵌入）。
+    """
+    monkeypatch.setattr(config, "PERSIST_DIRECTORY", str(tmp_path / "chroma"))
+    import rag_core
+
+    col = rag_core.get_vector_store([])
+    assert col.count() == 0
+
+
 def test_index_stats(client, monkeypatch):
     col = FakeCol(count=7, metas=[{"source": "/x/a.md"}, {"source": "/x/b.md"}, {"source": "/x/b.md"}])
     monkeypatch.setattr(main, "get_vector_store", lambda: col)

@@ -400,20 +400,24 @@ def get_vector_store(chunks=None):
         except Exception:
             pass
         col = client.get_or_create_collection(_COLLECTION_NAME, embedding_function=ef)
-        ids = [
-            hashlib.md5(
-                f"{d.metadata['source']}::{d.metadata['start_index']}".encode("utf-8")
-            ).hexdigest()
-            for d in chunks
-        ]
-        col.upsert(
-            ids=ids,
-            documents=[d.page_content for d in chunks],
-            metadatas=[d.metadata for d in chunks],
-        )
+        # 2026-08-22 修复（系统测试 P1）：chunks 为空时 chromadb 的 upsert 会抛
+        # "Non-empty lists are required" —— data/ 空目录重建索引时直接崩溃。
+        # 空库也应返回有效集合句柄（count()==0），问答/健康检查照常工作。
+        if chunks:
+            ids = [
+                hashlib.md5(
+                    f"{d.metadata['source']}::{d.metadata['start_index']}".encode("utf-8")
+                ).hexdigest()
+                for d in chunks
+            ]
+            col.upsert(
+                ids=ids,
+                documents=[d.page_content for d in chunks],
+                metadatas=[d.metadata for d in chunks],
+            )
         _vector_store = col
         _invalidate_all_chunks()  # 全量重建后 BM25 通道缓存强制刷新
-        print("Vector store created and saved.")
+        print(f"Vector store created and saved ({len(chunks)} chunks).")
         return _vector_store
 
     if _vector_store is None:
