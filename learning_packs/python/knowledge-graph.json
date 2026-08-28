@@ -1,0 +1,108 @@
+{
+  "course": "python",
+  "title": "Python 基础：变量/数据类型 + 列表/字典",
+  "version": "1.0",
+  "description": "P0 学习包：2 章节 12 知识点。章节 A(ch1) 用于 lecture 对照模式，章节 B(ch2) 用于 feynman 模式（PLAN 8 对照实验设计）。",
+  "chapters": {
+    "ch1": { "title": "变量与数据类型", "mode_hint": "lecture（对照组）" },
+    "ch2": { "title": "列表与字典", "mode_hint": "feynman（实验组）" }
+  },
+  "knowledge_points": [
+    {
+      "kp_id": "python.variable.assignment",
+      "title": "变量赋值",
+      "chapter": "ch1",
+      "prerequisites": [],
+      "sources": [],
+      "notes_file": "notes/python.variable.assignment.md"
+    },
+    {
+      "kp_id": "python.int.float",
+      "title": "整数与浮点数",
+      "chapter": "ch1",
+      "prerequisites": ["python.variable.assignment"],
+      "sources": [],
+      "notes_file": "notes/python.int.float.md"
+    },
+    {
+      "kp_id": "python.string.basic",
+      "title": "字符串基础（引号/拼接/转义）",
+      "chapter": "ch1",
+      "prerequisites": ["python.variable.assignment"],
+      "sources": [],
+      "notes_file": "notes/python.string.basic.md"
+    },
+    {
+      "kp_id": "python.string.methods",
+      "title": "字符串方法（upper/lower/strip/split/join）",
+      "chapter": "ch1",
+      "prerequisites": ["python.string.basic"],
+      "sources": [],
+      "notes_file": "notes/python.string.methods.md"
+    },
+    {
+      "kp_id": "python.bool.comparison",
+      "title": "布尔值与比较运算",
+      "chapter": "ch1",
+      "prerequisites": ["python.variable.assignment"],
+      "sources": [],
+      "notes_file": "notes/python.bool.comparison.md"
+    },
+    {
+      "kp_id": "python.type.conversion",
+      "title": "类型转换（int()/str()/float()）",
+      "chapter": "ch1",
+      "prerequisites": ["python.int.float", "python.string.basic"],
+      "sources": [],
+      "notes_file": "notes/python.type.conversion.md"
+    },
+    {
+      "kp_id": "python.list.basic",
+      "title": "列表创建与索引",
+      "chapter": "ch2",
+      "prerequisites": ["python.variable.assignment"],
+      "sources": [],
+      "notes_file": "notes/python.list.basic.md"
+    },
+    {
+      "kp_id": "python.list.slice",
+      "title": "列表切片",
+      "chapter": "ch2",
+      "prerequisites": ["python.list.basic"],
+      "sources": [],
+      "notes_file": "notes/python.list.slice.md"
+    },
+    {
+      "kp_id": "python.list.methods",
+      "title": "列表方法（append/insert/remove/pop/sort）",
+      "chapter": "ch2",
+      "prerequisites": ["python.list.basic"],
+      "sources": [],
+      "notes_file": "notes/python.list.methods.md"
+    },
+    {
+      "kp_id": "python.list.comprehension",
+      "title": "列表推导式",
+      "chapter": "ch2",
+      "prerequisites": ["python.list.basic", "python.list.methods"],
+      "sources": [],
+      "notes_file": "notes/python.list.comprehension.md"
+    },
+    {
+      "kp_id": "python.dict.basic",
+      "title": "字典创建与访问",
+      "chapter": "ch2",
+      "prerequisites": ["python.variable.assignment"],
+      "sources": [],
+      "notes_file": "notes/python.dict.basic.md"
+    },
+    {
+      "kp_id": "python.dict.methods",
+      "title": "字典方法（keys/values/items/get）",
+      "chapter": "ch2",
+      "prerequisites": ["python.dict.basic"],
+      "sources": [],
+      "notes_file": "notes/python.dict.methods.md"
+    }
+  ]
+}

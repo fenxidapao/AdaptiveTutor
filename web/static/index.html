@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FeynmanTutor · 费曼导师</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <span class="logo">F</span>
+      <div>
+        <h1>FeynmanTutor</h1>
+        <p>你当老师讲，Agent 追问找盲点</p>
+      </div>
+    </div>
+    <div class="user-box">
+      <label>账号</label>
+      <input id="userId" value="" placeholder="user_id">
+      <input id="userPwd" type="password" placeholder="密码" class="pwd">
+      <button id="btnLogin" class="ghost">登录</button>
+      <button id="btnRegister" class="ghost">注册</button>
+      <button id="btnLogout" class="ghost hidden">退出</button>
+      <span id="loginHint" class="hint"></span>
+    </div>
+  </header>
+
+  <nav class="steps" id="steps">
+    <button data-step="pretest" class="active">① 前测</button>
+    <button data-step="diagnose">② 诊断</button>
+    <button data-step="learn">③ 费曼学习</button>
+    <button data-step="posttest">④ 后测</button>
+    <button data-step="report">⑤ 报告</button>
+    <button data-step="heatmap">⑥ 热力图</button>
+  </nav>
+
+  <main>
+    <!-- 前测 -->
+    <section id="view-pretest" class="view">
+      <h2>前测 <span class="hint">学之前测基线，10 题选择题</span></h2>
+      <div id="queueBox" class="card hidden"></div>
+      <div id="pretestBox"></div>
+    </section>
+
+    <!-- 诊断 -->
+    <section id="view-diagnose" class="view hidden">
+      <h2>学习诊断 <span class="hint">读答题记录生成画像</span></h2>
+      <button id="btnDiagnose" class="primary">运行诊断</button>
+      <div id="diagnoseBox" class="card mt"></div>
+    </section>
+
+    <!-- 费曼学习 -->
+    <section id="view-learn" class="view hidden">
+      <h2>费曼学习 <span class="hint">先答后讲：你讲，Agent 追问</span></h2>
+      <div class="row">
+        <select id="kpSelect"></select>
+        <button id="btnStartKp" class="primary">开始学习</button>
+      </div>
+      <div id="learnBox" class="mt"></div>
+    </section>
+
+    <!-- 后测 -->
+    <section id="view-posttest" class="view hidden">
+      <h2>后测 <span class="hint">不同题、同知识点、同难度</span></h2>
+      <div id="posttestBox"></div>
+    </section>
+
+    <!-- 报告 -->
+    <section id="view-report" class="view hidden">
+      <h2>学习效果报告</h2>
+      <div id="reflowBox" class="card hidden"></div>
+      <div id="reportBox" class="card"></div>
+      <div id="reportChartBox" class="card">
+        <h3>前后测对比 <span class="hint">X 轴章节 · Y 轴正确率</span></h3>
+        <div class="chart-wrap"><canvas id="reportChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- 热力图 -->
+    <section id="view-heatmap" class="view hidden">
+      <h2>知识掌握度热力图</h2>
+      <div class="chart-wrap"><canvas id="heatmapChart"></canvas></div>
+      <div id="heatmapLegend" class="hint"></div>
+    </section>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

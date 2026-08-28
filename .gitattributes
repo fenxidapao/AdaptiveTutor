@@ -1,0 +1,10 @@
+# Windows 换行规范：代码统一 LF，入库不转
+* text=auto
+*.py text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.jsonl text eol=lf
+*.sh text eol=lf

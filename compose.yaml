@@ -1,0 +1,23 @@
+# FeynmanTutor 编排（2026-08-23 C0）
+# 启动: docker compose up -d --build   (http://127.0.0.1:8001)
+# 数据: ./data 卷挂载,容器重建不丢
+services:
+  api:
+    build: .
+    container_name: feynmantutor
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      # SQLite 落在挂载卷,容器重建数据不丢（PLAN 19.2）
+      - DB_PATH=/app/data/state.db
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

@@ -1,0 +1,25 @@
+# 敏感信息（绝不能进仓库）
+.env
+*.env
+!*.env.example
+
+# 数据库（含用户答题数据/画像）
+state.db
+state.db.*
+*.db
+*.db.bak*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 测试与运行产物
+.pytest_cache/
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db
