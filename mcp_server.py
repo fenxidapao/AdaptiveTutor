@@ -131,6 +131,9 @@ def _call_tool(name: str, arguments: dict) -> dict:
         top_k = int(arguments.get("top_k", 5))
     except (TypeError, ValueError):
         raise JsonRpcError(-32602, "invalid params: 'top_k' must be an integer")
+    # 钳制到 schema 声明的 [1,20]：负值会让 docs[:top_k] 切片语义错乱，
+    # 超上限会绕过 schema max——schema 只是给客户端的提示，服务端必须自守
+    top_k = max(1, min(20, top_k))
     mode = arguments.get("mode", "fast")
     if mode not in ("fast", "accurate"):
         raise JsonRpcError(-32602, "invalid params: 'mode' must be 'fast' or 'accurate'")

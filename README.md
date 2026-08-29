@@ -26,7 +26,7 @@
 - 🔌 **MCP 标准工具层（自实现协议子集）**：`mcp_server.py` 仅用 Python 标准库实现 MCP stdio 传输的最小协议子集（initialize 能力协商 / tools list / tools call，JSON-RPC 2.0），把混合检索暴露为标准 `course_retrieve` 工具（与 `/retrieve` 同一检索实现，fast/accurate 同语义）；经官方 MCP Inspector 互操作实测通过，任意 MCP 兼容 Agent Runtime 可直接挂载（证据见 `mcp_interop_evidence.md`）。零新依赖。
 - ➕ **增量索引 + 去重（P1-4）**：稳定 id（`md5(source::start_index)`）自动去重，上传仅增量 upsert 新文件；按 source 删除单文档，其余不受影响，不再全量重建
 - ✅ **核心算法单测（P2-1）**：零依赖 `test_core.py` 覆盖 BM25 排序 / RRF 融合去重 / 稳定 id 去重 / 接地判定 / 日志格式，脱离 chromadb/ollama/streamlit 亦可在任意干净 Python 环境实跑
-- ✅ **集成测试 + CI（T9）**：`test_api.py`（17 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护）+ `test_retrieval.py`（8 用例，检索链路冒烟，无 Ollama 自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 三套测试）
+- ✅ **集成测试 + CI（T9）**：`test_api.py`（19 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护）+ `test_retrieval.py`（8 用例，检索链路冒烟，无 Ollama 自动 skip）+ `test_mcp.py`（12 用例：11 个零依赖 MCP 协议/参数钳制用例 CI 直跑 + 1 个真实检索冒烟自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 四套测试）
 - 🔒 配置外置 `.env`，模型名/路径/调参不再写死代码
 
 ## 目录结构
@@ -80,6 +80,19 @@ streamlit run app.py
 # 侧栏确认 data/ 下示例 md 存在 → 点「🔄 全量重建索引（data/ 全部）」→ 问「什么是 ACID？」应带来源回答
 # 检索模式：快速=纯向量 top-5（秒级）；精确=向量 top-50 + BM25 融合（+ bge-reranker 精排）top-5（救难 query）
 ```
+
+### MCP 工具层（把检索挂给任意 MCP 兼容 Agent）
+
+`mcp_server.py` 是独立的 stdio 服务（与 Streamlit/API 并存，共用同一套检索实现，零新依赖）：
+
+```powershell
+# 手动验证（官方 Inspector，需 Node）：
+npx -y @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/list
+npx -y @modelcontextprotocol/inspector --cli python mcp_server.py --method tools/call --tool-name course_retrieve --tool-arg query=什么是ACID --tool-arg mode=fast
+# 任意 MCP 兼容客户端（如 Claude Desktop）按 stdio server 配置 command/args 即可挂载
+```
+
+工具 `course_retrieve`：入参 `query` / `top_k`(1-20，服务端强制钳制) / `mode`(fast|accurate)，返回带来源与相关性分数的文本块。互操作实测矩阵与协议细节见 `mcp_interop_evidence.md`。
 
 ## 一键启动
 
