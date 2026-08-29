@@ -446,7 +446,8 @@
     const cv = $("#reportChart");
     if (!cv) return;
     if (state.reportChart) state.reportChart.destroy();
-    const chapters = rows.map(r => r.chapter);
+    // Web 实验流只有 'all' 一个聚合章节，图例显示"总体"
+    const chapters = rows.map(r => r.chapter === "all" ? "总体" : r.chapter);
     const pre = rows.map(r => r.pre == null ? null : Math.round(r.pre * 100));
     const post = rows.map(r => r.post == null ? null : Math.round(r.post * 100));
     if (!chapters.length) { $("#reportChartBox").style.display = "none"; return; }

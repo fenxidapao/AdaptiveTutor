@@ -458,7 +458,15 @@ def api_queue(course: str, user_id: str, session_id: str = Query(None)):
 @app.get("/api/report/{course}/{user_id}")
 def api_report(course: str, user_id: str, session_id: str = Query(None)):
     uid = _start_req(session_id, user_id)
-    return assessor.report(uid, None)
+    r = assessor.report(uid, None)
+    # Web 实验流的测评 chapter 恒为 'all'（前端提交不带章节），而 assessor.by_chapter
+    # 排除 'all'（避免与 CLI 分章数据重复）——柱状图会因此永远为空。此处为 Web 流
+    # 合成聚合行，前端图例显示"总体"。
+    if not r.get("by_chapter") and (r.get("pre") is not None or r.get("post") is not None):
+        r["by_chapter"] = [{"chapter": "all", "mode": None,
+                            "pre": r.get("pre"), "post": r.get("post"),
+                            "gain_pp": r.get("gain_pp")}]
+    return r
 
 
 @app.get("/api/heatmap/{user_id}")

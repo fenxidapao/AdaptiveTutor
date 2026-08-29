@@ -145,3 +145,21 @@ def test_frontend_no_cache_headers():
         r = client.get(path)
         assert r.status_code == 200
         assert r.headers.get("cache-control") == "no-cache", f"{path} 缺 no-cache"
+
+
+# ==================== C2 运维：报告柱状图数据 ====================
+
+def test_report_by_chapter_synthesized_for_web_flow():
+    """Web 实验流测评 chapter 恒为 'all'，assessor.by_chapter 会排除它——
+    API 层必须合成聚合行，否则报告柱状图永远为空（2026-08-29 手机实测发现）。"""
+    uid = new_uid()
+    db.get_user(uid)
+    db.record_assessment(uid, "all", "pretest", "feynman", 0.4, 10)
+    db.record_assessment(uid, "all", "posttest", "feynman", 0.8, 10)
+    r = client.get(f"/api/report/python/{uid}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["pre"] == 0.4 and body["post"] == 0.8
+    assert len(body["by_chapter"]) == 1
+    assert body["by_chapter"][0]["chapter"] == "all"
+    assert body["by_chapter"][0]["pre"] == 0.4 and body["by_chapter"][0]["post"] == 0.8
