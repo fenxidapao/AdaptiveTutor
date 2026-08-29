@@ -15,6 +15,7 @@ import streamlit as st
 import os
 import json
 import re
+import time
 
 # reranker 权重（bge-reranker-v2-m3）加载需访问 HuggingFace。本机 huggingface.co 不可达会
 # 超时卡死（页面一直转）。故在 import 任何可能拉起 sentence_transformers / huggingface_hub 的
@@ -35,13 +36,17 @@ from rag_core import (
     build_rag_chain,
     retrieve_and_rerank,
     get_confidence,
+    is_hard_reject,
+    grounded_generate,
+    HARD_REJECT_ANSWER,
     chunk_file,
     add_documents,
     delete_by_source,
 )
 import config
 from health import collect_status
-from query_log import log_query
+from query_log import log_query, set_feedback
+import semantic_cache
 
 HISTORY_FILE = Path(config.DATA_DIR).parent / ".chat_history.json"
 MAX_HISTORY_TURNS = 6  # 喂给 LLM 的最近轮数
@@ -91,6 +96,35 @@ def render_answer_html(answer, n_sources, mid):
         return m.group(0)
 
     return _BRACKET_RE.sub(repl, answer)
+
+
+def _persist_feedback(msg, fb):
+    """写反馈：回写 .query_log.jsonl（按 log_ts 定位）+ 存历史（刷新不丢）。"""
+    log_ts = msg.get("log_ts")
+    if log_ts:
+        set_feedback(log_ts, fb)
+    save_history(st.session_state.messages)
+
+
+def render_feedback_buttons(mid):
+    """最后一条助手消息的 👍/👎 反馈按钮（#17 最小闭环）。
+
+    幂等：已反馈则只显示当前状态，不再给按钮；点击后回写日志 + 历史并 rerun。
+    """
+    msg = st.session_state.messages[mid]
+    cur = msg.get("feedback")
+    if cur:
+        st.caption(f"反馈：{cur}")
+        return
+    c1, c2 = st.columns(2)
+    if c1.button("👍 有用", key=f"fb_up_{mid}"):
+        msg["feedback"] = "👍"
+        _persist_feedback(msg, "👍")
+        st.rerun()
+    if c2.button("👎 不好", key=f"fb_down_{mid}"):
+        msg["feedback"] = "👎"
+        _persist_feedback(msg, "👎")
+        st.rerun()
 
 
 # ==================== 页面配置 ====================
@@ -169,6 +203,7 @@ with st.sidebar:
                 with st.spinner("首次建库：从 data/ 全量重建索引..."):
                     chunks = load_and_chunk_documents()
                     get_vector_store(chunks)
+                    semantic_cache.invalidate()  # P2：重建后旧缓存作废
                 st.success("首次建库完成！")
             else:
                 with st.spinner("正在增量索引（仅新上传文件）..."):
@@ -186,6 +221,7 @@ with st.sidebar:
             try:
                 chunks = load_and_chunk_documents()
                 get_vector_store(chunks)
+                semantic_cache.invalidate()  # P2：重建后旧缓存作废
                 st.success(f"索引完成！共 {len(chunks)} 块")
                 st.rerun()
             except Exception as e:
@@ -282,6 +318,9 @@ for idx, message in enumerate(st.session_state.messages):
                         f"```text\n{cit['content'][:500]}{'...' if len(cit['content']) > 500 else ''}\n```",
                         unsafe_allow_html=True,
                     )
+            # 最后一条助手消息：渲染 👍/👎 反馈按钮（含刷新/重载后状态恢复）
+            if role == "assistant" and idx == len(st.session_state.messages) - 1:
+                render_feedback_buttons(idx)
 
 if prompt := st.chat_input("问任何专业课问题..."):
     # 先用「已有历史」拼上下文（不含本次提问），再追加用户消息
@@ -289,6 +328,7 @@ if prompt := st.chat_input("问任何专业课问题..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     # 本条助手消息落盘后的索引 = 当前长度（用户已追加），用于锚点 id 去重
     mid = len(st.session_state.messages)
+    t0 = time.time()  # #15 看板：整轮问答耗时计时起点
     with st.chat_message("user", avatar="🧑‍💻"):
         st.markdown(prompt)
 
@@ -296,50 +336,97 @@ if prompt := st.chat_input("问任何专业课问题..."):
         message_placeholder = st.empty()
         try:
             accurate = st.session_state.mode == "accurate"
+            rejected = False          # P1：精确模式是否触发硬拒答
+            grounded_score = None     # P1：生成接地自检得分（仅精确模式）
+            docs = None               # 语义缓存命中时无检索过程，docs 保持 None
+            _from_cache = False
 
-            # ---- P0-3 分阶段进度（覆盖 检索+重排+生成，结束显式标记完成）----
-            # 统一走 retrieve_and_rerank（fast=纯向量 top-5；accurate=向量+BM25 融合+可选 reranker），
-            # 把同一份 docs 既给引用展示、又传给链生成，杜绝重复检索与来源不一致。
-            with st.status("正在处理…", expanded=True) as status:
-                if accurate:
-                    status.update(label="① 向量召回 + BM25 融合 top-%d …" % config.RETRIEVE_K)
-                else:
-                    status.update(label="① 向量召回 top-%d …" % config.RERANKER_TOP_N)
-                docs = retrieve_and_rerank(prompt, force_no_rerank=not accurate)
-                if accurate and config.RERANKER_ENABLED:
-                    status.update(label="② bge-reranker 精排 top-%d …" % config.RERANKER_TOP_N)
-                status.update(label="③ 生成回答…", state="running")
+            # ---- P2 语义缓存（2026-08-25）：命中则跳过检索/重排/生成，直接复用历史答案 ----
+            mode_label = "精确" if accurate else "快速"
+            _cached = semantic_cache.lookup(prompt, mode_label)
+            if _cached:
+                full_response = _cached["answer"]
+                citations = _cached["citations"]
+                _from_cache = True
+            else:
+                # ---- P0-3 分阶段进度（覆盖 检索+重排+生成，结束显式标记完成）----
+                # 统一走 retrieve_and_rerank（fast=纯向量 top-5；accurate=向量+BM25 融合+可选 reranker），
+                # 把同一份 docs 既给引用展示、又传给链生成，杜绝重复检索与来源不一致。
+                with st.status("正在处理…", expanded=True) as status:
+                    if accurate:
+                        status.update(label="① 向量召回 + BM25 融合 top-%d …" % config.RETRIEVE_K)
+                    else:
+                        status.update(label="① 向量召回 top-%d …" % config.RERANKER_TOP_N)
+                    docs = retrieve_and_rerank(prompt, force_no_rerank=not accurate)
+                    if accurate and config.RERANKER_ENABLED:
+                        status.update(label="② bge-reranker 精排 top-%d …" % config.RERANKER_TOP_N)
 
-                # 引用溯源结构
-                citations = []
-                for rank, doc in enumerate(docs, 1):
-                    source = Path(doc.metadata.get("source", "unknown")).name
-                    content = doc.page_content.strip()
-                    # T3: 分数展示优先级 rerank_score → hybrid_score → vector_score
-                    score = (
-                        doc.metadata.get("rerank_score")
-                        or doc.metadata.get("hybrid_score")
-                        or doc.metadata.get("vector_score")
-                    )
-                    start = doc.metadata.get("start_index")
-                    citations.append({
-                        "rank": rank,
-                        "source": source,
-                        "content": content,
-                        "score": score,
-                        "start_index": start,
-                    })
+                    # 引用溯源结构（两种模式共用，均基于同一份 docs）
+                    citations = []
+                    for rank, doc in enumerate(docs, 1):
+                        source = Path(doc.metadata.get("source", "unknown")).name
+                        content = doc.page_content.strip()
+                        # T3: 分数展示优先级 rerank_score → hybrid_score → vector_score
+                        score = (
+                            doc.metadata.get("rerank_score")
+                            or doc.metadata.get("hybrid_score")
+                            or doc.metadata.get("vector_score")
+                        )
+                        start = doc.metadata.get("start_index")
+                        citations.append({
+                            "rank": rank,
+                            "source": source,
+                            "content": content,
+                            "score": score,
+                            "start_index": start,
+                        })
 
-                # 构建带历史记忆的链并生成（复用上方同一份 docs，引用与上下文一致）
-                rag_result = build_rag_chain(
-                    custom_prompt=st.session_state.custom_prompt,
-                    history=history_text,
+                    # ---- P1 硬拒答 + 接地自检（仅精确模式；快速模式保留软提示与低延迟）----
+                    if accurate:
+                        reject, _sig = is_hard_reject(docs)
+                        if reject:
+                            rejected = True
+                            full_response = HARD_REJECT_ANSWER
+                            status.update(
+                                label="🚫 已拒答（检索不相关，signal=%.2f）" % _sig,
+                                state="complete",
+                            )
+                        else:
+                            status.update(label="③ 生成回答…（含接地自检）", state="running")
+                            rag_result = build_rag_chain(
+                                custom_prompt=st.session_state.custom_prompt,
+                                history=history_text,
+                            )
+                            chain = rag_result["chain"]
+                            full_response, grounded_flag, grounded_score = grounded_generate(
+                                prompt, docs, chain
+                            )
+                            status.update(
+                                label="✅ 回答完成" + ("" if grounded_flag else "（未接地→已拒答）"),
+                                state="complete",
+                            )
+                    else:
+                        status.update(label="③ 生成回答…", state="running")
+                        # 构建带历史记忆的链并生成（复用上方同一份 docs，引用与上下文一致）
+                        rag_result = build_rag_chain(
+                            custom_prompt=st.session_state.custom_prompt,
+                            history=history_text,
+                        )
+                        chain = rag_result["chain"]
+                        response = chain.invoke(prompt, docs=docs)
+                        full_response = response
+                        # 显式标记完成，避免阶段标签「③ 生成回答…」残留为 running
+                        status.update(label="✅ 回答完成", state="complete")
+
+                # 写入语义缓存（拒答/未接地不缓存，避免把错误拒答当"热答案"复用）
+                semantic_cache.store(
+                    prompt, mode_label, full_response, citations,
+                    reject=(rejected or (grounded_score is not None
+                                         and grounded_score < config.GROUNDED_SCORE_THRESHOLD)),
                 )
-                chain = rag_result["chain"]
-                response = chain.invoke(prompt, docs=docs)
-                full_response = response
-                # 显式标记完成，避免阶段标签「③ 生成回答…」残留为 running
-                status.update(label="✅ 回答完成", state="complete")
+
+            if _from_cache:
+                st.caption(f"⚡ 语义缓存命中（相似度 {_cached['sim']:.2f}）")
 
             # 流式回显（在状态框外，避免与阶段进度混淆）
             for i in range(len(full_response)):
@@ -350,29 +437,44 @@ if prompt := st.chat_input("问任何专业课问题..."):
                 unsafe_allow_html=True,
             )
 
-            # ---- T3 低置信提示：top-1 向量相似度低于阈值 → 显式告知资料可能不足 ----
-            _conf = get_confidence(docs)
-            if _conf is not None and _conf < config.LOW_CONFIDENCE_THRESHOLD:
+            # ---- 拒答 / 低置信提示 ----
+            # P1 硬拒答：精确模式已判定资料不足/未接地 → 明确拒答横幅（替代软提示）。
+            # 快速模式或精确模式漏拒 → 软提示「资料可能不足」（保留旧 T3 行为）。
+            _conf = None if docs is None else get_confidence(docs)
+            if accurate and (
+                rejected
+                or (grounded_score is not None
+                    and grounded_score < config.GROUNDED_SCORE_THRESHOLD)
+            ):
+                st.error(
+                    "🚫 **已拒答**：根据提供的课程资料无法回答该问题"
+                    "（检索不相关 / 回答未接地）。建议补充相关教材或笔记后重试。"
+                )
+            elif _conf is not None and _conf < config.LOW_CONFIDENCE_THRESHOLD:
                 st.warning(
                     f"⚠️ **资料可能不足**（相关度 {_conf:.2f} < 阈值 {config.LOW_CONFIDENCE_THRESHOLD}）。"
                     "以下回答仅供参考，建议补充相关课程资料后重试。"
                 )
 
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": full_response,
-                "citations": citations,
-            })
-            # ---- P0-2 落盘 ----
-            save_history(st.session_state.messages)
-
             # ---- P1-3 查询 / 接地日志（每轮追加一行 .query_log.jsonl）----
-            log_query(
+            # 先落日志拿到 ts（供反馈按钮回写定位）；fast 模式 rejected 记 None
+            log_ts = log_query(
                 question=prompt,
                 mode="精确" if accurate else "快速",
                 citations=citations,
                 answer=full_response,
+                latency_ms=int((time.time() - t0) * 1000),
+                rejected=(rejected if accurate else None),
             )
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": full_response,
+                "citations": citations,
+                "log_ts": log_ts,
+            })
+            # ---- P0-2 落盘 ----
+            save_history(st.session_state.messages)
 
             # 展示引用
             with st.expander("📌 来源（检索 + 重排结果）", expanded=False):
@@ -391,6 +493,9 @@ if prompt := st.chat_input("问任何专业课问题..."):
                         f"```text\n{cit['content'][:500]}{'...' if len(cit['content']) > 500 else ''}\n```",
                         unsafe_allow_html=True,
                     )
+
+            # 反馈按钮（仅本次生成的这条）
+            render_feedback_buttons(len(st.session_state.messages) - 1)
         except Exception as e:
             st.error(f"出错了: {str(e)}")
             st.info(

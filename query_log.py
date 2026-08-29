@@ -33,13 +33,16 @@ def _is_grounded(answer):
     return True
 
 
-def log_query(question, mode, citations, answer):
+def log_query(question, mode, citations, answer, latency_ms=None, rejected=None):
     """
     追加一行查询日志。
     question: 用户问题文本
     mode: "快速" / "精确"
     citations: app.py 拼好的引用结构列表 [{rank,source,score,...}]
     answer: 模型最终回答文本
+    latency_ms: 整轮问答耗时（毫秒，可选，看板 #15 用）
+    rejected: 是否硬拒答 / 未接地（精确模式才有；快速模式传 None）
+    返回: 本条记录的 ts，供 👍/👎 反馈回写定位。
     """
     try:
         top_sources = [
@@ -50,8 +53,20 @@ def log_query(question, mode, citations, answer):
             }
             for c in (citations or [])
         ]
+        # est_tokens：启发式估算（CJK≈1 token/字，含问题+上下文+回答），非精确计数，
+        # 仅作成本量级参考，避免引入真实 tokenizer 依赖。
+        est_tokens = round(
+            (
+                len(question or "")
+                + sum(len(c.get("content") or "") for c in (citations or []))
+                + len(answer or "")
+            )
+            / 1.5
+        )
+        # 毫秒级 ts：反馈回写靠 ts 精确定位，秒级可能同秒撞车
+        ts = datetime.now().isoformat(timespec="milliseconds")
         record = {
-            "ts": datetime.now().isoformat(timespec="seconds"),
+            "ts": ts,
             "question": question,
             "mode": mode,
             "top_sources": top_sources,
@@ -60,9 +75,48 @@ def log_query(question, mode, citations, answer):
             "has_citation": bool(re.search(r"[\[【［]\d+[\]】］]", answer or "")),
             "grounded": _is_grounded(answer),
             "answer_len": len(answer or ""),
+            # ---- 可观测看板（#15，2026-08-25）新增字段 ----
+            "latency_ms": latency_ms,
+            "est_tokens": est_tokens,
+            "rejected": rejected,
+            "feedback": None,  # 由 set_feedback 在用户点击 👍/👎 后回写
         }
         with open(QUERY_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return ts
     except Exception:
         # 日志失败不影响主功能
+        return None
+
+
+def set_feedback(ts, feedback):
+    """
+    把 ts 对应日志行的 feedback 字段回写为 👍/👎（就地改行，不重复追加）。
+
+    设计说明：feedback 在写入时恒为 null，用户点击 👍/👎 后才补写，
+    避免同一条查询被追加成两行。读改写对单用户本地文件安全；
+    某行解析失败跳过、不影响其他行。回写失败静默，不影响主链路。
+    """
+    if not QUERY_LOG_PATH.exists():
+        return
+    try:
+        lines = QUERY_LOG_PATH.read_text(encoding="utf-8").splitlines()
+        out = []
+        changed = False
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+            except Exception:
+                out.append(line)
+                continue
+            if not changed and rec.get("ts") == ts:
+                rec["feedback"] = feedback
+                changed = True
+            out.append(json.dumps(rec, ensure_ascii=False))
+        if changed:
+            QUERY_LOG_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+    except Exception:
+        # 回写失败不影响主功能
         pass

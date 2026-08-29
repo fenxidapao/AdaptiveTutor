@@ -29,10 +29,23 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))  # 低温度压制�
 # ---------- 重排 Reranker（召回多、精排少，两段式检索）----------
 # 向量召回是双塔粗排（只看语义相似度），reranker 是单塔交互精排，
 # 把 (query, doc) 拼一起过模型，捕捉细粒度相关性。生产 RAG 标配。
-RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "false").lower() == "true"
+# 工程化落地（2026-08-24）：决策④ reranker 默认开启（生产 RAG 标配两段式）。
+# 注意：run_ab.py 仍强制 RERANKER_ENABLED=false 隔离「BM25 纯贡献」A/B，不受此处影响；
+# 快速模式（UI 默认）走 force_no_rerank，本机不触发 reranker，延迟不变；
+# 仅「精确模式」叠加 bge-reranker 精排（延迟 19~115s，已在 UI 文案明示）。
+RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")  # 多语言，中文友好
 RETRIEVE_K = int(os.getenv("RETRIEVE_K", "50"))       # 向量召回候选数（扩到 50：难 query 正确块常排 30+，池不够捞不到；配合 reranker 精排纠回）
-RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", "5"))  # 重排后保留、进 LLM 的条数
+# 重排后保留、进 LLM 的条数。2026-08-24 held-out A 组实测：5→8 后 faithfulness 0.746→0.911、
+# context_recall 0.823→0.873（正确块常排 6~8 名，top-5 供给不足导致模型「无法完整回答」）。
+# 不设更高（10+）：precision 已回落 0.811，噪声随 TOP_N 递增，0.85 门控余量已足。
+RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", "8"))
+# B 专项（2026-08-26）：RRF 融合候选池规模（>RERANKER_TOP_N）。
+# 背景：Q21 软链接等难 query 的正确块只被 BM25 通道命中（向量通道缺席），
+# 融合直接按 RERANKER_TOP_N=8 截断时其 RRF 分（仅 1/(rank+60)）被双通道块压制而淘汰，
+# 永远进不了 rerank。扩到 16 让 BM25-only 正确块先入池，再由 reranker 精排回 top-8。
+# 代价：rerank 候选翻倍 → 「精确模式」延迟上升（bge-reranker CPU 逐条打分）。
+RERANK_CANDIDATE_K = int(os.getenv("RERANK_CANDIDATE_K", "16"))
 
 # ---------- 混合检索（向量 + 自实现 BM25，双通道 RRF 融合）----------
 # 课程资料大量精确术语（ACID / 2NF / 死锁 / 事务隔离级别），纯向量对词面匹配不如 BM25。
@@ -66,6 +79,41 @@ JUDGE_API_BASE = os.getenv("JUDGE_API_BASE", "https://api.deepseek.com/v1")
 # nomic-embed-text 中文基线相似度偏高）→ 阈值取语料内 p5，误拒≈5%，漏拒部分语料外问题；
 # 因此实现为「低置信提示」而非硬拒答。改阈值后重跑 _thr_scan.py 校准。
 LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))
+
+# ---------- 硬拒答 / 生成接地自检（P1，2026-08-24 工程化落地） ----------
+# 软提示（LOW_CONFIDENCE_THRESHOLD）仍保留给「快速模式」；此处为「精确模式」的硬拒答闸门：
+#   - 检索阶段：top-1 向量分 < HARD_REJECT_VECTOR_THRESHOLD 直接硬拒（不进生成）；
+#     精确模式若开启 reranker，其最高 rerank_score < HARD_REJECT_RERANK_THRESHOLD 也判硬拒。
+#   阈值取 0.55（低于软提示 0.69），仅拦明显语料外，误拒率更低。
+#   - 生成阶段：GROUNDED_VERIFY_ENABLED 时，独立裁判判定回答是否完全基于上下文
+#     （grounded），未接地则把答案替换为硬拒文案，杜绝软提示下的幻觉外溢。
+# 实测校准：启用后跑 eval_heldout.py（B 组拒答率应 ≥90%），据结果回调阈值。
+HARD_REJECT_VECTOR_THRESHOLD = float(os.getenv("HARD_REJECT_VECTOR_THRESHOLD", "0.55"))
+HARD_REJECT_RERANK_THRESHOLD = float(os.getenv("HARD_REJECT_RERANK_THRESHOLD", "0.30"))
+GROUNDED_VERIFY_ENABLED = os.getenv("GROUNDED_VERIFY_ENABLED", "true").lower() == "true"
+# grounded 自检：回答被支撑比例（faithfulness 口径）低于此值 → 判未接地，触发硬拒替换。
+GROUNDED_SCORE_THRESHOLD = float(os.getenv("GROUNDED_SCORE_THRESHOLD", "0.60"))
+
+# ---------- 多用户预留扩展点（P2 / Gate 2，2026-08-24） ----------
+# 默认全部关闭：本地 / 局域网部署零摩擦。将来要并发 Web 服务，开开关即可，不必重写后端。
+#   - AUTH_ENABLED=true：所有 API 端点要求请求头 `X-API-Key: <API_KEY>`。
+#   - RATE_LIMIT>0：按客户端 IP 限制每分钟请求数（内存令牌桶，单进程够用；
+#     多副本需换 Redis，见文档路线 β/ε）。
+#   - CORS_ORIGINS：允许源，生产收紧为具体域名（默认 "*" 仅演示 / 前后端分离）。
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
+API_KEY = os.getenv("API_KEY", "")
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "0"))            # 每 IP 每分钟请求上限，0=不限
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+
+# ---------- 语义缓存（P2，2026-08-25） ----------
+# 缓解精确模式 reranker 19~115s 延迟：命中"语义相似"的重复/改写问句时跳过检索/重排/生成。
+#   - SEMANTIC_CACHE_ENABLED：总开关（单用户可关；多人在线热问题重复率高时开着最划算）
+#   - SEMANTIC_CACHE_SIM：embedding 余弦阈值，同义改写（0.93 上下）命中，意图不同不误命中
+#   - SEMANTIC_CACHE_MAX：内存 LRU 上限（单进程；多副本需换 Redis，见文档路线 β/ε）
+# 只缓存正常答案，硬拒答/未接地不缓存；索引重建后自动失效（semantic_cache.invalidate）。
+SEMANTIC_CACHE_ENABLED = os.getenv("SEMANTIC_CACHE_ENABLED", "true").lower() == "true"
+SEMANTIC_CACHE_SIM = float(os.getenv("SEMANTIC_CACHE_SIM", "0.93"))
+SEMANTIC_CACHE_MAX = int(os.getenv("SEMANTIC_CACHE_MAX", "128"))
 
 # ---------- 乱码清洗（2026-08-22：微信小程序 PDF CID 字体乱码） ----------
 # 块级乱码字符占比 > 此阈值 → 整块丢弃（内容已不可读，纯噪声）；

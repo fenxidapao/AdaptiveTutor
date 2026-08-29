@@ -43,6 +43,7 @@ import chromadb
 
 import config
 from reranker import rerank_documents
+import grounding  # P1 接地自检（grounding 仅依赖 config/ollama，无循环依赖）
 
 
 # ====================== 0. 轻量客户端 / Document ======================
@@ -70,6 +71,38 @@ def ollama_chat(messages, temperature=None):
 _SEPARATORS = ["\n\n", "\n", "。", "；", "！", "？", "，", "、", " ", ""]
 
 
+def _extract_pdf_text(path: Path):
+    """PDF 文字层提取：优先 PyMuPDF，回退 pypdf。
+
+    G2（2026-08-28）：实测《微信小程序开发实战》303 页 pypdf 提取中文全为 CID
+    乱码（正文不可读、向量通道失效），而 PyMuPDF 对同一 PDF 296/303 页正常提取。
+    根因是 CID→Unicode 映射（ToUnicode CMap），非扫描版——换提取器即可免费修复，
+    无需 OCR。PyMuPDF 缺失/提取过低时回退 pypdf（保持原扫描版检测行为）。
+    返回 (text, n_pages)；text 为空字符串表示无文字层。
+    """
+    try:
+        import pymupdf  # 1.28+ 官方命名
+    except ImportError:
+        try:
+            import fitz as pymupdf  # 旧命名
+        except ImportError:
+            pymupdf = None
+    if pymupdf is not None:
+        try:
+            doc = pymupdf.open(str(path))
+            pages = [p.get_text() or "" for p in doc]
+            avg = sum(len(t.strip()) for t in pages) / max(len(pages), 1)
+            if avg >= config.PDF_MIN_CHARS_PER_PAGE:
+                return "\n".join(pages), len(pages)
+            # PyMuPDF 也提不出 → 真扫描/伪文字层，落到 pypdf 再确认一次
+        except Exception:
+            pass
+    from pypdf import PdfReader
+    reader = PdfReader(str(path))
+    pages = [(p.extract_text() or "") for p in reader.pages]
+    return "\n".join(pages), len(pages)
+
+
 def _load_text(path: Path):
     """按后缀加载单文件为纯文本；不支持或读取失败返回 None（跳过不中断建库）。
 
@@ -80,17 +113,15 @@ def _load_text(path: Path):
     suffix = path.suffix.lower()
     try:
         if suffix == ".pdf":
-            from pypdf import PdfReader
-            reader = PdfReader(str(path))
-            pages = [(p.extract_text() or "") for p in reader.pages]
-            avg = (sum(len(t.strip()) for t in pages) / len(pages)) if pages else 0
+            text, n_pages = _extract_pdf_text(path)
+            avg = (len(text.strip()) / n_pages) if n_pages else 0
             if avg < config.PDF_MIN_CHARS_PER_PAGE:
                 print(
                     f"[warn] 跳过疑似扫描版/无文字层 PDF: {path.name} "
                     f"(均 {avg:.0f} 字符/页，阈值 {config.PDF_MIN_CHARS_PER_PAGE})"
                 )
                 return None
-            return "\n".join(pages)
+            return text
         if suffix == ".pptx":
             # T6: PPTX 课件支持——zipfile 读 slide XML 提取 <a:t> 文本，按页拼接
             import zipfile
@@ -121,8 +152,14 @@ def _load_text(path: Path):
     return None
 
 
-def _split_text(text, chunk_size, chunk_overlap, separators):
-    """递归切分（模仿 RecursiveCharacterTextSplitter），返回文本块列表。"""
+def _split_recursive(text, chunk_size, separators):
+    """纯递归分割（不合并）：返回按分隔符切开的文本片列表。
+
+    与 _split_text 的区别：这里只切不 merge。修复背景（B 专项）：
+    旧实现每层递归都调 _merge_splits，递归返回的『已合并块』又被父级当 split 再次合并，
+    overlap 逐层叠加 → 同一文本块在单个 chunk 内重复（Q21 软链接块重复两遍即此所致），
+    污染嵌入、破坏检索。现分割与合并彻底分离：分割阶段纯切，合并只在顶层做一次。
+    """
     if text == "":
         return []
 
@@ -143,19 +180,28 @@ def _split_text(text, chunk_size, chunk_overlap, separators):
         # 把分隔符重新贴回除最后一段外的每段，保持原文连续性
         splits = [s + separator for s in raw[:-1]] + [raw[-1]]
 
-    good_splits = []
+    good = []
     for s in splits:
         if s == "":
             continue
         if len(s) < chunk_size:
-            good_splits.append(s)
+            good.append(s)
         else:
             if len(separators) > 1:
-                good_splits.extend(_split_text(s, chunk_size, chunk_overlap, separators[1:]))
+                good.extend(_split_recursive(s, chunk_size, separators[1:]))
             else:
-                good_splits.append(s)
+                good.append(s)
+    return good
 
-    return _merge_splits(good_splits, chunk_size, chunk_overlap)
+
+def _split_text(text, chunk_size, chunk_overlap, separators):
+    """递归切分（模仿 RecursiveCharacterTextSplitter）：分割后只在顶层一次性合并。
+
+    修复（B 专项）：原实现递归内部也 _merge_splits，overlap 多层叠加导致
+    同一文本块在单 chunk 内重复。现 _split_recursive 只切不合并，_merge_splits
+    只在外层调用一次，overlap 仅作用一次，杜绝块内重复。
+    """
+    return _merge_splits(_split_recursive(text, chunk_size, separators), chunk_size, chunk_overlap)
 
 
 def _merge_splits(splits, chunk_size, chunk_overlap):
@@ -573,7 +619,9 @@ def hybrid_retrieve(question, k=config.RETRIEVE_K):
         return []
     all_chunks = _get_all_chunks()
     bm25_docs = _bm25_rank(question, all_chunks, top_n=config.BM25_TOP_K)  # 通道 B：BM25 全库 top-K
-    return _rrf_fuse([vector_docs, bm25_docs], top_n=config.RERANKER_TOP_N)
+    # B 专项：融合候选池扩到 RERANK_CANDIDATE_K（>RERANKER_TOP_N），
+    # 让「仅 BM25 命中、向量缺席」的正确块先进池，再由 reranker 精排回 top-N（见 retrieve_and_rerank）。
+    return _rrf_fuse([vector_docs, bm25_docs], top_n=config.RERANK_CANDIDATE_K)
 
 
 def retrieve_and_rerank(question, force_no_rerank=False):
@@ -591,9 +639,12 @@ def retrieve_and_rerank(question, force_no_rerank=False):
         return retrieve_vector(question, k=config.RERANKER_TOP_N)
 
     if config.HYBRID_ENABLED:
-        docs = hybrid_retrieve(question)  # 已融合出 top-N
+        docs = hybrid_retrieve(question)  # 已融合出 RERANK_CANDIDATE_K 候选
         if config.RERANKER_ENABLED:
             docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
+        else:
+            # 不开 reranker：候选池截回 RERANKER_TOP_N，保证进 LLM 的条数与旧版一致
+            docs = docs[: config.RERANKER_TOP_N]
     else:
         docs = retrieve_vector(question, k=config.RETRIEVE_K)
         if config.RERANKER_ENABLED:
@@ -612,14 +663,62 @@ def get_confidence(docs):
     return docs[0].metadata.get("vector_score")
 
 
+def is_hard_reject(docs):
+    """P1（2026-08-24）：硬拒答检索阶段判定。
+
+    返回 (reject: bool, signal: float)：
+      - docs 为空 → 直接拒（检索无结果）。
+      - top-1 向量相似度 < HARD_REJECT_VECTOR_THRESHOLD → 拒（明显语料外）。
+      - 精确模式且 reranker 开启时，top-1 rerank_score < HARD_REJECT_RERANK_THRESHOLD → 拒。
+    阈值经 eval_heldout.py（B 组拒答率应 ≥90%）校准；取 0.55 仅拦明显语料外，误拒率低。
+    """
+    if not docs:
+        return True, 0.0
+    top = docs[0]
+    vs = top.metadata.get("vector_score")
+    rs = top.metadata.get("rerank_score")
+    if vs is not None and vs < config.HARD_REJECT_VECTOR_THRESHOLD:
+        return True, vs
+    if config.RERANKER_ENABLED and rs is not None and rs < config.HARD_REJECT_RERANK_THRESHOLD:
+        return True, rs
+    return False, (vs if vs is not None else (rs if rs is not None else 0.0))
+
+
+# 硬拒答标准文案（语料外明确拒，而非软提示；符合系统提示「宁可少答不可错答」）。
+HARD_REJECT_ANSWER = (
+    "根据提供的课程资料无法回答该问题——检索到的内容与问题不相关（资料可能不足，"
+    "或该问题超出本课程范围）。建议补充相关教材/笔记后重试，或换一种更贴近课程知识点的问法。"
+)
+
+
+def grounded_generate(question, docs, chain):
+    """P1（2026-08-24）：带接地自检的生成。
+
+    流程：先正常生成 → 若 GROUNDED_VERIFY_ENABLED，用独立裁判校验是否完全基于上下文；
+    未接地则把答案替换为 HARD_REJECT_ANSWER 并返回 grounded=False。
+    返回 (answer, grounded_flag, grounded_score, citations 不在此处理)。
+    仅「精确模式」调用（保护快速模式延迟，见 app.py）。
+    """
+    answer = chain.invoke(question, docs=docs)
+    grounded_flag = True
+    grounded_score = 1.0
+    if config.GROUNDED_VERIFY_ENABLED:
+        context = "\n\n".join(d.page_content for d in docs)
+        res = grounding.verify_grounded(context, answer)
+        grounded_score = res["score"]
+        if not res["grounded"]:
+            answer = HARD_REJECT_ANSWER
+            grounded_flag = False
+    return answer, grounded_flag, grounded_score
+
+
 # ====================== 4. 拼 RAG 链（含引用） ======================
 SYSTEM_RULES = """你是一位严谨、准确的高校课程助教，专门解答专业课与课本问题。
 请严格遵守以下规则：
 1. 只能依据下面提供的【上下文】作答，严禁使用上下文之外的知识，也不得凭记忆编造。
-   重要：若【上下文】缺少回答所需的某些信息，请直接说明"根据提供的资料无法回答/无法完整回答（缺 XX）"，
-   绝不要用你自己的通用知识去补全答案——宁可少答，不可错答。
-2. 合理使用 Markdown（加粗、列表等）让回答清晰易读。
-3. 仅当【上下文】确实未提供回答所需信息、或上下文内部相互矛盾时，才说明"根据提供的资料无法回答"；不要猜测。注意：即使上下文描述的是示例、虚构或假设性概念，只要其中已给出明确答案，就必须基于上下文如实作答，不得以此为由拒答。
+   重要：只要【上下文】包含了与问题相关的信息，就必须基于上下文尽量答全、答准；即使某些细节在资料中未完整展开，也要把资料已给出的部分讲清楚，不要因"信息不完整"而拒答或只说"无法回答"。
+2. 仅当【上下文】完全没有提供与问题相关的任何信息、或上下文内部相互矛盾时，才说明"根据提供的资料无法回答"。不要猜测，也不要因个别细节缺失就用通用知识编造补全。注意：即使上下文描述的是示例、虚构或假设性概念，只要其中已给出明确答案，就必须基于上下文如实作答，不得以此为由拒答。
+3. 合理使用 Markdown（加粗、列表等）让回答清晰易读。
 4. 回答语言必须与用户提问保持一致（用户用中文提问，就用中文回答）。
 5. 回答要紧扣问题，避免堆砌与问题无关的内容。
 6. 回答中每提及一条来自【上下文】的具体事实，必须紧跟来源标注 [n]（半角方括号，n 为下方『已知来源』中的编号，即上下文第 n 段）；同一句可标多个如 [1][2]。仅当某事实确实无法对应任何来源时才不标。严禁编造超出范围的序号（n 必须 ≤ 已知来源条数）。

@@ -31,10 +31,11 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
+from api_security import RateLimitMiddleware, require_auth
 from api_schemas import (
     CheckItem,
     Citation,
@@ -52,6 +53,7 @@ from api_schemas import (
 )
 from health import collect_status
 from query_log import log_query
+import semantic_cache
 from rag_core import (
     add_documents,
     build_rag_chain,
@@ -130,15 +132,20 @@ app = FastAPI(
     "交互式文档见 /docs（Swagger UI）。",
     version="1.0.0",
     lifespan=lifespan,
+    # Gate 2：全局鉴权依赖（AUTH_ENABLED=false 时为 no-op，零摩擦本地部署）。
+    dependencies=[Depends(require_auth)],
 )
 
-# 演示 / 前后端分离场景放开跨域；生产可收紧为具体域名。
+# 跨域：演示 / 前后端分离放开（默认 "*"）；生产在 .env 用 CORS_ORIGINS 收紧为具体域名。
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Gate 2：按 IP 限流（RATE_LIMIT=0 时为 no-op）。多副本需换 Redis（文档路线 β/ε）。
+app.add_middleware(RateLimitMiddleware, per_minute=config.RATE_LIMIT)
 
 
 # ==================== 服务信息 ====================
@@ -195,24 +202,43 @@ def query(req: QueryRequest):
     """
     t0 = time.time()
     try:
-        docs = _retrieve(req.question, req.mode)
-        citations = _build_citations(docs)
+        # P2 语义缓存（2026-08-25）：命中则跳过检索/重排/生成，直接复用历史答案
+        mode_label = "精确" if req.mode == "accurate" else "快速"
+        cached = semantic_cache.lookup(req.question, mode_label)
+        if cached:
+            answer = cached["answer"]
+            citations = cached["citations"]
+            _from_cache = True
+        else:
+            docs = _retrieve(req.question, req.mode)
+            citations = _build_citations(docs)
 
-        rag = build_rag_chain(custom_prompt=req.custom_prompt, history=req.history or "")
-        answer = rag["chain"].invoke(req.question, docs=docs)
+            rag = build_rag_chain(custom_prompt=req.custom_prompt, history=req.history or "")
+            answer = rag["chain"].invoke(req.question, docs=docs)
+            # 写入缓存（/query 不做硬拒答/接地自检，非空即可缓存）
+            semantic_cache.store(req.question, mode_label, answer,
+                                 [c.model_dump() for c in citations])
+            _from_cache = False
 
+        # 归一化 citations 为 dict 列表：命中缓存时是纯 dict，未命中时是 Citation 对象
+        cit_dicts = [c.model_dump() if hasattr(c, "model_dump") else c for c in citations]
         log_query(
             question=req.question,
-            mode="精确" if req.mode == "accurate" else "快速",
-            citations=[c.model_dump() for c in citations],
+            mode=mode_label,
+            citations=cit_dicts,
             answer=answer,
+            latency_ms=int((time.time() - t0) * 1000),  # #15 看板：整轮耗时
         )
         # grounded 判定与 query_log._is_grounded 的启发式保持一致：
         # 非空 且 未声称「无法回答」→ 视为接地
         grounded = bool(answer.strip()) and "无法回答" not in answer
-        # T3：top-1 向量相似度低于阈值 → 资料可能不足（low_confidence=true，前端据此提示）
-        _conf = get_confidence(docs)
-        low_confidence = _conf is not None and _conf < config.LOW_CONFIDENCE_THRESHOLD
+        # T3：top-1 向量相似度低于阈值 → 资料可能不足（low_confidence=true，前端据此提示）；
+        # 缓存命中时无检索过程，docs 未定义 → 不判低置信
+        if _from_cache:
+            low_confidence = False
+        else:
+            _conf = get_confidence(docs)
+            low_confidence = _conf is not None and _conf < config.LOW_CONFIDENCE_THRESHOLD
         return QueryResponse(
             answer=answer,
             mode=req.mode,
@@ -220,6 +246,7 @@ def query(req: QueryRequest):
             latency_ms=int((time.time() - t0) * 1000),
             grounded=grounded,
             low_confidence=low_confidence,
+            cached=_from_cache,
         )
     except HTTPException:
         raise
@@ -302,6 +329,7 @@ async def upload_document(file: UploadFile = File(..., description="PDF / TXT / 
             # 首次建库：全量重建（与 app.py 逻辑一致）
             chunks = load_and_chunk_documents()
             get_vector_store(chunks)
+            semantic_cache.invalidate()  # P2：重建后旧缓存作废
             added = len(chunks)
             print(f"[api] first index: rebuilt {added} chunks from data/")
         else:
@@ -347,6 +375,7 @@ def rebuild_index():
     if not chunks:
         raise HTTPException(status_code=400, detail="data/ 下没有可索引的文档（PDF / TXT / MD / DOCX）")
     get_vector_store(chunks)
+    semantic_cache.invalidate()  # P2：重建后旧缓存作废
     return RebuildResponse(chunks=len(chunks), files=len({d.metadata["source"] for d in chunks}))
 
 

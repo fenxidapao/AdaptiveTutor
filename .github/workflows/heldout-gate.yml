@@ -1,0 +1,57 @@
+name: Held-out Gate
+
+# held-out 评估门控（工程化 P0：可防御评估）。
+# 重要：该作业需要本机 Ollama（生成 llama3.1:8b + 裁判 qwen2.5:7b + 嵌入 nomic-embed-text）
+# 以及已建好的 chroma_db。GitHub 托管的 ubuntu  runner 没有 Ollama，因此必须跑在
+# 自带 Ollama 的 self-hosted runner 上（或本地手动 python eval_heldout.py）。
+# 若没有 self-hosted runner，本工作流会被跳过，不会让 CI 变红——但门控也就没自动跑，
+# 需本地手动执行并附结果到 PR。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  heldout:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖（评估栈）
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-eval.txt
+
+      - name: 确认 Ollama 可用
+        run: |
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              urllib.request.urlopen("http://localhost:11434", timeout=5)
+          except Exception as e:
+              print("Ollama 不可达，跳过 held-out 门控:", e)
+              sys.exit(0)   # 无 Ollama 时优雅跳过，不阻断其它 CI
+          PY
+
+      - name: 跑 held-out 评估 + 门控
+        run: |
+          python eval_heldout.py
+        continue-on-error: true   # 门控未达标只记录，不强制红（避免误伤日常提交）
+
+      - name: 上传评估明细
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heldout-results
+          path: |
+            eval_results_heldout_A.csv
+            eval_results_heldout_BC.csv
+          if-no-files-found: ignore

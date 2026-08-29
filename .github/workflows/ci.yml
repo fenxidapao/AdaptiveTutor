@@ -32,7 +32,9 @@ jobs:
         run: |
           python -m py_compile rag_core.py rag_search_utils.py reranker.py \
             app.py main.py api_schemas.py config.py health.py query_log.py \
-            eval_data.py eval_local.py run_ab.py
+            eval_data.py eval_local.py run_ab.py \
+            eval_data_heldout.py grounding.py backup_index.py eval_heldout.py \
+            api_security.py ingest_ocr.py
 
       - name: 核心算法单测（零外部依赖）
         run: python test_core.py

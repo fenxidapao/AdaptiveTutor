@@ -52,6 +52,9 @@ class QueryResponse(BaseModel):
     low_confidence: bool = Field(
         False, description="T3：top-1 向量相似度低于 LOW_CONFIDENCE_THRESHOLD，资料可能不足"
     )
+    cached: bool = Field(
+        False, description="P2 语义缓存：是否命中缓存直接复用历史答案（未走检索/生成）"
+    )
 
 
 class RetrieveRequest(BaseModel):

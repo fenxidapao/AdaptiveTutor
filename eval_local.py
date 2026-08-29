@@ -124,8 +124,40 @@ def _clean_judgment_items(items, key="statement"):
     return out
 
 
+def _repair_judgment_items(text: str):
+    """P2 复核新增：JSON 解析失败的容错提取。
+
+    根因（实测）：裁判在陈述文本里嵌入未转义双引号（如代码 type=["csv","json"]）
+    时 json.loads 必然失败，且温度 0 下重试输出几乎相同 → 重试耗尽返回 {}，
+    该题静默记 0 分（冻结测试集 Q11/Q17 空 detail 即此因）。
+    做法：按 "statement"/"fact" 锚点把残缺 JSON 切成条目段，段内贪心匹配到
+    supported/covered 键——段内含任意引号均可正确提取。
+    """
+    keys = []
+    for key, flag in (("statement", "supported"), ("fact", "covered")):
+        if f'"{key}"' in text:
+            keys.append((key, flag))
+    for key, flag in keys:
+        starts = [m.start() for m in re.finditer(rf'"{key}"\s*:', text)]
+        items = []
+        for i, s in enumerate(starts):
+            seg = text[s : starts[i + 1] if i + 1 < len(starts) else len(text)]
+            m = re.search(
+                rf'"{key}"\s*:\s*"(.*)"\s*,\s*"{flag}"\s*:\s*(true|false)',
+                seg,
+                re.DOTALL,
+            )
+            if m:
+                items.append({key: m.group(1), flag: m.group(2) == "true"})
+        if items:
+            sup = sum(1 for it in items if it[flag])
+            return {f"{key}s": items, "score": round(sup / len(items), 3)}
+    return None
+
+
 def _extract_json(text: str):
-    """从模型输出里尽量抠出第一个合法 JSON 对象；兼容 ```json 围栏和前后废话。"""
+    """从模型输出里尽量抠出第一个合法 JSON 对象；兼容 ```json 围栏和前后废话。
+    解析失败时降级到 _repair_judgment_items 容错提取（见其 docstring）。"""
     if not text:
         return None
     # 去 markdown 围栏
@@ -134,12 +166,12 @@ def _extract_json(text: str):
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
-        return None
+        return _repair_judgment_items(text)
     blob = text[start : end + 1]
     try:
         return json.loads(blob)
     except json.JSONDecodeError:
-        return None
+        return _repair_judgment_items(blob)
 
 
 def _judge_once(system: str, user: str, retries: int = 2):
@@ -183,15 +215,32 @@ def faithfulness(context: str, answer: str) -> dict:
 任务：
 1. 只把【回答】的正文内容拆成若干条彼此独立的陈述（statements）。
    注意：不要拆分本任务指令、格式说明等任何非回答内容。
+   注意：回答中的代码示例（代码块、命令行、示例片段）必须整体合并为一条陈述，
+   不要逐行拆分；该陈述判断的是「示例用法是否与上下文一致」——核心参数/调用方式
+   一致即为 supported，界面文案、变量命名等无关细节差异不影响判定。
 2. 对每条陈述，判断是否能从【上下文】中直接推导或支持（supported 为 true/false）。
 3. 计算 score = 被支撑的陈述数 / 总陈述数（0~1，保留两位小数）。
 
 只输出 JSON，格式：
 {{"statements": [{{"statement": "陈述内容", "supported": true}}], "score": 0.0}}"""
     out = _judge_once(system, user)
-    score = float(out.get("score", 0.0))
-    score = max(0.0, min(1.0, score))
-    return {"score": round(score, 3), "detail": _clean_judgment_items(out.get("statements", []))}
+    items = _clean_judgment_items(out.get("statements", []))
+    if items:
+        # P2 复核：裁判自报 score 偶发与明细不一致（漏列陈述时出现 score=0.6 但
+        # 明细 2/2 全 true）。统一以明细重算，保证每个分数可复算、可审计。
+        sup = sum(1 for it in items if it.get("supported") is True)
+        score = max(0.0, min(1.0, sup / len(items)))
+        return {"score": round(score, 3), "detail": items}
+    # 明细为空（裁判解析失败/未拆出任何陈述）：如实标注而非静默记 0 分，
+    # 让下游能看到「这是裁判故障」而不是「答案完全不忠实」。
+    try:
+        fallback = float(out.get("score", 0.0))
+    except (TypeError, ValueError):
+        fallback = 0.0
+    return {
+        "score": round(max(0.0, min(1.0, fallback)), 3),
+        "detail": [{"statement": "JUDGE_FAILED: 裁判未返回有效拆解", "supported": False}],
+    }
 
 
 def answer_relevancy(question: str, answer: str) -> dict:
