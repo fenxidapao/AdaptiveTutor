@@ -1,7 +1,9 @@
 """C 阶段实验分析（PLAN 18.3 / EXPERIMENT.md §6）。
 
-读 state.db → 组间对比（feynman vs lecture 前后测提升）→ markdown 报告。
-用法：/d/anacoda3/python.exe scripts/analyze_experiment.py [--db state.db] [--out reports/experiment.md]
+读实验库 → 组间对比（feynman vs lecture 前后测提升）→ markdown 报告。
+用法：/d/anacoda3/python.exe scripts/analyze_experiment.py [--db data/state.db] [--out reports/experiment.md]
+默认读 data/state.db（容器卷挂载的实验库；2026-08-29 踩坑：曾默认读到根目录
+pytest 残渣库 state.db，443 个假用户）。
 """
 
 import argparse
@@ -11,6 +13,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import db  # noqa: E402
+
+# 测试账号剔除（C2 运行约定，docs/EXPERIMENT_LOG.md）：非参与者数据不入组间统计/流失率
+EXCLUDED_USER_PREFIXES = ("test_",)
+EXCLUDED_USERS = {"smoke_test", "u0", "u_eval", "u_eval_mem"}
 
 
 def _latest(rows, kind: str):
@@ -31,7 +37,10 @@ def _first(rows, kind: str):
 
 
 def analyze(db_path: str) -> dict:
-    users = {u["user_id"]: u for u in db.list_users(db_path)}
+    all_users = {u["user_id"]: u for u in db.list_users(db_path)}
+    users = {uid: u for uid, u in all_users.items()
+             if not uid.startswith(EXCLUDED_USER_PREFIXES) and uid not in EXCLUDED_USERS}
+    excluded = sorted(set(all_users) - set(users))
     rows_by_user = {}
     for uid in users:
         rows_by_user[uid] = db.list_assessments(uid, db_path=db_path)
@@ -77,7 +86,7 @@ def analyze(db_path: str) -> dict:
         return fl
 
     return {"records": records, "dropouts": dropouts, "flags": flags,
-            "reflow": reflow}
+            "reflow": reflow, "excluded": excluded}
 
 
 def _group_stats(records, include):
@@ -107,8 +116,10 @@ def render(analysis: dict) -> str:
     def strict_incl(r):
         return not flag_map[r["user_id"]]  # 剔除天花板 + 疑似快速作答
 
+    excluded = analysis.get("excluded", [])
     lines = ["# C 阶段实验分析报告", "",
              f"- 生成时间：{__import__('datetime').datetime.now().isoformat(timespec='seconds')}",
+             f"- 剔除测试账号：{len(excluded)} 个（{', '.join(excluded) or '无'}；非参与者，约定见 EXPERIMENT_LOG）",
              f"- 注册用户数：{len(records) + len(dropouts)}，有前后测：{len(records)}，流失（无后测）：{len(dropouts)}",
              f"- 流失率：{len(dropouts) / (len(records) + len(dropouts)) * 100:.0f}%", ""]
 
@@ -155,13 +166,12 @@ def render(analysis: dict) -> str:
 
 def main():
     ap = argparse.ArgumentParser(description="C 阶段实验分析")
-    ap.add_argument("--db", default=None, help="state.db 路径（默认 config.DB_PATH）")
+    ap.add_argument("--db", default="data/state.db",
+                    help="实验库路径（默认 data/state.db，容器卷挂载库）")
     ap.add_argument("--out", default="reports/experiment.md", help="报告输出路径")
     args = ap.parse_args()
 
-    import config
-    db_path = args.db or config.DB_PATH
-    analysis = analyze(db_path)
+    analysis = analyze(args.db)
     report = render(analysis)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
