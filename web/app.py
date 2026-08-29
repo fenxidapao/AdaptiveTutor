@@ -79,6 +79,33 @@ def _start_req(session_id: str | None, user_id: str) -> str:
     return uid
 
 
+def _require_session(session_id: str | None) -> str:
+    """EXPERIMENT_AUTH=1 时要求任意有效会话（管理类端点，如 /api/users 列表）。
+    返回会话归属的 user_id；默认 0 时返回空串（兼容本机演示）。"""
+    if not config.EXPERIMENT_AUTH:
+        return ""
+    if not session_id:
+        raise HTTPException(401, "未登录，请先注册/登录")
+    uid = db.get_session_user(session_id)
+    if uid is None:
+        raise HTTPException(401, "会话无效或已过期，请重新登录")
+    return uid
+
+
+def _enforce_feynman_group(user_id: str) -> None:
+    """C2 自变量硬门禁（EXPERIMENT_AUTH=1）：费曼追问端点仅 feynman 组可用。
+
+    EXPERIMENT.md §3：实验差异 = feynman 组走 /api/feynman/*（先答后讲+追问），
+    lecture 组只看 /api/explain 标准讲解。前端按 group 分支只是 UX——
+    测量有效性靠这里（lecture 组即使篡改前端也进不了费曼流程）。
+    """
+    if not config.EXPERIMENT_AUTH:
+        return
+    group = (db.get_user(user_id) or {}).get("group_name")
+    if group != "feynman":
+        raise HTTPException(403, "当前学习模式不含费曼追问环节")
+
+
 @app.get("/")
 def index():
     return FileResponse(WEB_DIR / "index.html")
@@ -86,8 +113,17 @@ def index():
 
 @app.get("/health")
 def health():
-    """存活检查（compose healthcheck 依赖，PLAN 19.5）。"""
-    return {"status": "ok", "service": "feynmantutor"}
+    """存活检查（compose healthcheck 依赖，PLAN 19.5）+ RAG 可达状态
+    （C2 运维：讲解静默降级 notes 时在这里可见，不再无告警）。"""
+    rag = "down"
+    try:
+        import urllib.request
+        urllib.request.urlopen(config.RAG_BASE_URL.rstrip("/") + "/health", timeout=2)
+        rag = "up"
+    except Exception:  # noqa: BLE001
+        pass
+    return {"status": "ok", "service": "feynmantutor",
+            "rag": rag, "experiment_auth": config.EXPERIMENT_AUTH}
 
 
 # ==================== 用户 ====================
@@ -142,18 +178,28 @@ def api_me(session_id: str = Query(None)):
 
 
 @app.get("/api/users")
-def api_users():
-    return db.list_users()
+def api_users(session_id: str = Query(None)):
+    """全部用户列表（实验统计用）。鉴权 + 剥离 password_hash（P0-2 修复：
+    原实现直接返回整行，未登录可读全部用户密码哈希）。"""
+    _require_session(session_id)
+    return [_public_user(u) for u in db.list_users()]
 
 
 @app.post("/api/users")
-def api_register(user_id: str = Query(...), name: str = Query("")):
-    return db.get_user(user_id, name=name or None)
+def api_user_upsert(user_id: str = Query(...), name: str = Query(""),
+                    session_id: str = Query(None)):
+    """建用户/查用户（遗留兼容端点，前端注册已走 /api/register）。
+    实验模式下禁用：绕过密码注册会制造无凭据账号并占用分组均衡计数。"""
+    if config.EXPERIMENT_AUTH:
+        raise HTTPException(403, "实验模式下请走 /api/register 注册")
+    return _public_user(db.get_user(user_id, name=name or None))
 
 
 @app.get("/api/users/{user_id}")
-def api_user(user_id: str):
-    return db.get_user(user_id)
+def api_user(user_id: str, session_id: str = Query(None)):
+    """单用户信息。鉴权（只能看自己）+ 剥离 password_hash。"""
+    _require_auth(session_id, user_id)
+    return _public_user(db.get_user(user_id))
 
 
 # ==================== 学习包 ====================
@@ -204,8 +250,14 @@ def _strip_answers(qs: list[dict]) -> list[dict]:
 def api_quiz_submit(course: str, kind: str,
                     payload: dict):
     """提交一套题。payload: {user_id, session_id?, chapter?, mode?, answers: {ex_id: answer}}"""
+    # 先鉴权后校验：实验模式下未登录缺参应 401 而非 400（不向未认证方暴露校验细节）
     session_id = payload.get("session_id")
-    user_id = _start_req(session_id, payload["user_id"])
+    user_id = _start_req(session_id, str(payload.get("user_id") or ""))
+    if not user_id:
+        raise HTTPException(400, "user_id 必填")
+    answers = payload.get("answers") or {}  # 空 answers 合法（全错提交）
+    if not isinstance(answers, dict):
+        raise HTTPException(400, "answers 必须是对象")
     answers = payload["answers"]
     chapter = payload.get("chapter")
     mode = payload.get("mode", "feynman")
@@ -267,8 +319,12 @@ def api_exercises(course: str, kp_id: str | None = None):
 def api_grade(payload: dict):
     """判一道题。payload: {user_id, session_id?, ex_id, answer}"""
     session_id = payload.get("session_id")
-    user_id = _start_req(session_id, payload["user_id"])
-    ex_id = payload["ex_id"]
+    user_id = _start_req(session_id, str(payload.get("user_id") or ""))
+    if not user_id:
+        raise HTTPException(400, "user_id 必填")
+    ex_id = payload.get("ex_id")
+    if not ex_id:
+        raise HTTPException(400, "ex_id 必填")
     answer = payload.get("answer", "")
     ex = _find_exercise(ex_id)
     if ex is None:
@@ -313,14 +369,15 @@ def api_explain(course: str, kp_id: str, user_id: str = Query("u0"),
 def api_feynman_turn(payload: dict):
     """费曼追问一轮。payload: {course, kp_id, user_id?, session_id?, transcript: [{role, content}...]}"""
     session_id = payload.get("session_id")
-    uid = _start_req(session_id, payload.get("user_id", "u0"))
-    course = payload["course"]
-    kp_id = payload["kp_id"]
+    uid = _start_req(session_id, str(payload.get("user_id") or "") or "u0")
+    _enforce_feynman_group(uid)
+    course = payload.get("course") or "python"
+    kp_id = payload.get("kp_id") or ""
     transcript = payload.get("transcript", [])
     graph = learning_pack.load_graph(course)
     kp = graph["_by_id"].get(kp_id)
     if kp is None:
-        raise HTTPException(404, f"未知知识点: {kp_id}")
+        raise HTTPException(404, f"未知知识点: {kp_id or '缺失'}")
     reply = feynman.generate_followup(kp, transcript, uid)
     return {"coach": reply, "transcript": transcript}
 
@@ -329,14 +386,15 @@ def api_feynman_turn(payload: dict):
 def api_feynman_summarize(payload: dict):
     """费曼结束，总结盲点。payload: {course, kp_id, transcript, user_id?, session_id?}"""
     session_id = payload.get("session_id")
-    uid = _start_req(session_id, payload.get("user_id", "u0"))
-    course = payload["course"]
-    kp_id = payload["kp_id"]
+    uid = _start_req(session_id, str(payload.get("user_id") or "") or "u0")
+    _enforce_feynman_group(uid)
+    course = payload.get("course") or "python"
+    kp_id = payload.get("kp_id") or ""
     transcript = payload.get("transcript", [])
     graph = learning_pack.load_graph(course)
     kp = graph["_by_id"].get(kp_id)
     if kp is None:
-        raise HTTPException(404, f"未知知识点: {kp_id}")
+        raise HTTPException(404, f"未知知识点: {kp_id or '缺失'}")
     gaps = feynman.summarize_gaps(kp, transcript, uid)
     # 记录讲解次数（费曼环节算讲解一次）
     if transcript:

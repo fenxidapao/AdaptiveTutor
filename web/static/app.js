@@ -6,6 +6,7 @@
   const state = {
     user: "u0",
     session: localStorage.getItem("ft_session") || null,
+    group: null, // C2 自变量（P0-1 修复）：feynman=先答后讲+追问；lecture=直接标准讲解
     course: "python",
     kpList: [],
     // 费曼会话状态（前端保存 transcript，后端无状态）
@@ -67,6 +68,7 @@
       const r = await api(path, { method: "POST", body: JSON.stringify({ user_id: uid, password: pwd }) });
       state.user = r.user.user_id;
       state.session = r.session_id;
+      state.group = r.user.group_name || null;
       localStorage.setItem("ft_session", r.session_id);
       $("#userPwd").value = "";
       const g = r.user.group_name ? `（实验组: ${r.user.group_name}）` : "";
@@ -77,7 +79,7 @@
 
   function doLogout() {
     const sid = state.session;
-    state.session = null; state.user = "u0";
+    state.session = null; state.user = "u0"; state.group = null;
     localStorage.removeItem("ft_session");
     $("#loginHint").textContent = "未登录（演示模式 u0）";
     if (sid) api("/api/logout", { method: "POST", body: JSON.stringify({ session_id: sid }) }).catch(() => {});
@@ -269,8 +271,13 @@
     card.className = "card";
     card.innerHTML = "<h3>标准讲解</h3><div id='explainText' class='hint'>加载中…</div>";
     box.appendChild(card);
-    const r = await api(sessUrl(`/api/explain/${state.course}/${state.feyman.kpId}?user_id=${state.user}`));
-    $("#explainText").textContent = r.explanation;
+    try {
+      const r = await api(sessUrl(`/api/explain/${state.course}/${state.feyman.kpId}?user_id=${state.user}`));
+      $("#explainText").textContent = r.explanation;
+    } catch (e) {
+      $("#explainText").textContent = `讲解加载失败：${e.message}`;
+      return;
+    }
     // 接着练习
     const pBtn = document.createElement("button");
     pBtn.className = "primary mt";
@@ -520,6 +527,7 @@
       try {
         const me = await api(`/api/me?session_id=${encodeURIComponent(state.session)}`);
         state.user = me.user_id;
+        state.group = me.group_name || null;
         $("#loginHint").textContent = `已登录 ${me.user_id}${me.group_name ? `（实验组: ${me.group_name}）` : ""}`;
         $("#btnLogout").classList.remove("hidden");
       } catch (e) {
@@ -533,7 +541,10 @@
     $("#btnStartKp").onclick = () => {
       state.feyman = { kpId: $("#kpSelect").value, transcript: [], round: 0, maxRounds: 3 };
       $("#learnBox").innerHTML = "";
-      renderFeynman();
+      // C2 自变量分支（P0-1 修复）：lecture 组直接看标准讲解，不走费曼追问。
+      // 硬约束在服务端 /api/feynman/*（lecture 调用即 403），前端分支只决定 UX。
+      if (state.group === "lecture") showExplain();
+      else renderFeynman();
     };
     await loadKps();
     loadQueue();

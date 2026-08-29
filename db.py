@@ -182,12 +182,18 @@ def _verify_password(pwd: str, stored: str) -> bool:
 
 
 def _auto_group(db_path: str | None = None) -> str:
-    """注册自动分组：分到当前人数少的组（均衡分配，实验设计见 docs/EXPERIMENT.md）。"""
+    """注册自动分组：分到当前人数少的组（均衡分配，实验设计见 docs/EXPERIMENT.md）。
+
+    只统计有 password_hash 的注册账号——遗留无凭据账号（u0/smoke_test 等
+    get_user 隐式创建，永远无法登录）不占用均衡计数，避免污染分组比例。
+    """
     with _conn(db_path) as c:
         feynman = c.execute(
-            "SELECT COUNT(*) FROM users WHERE group_name='feynman'").fetchone()[0]
+            "SELECT COUNT(*) FROM users WHERE group_name='feynman' "
+            "AND password_hash IS NOT NULL").fetchone()[0]
         lecture = c.execute(
-            "SELECT COUNT(*) FROM users WHERE group_name='lecture'").fetchone()[0]
+            "SELECT COUNT(*) FROM users WHERE group_name='lecture' "
+            "AND password_hash IS NOT NULL").fetchone()[0]
     return "lecture" if lecture < feynman else "feynman"
 
 

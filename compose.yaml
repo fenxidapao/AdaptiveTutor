@@ -12,6 +12,13 @@ services:
     environment:
       # SQLite 落在挂载卷,容器重建数据不丢（PLAN 19.2）
       - DB_PATH=/app/data/state.db
+      # C2 实验开关：session 鉴权 + mode 分组服务端强制 + 配额生效（PLAN 18.3）
+      - EXPERIMENT_AUTH=1
+      # P1 修复：容器内 127.0.0.1 指向容器自身，CourseRAG 在宿主机另一 compose 网络——
+      # 经 host.docker.internal 访问宿主机映射端口，取不到时仍走 notes 兜底
+      - RAG_BASE_URL=http://host.docker.internal:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
     healthcheck:
