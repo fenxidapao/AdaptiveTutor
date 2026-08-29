@@ -134,3 +134,14 @@ def test_auto_group_ignores_passwordless_users():
     finally:
         with db._conn() as c:
             c.execute("DELETE FROM users WHERE user_id=?", (ghost,))
+
+
+# ==================== C2 运维：前端缓存 ====================
+
+def test_frontend_no_cache_headers():
+    """/ 与 /static/* 必须带 Cache-Control: no-cache——实验期间热修前端
+    若被浏览器启发式缓存，学生会拿旧 JS 做题，实验条件被静默撕裂。"""
+    for path in ("/", "/static/app.js"):
+        r = client.get(path)
+        assert r.status_code == 200
+        assert r.headers.get("cache-control") == "no-cache", f"{path} 缺 no-cache"

@@ -37,6 +37,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def no_cache_frontend(request, call_next):
+    """静态前端禁启发式缓存（C2 运维，2026-08-29 实测发现）：
+    StaticFiles 默认无 Cache-Control，Chromium 对旧文件长期不回源验证——
+    实验期间热修 app.js 会有学生拿着旧前端继续做题，实验条件被静默撕裂。
+    no-cache = 每次导航回源验证，文件小、本地服务，开销可忽略。"""
+    response = await call_next(request)
+    p = request.url.path
+    if p == "/" or p.startswith("/static"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # 可观测性：LLM 调用日志 hook（token/耗时，PLAN 8 多 Agent 效率评估）
 db.init_db()
 model.set_log_hook(lambda **kw: db.log_llm_call(**kw))
