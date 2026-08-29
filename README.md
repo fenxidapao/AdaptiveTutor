@@ -18,14 +18,14 @@
 
 - 📚 多格式课程资料接入（PDF / PPTX / TXT / MD / DOCX；扫描版 PDF 自动告警跳过，不静默空索引）
 - ✂️ 递归语义切分（带重叠窗口，避免切断上下文）
-- 🔍 **真混合检索（向量全库 + BM25 全库双通道，RRF 融合，reranker 可选）**：向量召回（双塔粗排）与自实现 BM25 词面召回（精确术语如 ACID / 2NF）**各自对全库独立召回** top-50，再用倒数排名融合（RRF）互补两路信号，最后可选 bge-reranker 精排 top-5（单塔交互细排）。BM25 与 RRF 纯标准库实现，零新依赖；正确块即使向量排名靠后，只要词面匹配也能被 BM25 通道独立捞回（对比旧版"向量池内重排"的根本改进，见「评估基线·混合检索」）。
+- 🔍 **真混合检索（向量全库 + BM25 全库双通道，RRF 融合，reranker 可选）**：向量召回（双塔粗排）与自实现 BM25 词面召回（精确术语如 ACID / 2NF）**各自对全库独立召回** top-50，再用倒数排名融合（RRF）互补两路信号（融合候选池 `RERANK_CANDIDATE_K`=16，供 reranker 精排），最后可选 bge-reranker 精排 top-8（单塔交互细排）。BM25 与 RRF 纯标准库实现，零新依赖；正确块即使向量排名靠后，只要词面匹配也能被 BM25 通道独立捞回（对比旧版"向量池内重排"的根本改进，见「评估基线·混合检索」）。
 - 📌 **引用溯源（工程化）**：来源带相关性分数与原文偏移，可展开核对，也可直接喂评估；回答正文内联 `[n]` 上标（半角/全角均可），点击可跳转对应来源（P1-2）
 - 💬 本地流式问答界面（Streamlit）
 - 📊 **本地自实现 RAG 评估**：本机 Ollama 当裁判，四个核心指标测检索/回答质量，零额外依赖
 - 🪵 **查询日志（P1-3）**：每轮对话后追加 `.query_log.jsonl`，记录模式 / 来源 / 接地判定 / 引用标记，便于事后回溯检索质量
 - ➕ **增量索引 + 去重（P1-4）**：稳定 id（`md5(source::start_index)`）自动去重，上传仅增量 upsert 新文件；按 source 删除单文档，其余不受影响，不再全量重建
 - ✅ **核心算法单测（P2-1）**：零依赖 `test_core.py` 覆盖 BM25 排序 / RRF 融合去重 / 稳定 id 去重 / 接地判定 / 日志格式，脱离 chromadb/ollama/streamlit 亦可在任意干净 Python 环境实跑
-- ✅ **集成测试 + CI（T9，2026-08-22）**：`test_api.py`（17 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护）+ `test_retrieval.py`（8 用例，检索链路冒烟，无 Ollama 自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 三套测试）
+- ✅ **集成测试 + CI（T9）**：`test_api.py`（17 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护）+ `test_retrieval.py`（8 用例，检索链路冒烟，无 Ollama 自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 三套测试）
 - 🔒 配置外置 `.env`，模型名/路径/调参不再写死代码
 
 ## 目录结构
@@ -115,7 +115,7 @@ streamlit run app.py
 
 ## API 服务（FastAPI + Docker 部署）
 
-> 部署层封装（2026-08-20 新增）：把 `rag_core` 的「索引构建 / 检索 / 重排 / 生成」暴露为 RESTful 端点，
+> 部署层封装：把 `rag_core` 的「索引构建 / 检索 / 重排 / 生成」暴露为 RESTful 端点，
 > 与 Streamlit 界面**共用同一套核心模块**（`retrieve_and_rerank` / `build_rag_chain`），无重复逻辑，
 > 保证「界面看到的来源 = API 返回的来源」。交互式文档：启动后访问 `http://localhost:8000/docs`。
 
@@ -148,13 +148,32 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 # 浏览器打开 http://localhost:8000/docs（Swagger UI）
 ```
 
+### 多用户预留扩展点（Gate 2）
+
+> 决策：先本地/局域网部署让同学可用，**不重写后端**；以下扩展点默认关闭，需要多人公网暴露时再开。
+> 实现：`api_security.py`（`require_auth` 全局依赖 + `RateLimitMiddleware` IP 滑动窗口），`main.py` 已挂载（no-op）。
+
+| 环境变量 | 默认 | 作用 |
+|---|---|---|
+| `AUTH_ENABLED` | `false` | 开启后所有端点需 `X-API-Key` 头（值 = `API_KEY`） |
+| `API_KEY` | 空 | 开启鉴权时设置的密钥 |
+| `RATE_LIMIT` | 空 | 每 IP 每分钟请求上限（如 `60`），空 = 不限 |
+| `CORS_ORIGINS` | `*` | 收紧跨域（生产填具体域名，如 `https://qa.example.com`） |
+
+```bash
+# 示例：开启鉴权 + 限流（docker compose 场景改环境变量或 .env）
+AUTH_ENABLED=true API_KEY=your-secret RATE_LIMIT=60 python -m uvicorn main:app --port 8000
+# 带密钥请求
+curl -H "X-API-Key: your-secret" http://localhost:8000/health
+```
+
 ### Docker 一键部署（双模式）
 
-> **2026-08-22 变更**：compose 改为 **API 直连宿主 Ollama**（删除了容器内 ollama 服务）。
+> **变更**：compose 改为 **API 直连宿主 Ollama**（删除了容器内 ollama 服务）。
 > 原因：宿主已装 Ollama 且模型齐全，容器内再拉一套要重复下载 ~5GB 模型；
 > 且避免 11434 端口冲突。**前置条件：宿主 Ollama 已启动且模型已拉取。**
 > 实测验证（Windows Docker Desktop）：`host.docker.internal:11434` 直连宿主 Ollama 成功，
-> /health、/query（fast + accurate）、/retrieve 全部正常，容器加载宿主挂载的 993 块索引。
+> /health、/query（fast + accurate）、/retrieve 全部正常，容器加载宿主挂载的索引（实测时 978 块，B 专项块去重 993→978；当前 1219 块，容器挂载宿主目录无需重建即可用新索引）。
 
 ```bash
 # 模式一 · slim（默认）：轻量，无 reranker，精确模式=向量+BM25 混合
@@ -182,7 +201,7 @@ curl http://localhost:8001/health   # full（8001）
   已索引的库在容器内**路径一致**（均为相对 `./data` / `./chroma_db`），无需重建。
 - API 启动时自动预热向量库（空库 + 有资料时自动重建），Ollama 未就绪不会阻塞服务启动，
   `/health` 会明确报告缺什么。
-- **已知坑（2026-08-22 实测）**：多阶段构建只拷 site-packages，pip 装的可执行脚本不在
+- **已知坑（实测）**：多阶段构建只拷 site-packages，pip 装的可执行脚本不在
   `/usr/local/bin` → Dockerfile CMD 必须用 `python -m uvicorn`（不能用裸 `uvicorn`）。
 
 ### 验证（curl 示例）
@@ -224,6 +243,84 @@ curl http://localhost:8000/index/stats
   "grounded": true
 }
 ```
+
+## 索引备份与语料接入（P0 / Gate 1）
+
+**索引备份/恢复**（`backup_index.py`，纯文件操作，不依赖 Ollama）：
+
+```bash
+python backup_index.py backup   # 快照 chroma_db → chroma_db_backup_<时间戳>_<块数>/
+python backup_index.py list     # 列出所有备份与块数
+python backup_index.py restore  # 先备份当前、再恢复指定备份
+```
+
+**语料接入**（`ingest_ocr.py`，智能探测：有文字层 pypdf 直提，0 文字层降级 OCR）：
+
+```bash
+# 试点验证质量（先跑前 N 页，避免整本烧 1 小时+）
+python ingest_ocr.py "data/教材\<书>.pdf" --max-pages 10
+# 质量可接受 → 全量；无 --max-pages 时自动探测：直提 or OCR
+python ingest_ocr.py "data/教材\<书>.pdf"
+# 接入后重建索引（长任务，勿关终端；run_ab.py 内部强制 reranker off 仅用于 A/B 隔离）
+python run_ab.py
+```
+
+> OCR 依赖（懒加载，未装不影响仓库）：`pip install paddleocr paddlepaddle pymupdf`
+> （PyMuPDF 渲染 PDF 页 → PaddleOCR 识别中文，纯 pip 无系统依赖；`data/教材` 原件一律保留不删）。
+
+## 可观测看板 · 反馈闭环 · 语义缓存（P1/P2）
+
+**可观测看板**（`dashboard.py`，零新依赖，读 `.query_log.jsonl`）：
+
+```bash
+python -m streamlit run dashboard.py   # 打开 http://localhost:8501
+```
+
+展示：KPI（累计/今日查询、平均延迟、拒答未接地率）、快速 vs 精确延迟均值 + P95 + 时序折线、
+模式分布、来源 Top、拒答/未接地清单、👍/👎 反馈流。日志字段（`query_log.py` 写入）：
+
+| 字段 | 含义 |
+|---|---|
+| `ts` | 毫秒级时间戳（反馈回写定位用） |
+| `question` / `mode` | 问题与模式（快速/精确） |
+| `top_sources` | 检索来源（rank/source/score） |
+| `latency_ms` | 整轮问答耗时（P2 语义缓存命中时也如实记录） |
+| `est_tokens` | 启发式估算 token（CJK≈1 token/字，非精确） |
+| `rejected` / `grounded` | 硬拒答 / 接地判定 |
+| `feedback` | 👍/👎（点击按钮后由 `set_feedback` 回写） |
+
+**反馈闭环**（`feedback_pool.py`，把用户 👎 回流成评估集，不动冻结基线）：
+
+```bash
+python feedback_pool.py list                                   # 沉淀 👎 候选（去重）
+python feedback_pool.py promote 0 --group B                    # 语料外应拒答 → B 组
+python feedback_pool.py promote 1 --group C --expect reject    # 模糊 → C 组（需 --expect）
+python eval_heldout.py --bc-only                               # 重跑门控覆盖回流用例
+```
+
+回流用例写入 `eval_data_feedback.json`，`eval_data_heldout.py` 运行时合并进 B/C 组——不直接改冻结常量，可审计可撤销。
+
+**语义缓存**（`semantic_cache.py`，默认开，可关）：
+
+```bash
+# .env 可调：SEMANTIC_CACHE_ENABLED=true / SEMANTIC_CACHE_SIM=0.93 / SEMANTIC_CACHE_MAX=128
+```
+
+- 命中"语义相似"（embedding 余弦 ≥ 0.93）的重复/改写问句时，跳过检索 + reranker + 生成，直接返回历史答案，把精确模式 19~115s 压到秒级。
+- 只缓存正常答案（硬拒答/未接地不缓存）；**索引重建后自动失效**（`semantic_cache.invalidate()`）。
+- 内存 LRU，单进程够用；多副本需换 Redis（见路线图路线 β/ε）。
+
+**评估纪律（#18）**：`HELDOUT_A` 是已参与调参的**校准集**；对外正式宣布前用冻结测试集做最终回归：
+
+```bash
+python eval_test.py   # 跑 eval_data_test.TEST_SET（从未参与调参），结果入 eval_results_test.csv
+```
+
+**冻结测试集实测（24 题，从未参与调参；语料 1219 块 + 修复后裁判口径）**：faithfulness **0.976** / answer_relevancy 0.975 / context_precision 0.914 / context_recall **0.883**（当前官方基线）。
+对比校准集 A 组（0.895 / 0.819）——测试集显著高于校准集水位；对外引用绝对值以测试集为准。
+> **历史基线链路**：P0 温和化生成提示后 faithfulness 0.752→**0.811**；B 专项（修递归切分重叠逐层叠加 993→**978** 块、Q21 软链接正确块不再截断、RRF 融合候选池 8→16 `RERANK_CANDIDATE_K`）后复测 0.781 / 0.963 / 0.916 / 0.826，核心目标修复（软链接 0.43→0.86、小程序数据绑定 0→0.4、BFS/Dijkstra 0→0.8），0.811↔0.781 差异在裁判噪声带（±0.05）内。
+> **裁判口径复核（P2 收尾）**：逐题排查发现旧口径三类系统性故障——①裁判在陈述中嵌入未转义双引号导致 JSON 解析全灭（两题空 detail 被静默记 0 分）；②示例代码被逐行拆成陈述逐条判 false；③裁判自报 score 与明细矛盾、不可复算。修复评估工具（容错 JSON 提取 + prompt 明确代码块整体判定 + 分数一律从明细重算，未改任何 RAG 参数）后全量回归得 0.897。旧口径 0.781 与新口径不可直接比较。详见 `P2_裁判口径复核报告.md`。
+> **语料修复链路（PyMuPDF）**：小程序 PDF 乱码根因为 CID→Unicode 映射缺失（非扫描版），pypdf 提取乱码/空，换 PyMuPDF 优先提取（pypdf 兜底）后语料 978→**1219** 块，冻结测试集 0.897→**0.976**（小程序数据绑定 0.5→1.0、3NF/BCNF 0.667→1.0、软链接 0.75→1.0 等）；语料扩增会改变检索重排，held-out 三组已全量重验（见下节）。
 
 ## 架构（离线构建 / 在线问答）
 
@@ -305,6 +402,28 @@ python eval_local.py
 
 评估样本在 `eval_data.py`（基于 `data/` 课程笔记 + `data/教材/` 真实教材的知识点，现 100 条），扩文档后往里追加即可。
 
+### held-out 门控评估（工程化 P0）
+
+> 解决"评估集与语料同源 → 绝对值偏乐观"的问题：建**独立于训练集的 held-out 三组**，
+> 用绝对指标 + 拒答率双门控，作为"能否称落地"的硬证据（详见工程化点评文档 0.0 总览）。
+
+- 样本：`eval_data_heldout.py` = **A 组 30**（语料内，逐字取教材/笔记）+ **B 组 20**（语料外/应拒答）+ **C 组 10**（对抗/模糊/注入）。
+- 门控：A 组 faithfulness ≥ **0.85** 且 context_recall ≥ **0.80**；B 组拒答率 ≥ **90%**。
+- 运行（本机 Ollama，裁判 qwen2.5:7b 与生成 llama3.1:8b 不同源）：
+  ```bash
+  python eval_heldout.py --a-only    # A 组绝对指标 → eval_results_heldout_A.csv
+  python eval_heldout.py --bc-only   # B/C 拒答验证 → eval_results_heldout_BC.csv
+  python eval_heldout.py             # 全量 + 总门控
+  ```
+- **实测（语料 1219 块，RERANKER_TOP_N=8 已固化 config.py）**：
+  - A 组：faithfulness **0.895** / answer_relevancy 0.920 / context_precision 0.746 / context_recall **0.819** → **PASS ✅**（recall 超门控 +0.019，处于裁判噪声带边缘，见下方"语料变更纪律"）
+  - B 组：拒答 **19/20 = 95%** → **PASS ✅**（唯一放通："React 待办列表组件"被小程序/前端组件类语料语义近邻带 rerank 高分放通，属语料扩增的预期副作用，门控容忍 1 题）
+  - C 组（无门控，仅记录）：期望应拒题全部正确拒（含提示注入），2 题对宽泛/辨析类问题保守拒绝，Linux vs Windows 跨系统比较为既有误放通行为、多轮稳定
+  - 调参依据：TOP_N 5→8（top-5 时正确块常排 6~8 名导致模型"无法完整回答"，faith 仅 0.746；调 8 后 +0.165）。
+- ⚠️ **语料变更纪律**：每次语料/切分/检索参数变更后，必须重验 A 组与 B/C 门控，不能只看冻结测试集——语料扩增会改变检索重排（本轮 978→1219 块后：A 组校准集指标下移、B 组拒答 100%→95%，均为检索重排变化的直接体现；A 组单点波动含生成/裁判噪声，判断回归需看多轮而非单次）。
+- ⚠️ 重跑 A 组前**先移走旧 CSV**（`eval_local.py` 有断点续跑，同名 CSV 会让全部题目被跳过）。
+- 阈值可调：`config.py` 的 `HARD_REJECT_VECTOR_THRESHOLD` / `HARD_REJECT_RERANK_THRESHOLD` / `GROUNDED_SCORE_THRESHOLD`（改阈值重跑，**禁止为刷指标删 B 组题**）。
+
 ### 评估基线（21 样本，W4，reranker 关，纯向量召回）
 
 | 指标 | 均值 |
@@ -345,7 +464,7 @@ python eval_local.py
 
 ### 评估基线（59 样本，全量语料，reranker OFF vs ON）
 
-语料扩到 12 篇、评估扩到 59 条后，**已于 2026-08-18 完成全量 OFF/ON 重跑**（此前因时间未执行，见下方「扩展语料说明」）。OFF/ON 仍对齐到向量 top-5 上下文，唯一变量是 reranker；权重已缓存，ON 轮带 `HF_ENDPOINT=https://hf-mirror.com` 加载。
+语料扩到 12 篇、评估扩到 59 条后，**已完成全量 OFF/ON 重跑**（此前因时间未执行，见下方「扩展语料说明」）。OFF/ON 仍对齐到向量 top-5 上下文，唯一变量是 reranker；权重已缓存，ON 轮带 `HF_ENDPOINT=https://hf-mirror.com` 加载。
 
 | 指标 | reranker OFF | reranker ON | 差值 |
 |---|---|---|---|
@@ -363,12 +482,15 @@ python eval_local.py
 
 明细见 `eval_results_off_new.csv` / `eval_results_on_new.csv`，差值脚本 `compare.py`，结论 `eval_compare.md`。
 
-### 混合检索 vs 纯向量（100 样本，2026-08-22 实测 · v2 真混合检索 · 新语料 697 块）
+### 混合检索 vs 纯向量（100 样本 · v2 真混合检索 · 历史基线 697 块）
+
+> ⚠️ **口径提醒**：本节与下表数字均基于 **加廖雪峰教程前的 697 块语料**，是**历史基线**；
+> **当前语料为 1219 块**（PyMuPDF 语料修复后；演化路径 697 → 993 加廖雪峰教程 → 978 B 专项切分去重 → 1219 PyMuPDF 语料修复）。加料后未按 100 题重测，新旧基线跨语料不可直接比较（重测见路线图）。
 
 > ⚠️ **版本说明**：本节为 **v2 真混合检索**（向量全库 + BM25 全库双通道，RRF 融合）在**新语料 697 块**上的实测；
 > 裁判为独立模型 **qwen2.5:7b**（与生成模型 llama3.1:8b 不同源，破除自评偏差）。
 > v1 旧版（BM25 池内重排，8b 自评，旧语料 25 块）数据见 `eval_compare_hybrid.md` 历史记录。
-> **上一版数据（59 题 × 556 块）见 `eval_compare_hybrid.md` 历史记录；本节为 2026-08-22 重测后的最新基线（100 题 × 697 块，含乱码清洗修复）。**
+> **上一版数据（59 题 × 556 块）见 `eval_compare_hybrid.md` 历史记录；本节为加廖雪峰教程前的重测基线（100 题 × 697 块，含乱码清洗修复）。**
 
 隔离 reranker（`RERANKER_ENABLED=false`）后，对比 **纯向量 top-5** 与 **向量全库 + 自实现 BM25 全库 + RRF 融合 top-5**，量化 BM25 词面召回的纯贡献。
 
@@ -392,10 +514,10 @@ python eval_local.py
 
 明细见 `eval_results_vector.csv` / `eval_results_hybrid.csv`，runner（断点续跑）`run_ab.py`，对比脚本 `compare_hybrid.py`，结论 `eval_compare_hybrid.md`。
 
-> **扩展语料说明（已全量评测）**：`data/` 已扩至 **12 篇**（新增排序算法 / 图与最短路径 / 关系代数与 SQL / 函数依赖与范式 / OS 内存管理 / 计网 IP 与子网路由 / 组成原理指令系统与寻址），`eval_data.py` 扩至 **59 条**，`config.py` 已调 `CHUNK_SIZE=800 / CHUNK_OVERLAP=150 / RETRIEVE_K=50`（候选池扩到 50，让排 30+ 的难 query 正确块也能进池，reranker 才能纠回）。该扩展的 OFF/ON 全量对比**已于 2026-08-18 执行完毕**（见上方「59 样本评估基线」），**最终结论以 59 样本全量为准**；上方 33 样本表作为子集参考保留。重跑命令见交接文档第 4 节（ON 轮须带 `HF_ENDPOINT=https://hf-mirror.com`）。
+> **扩展语料说明（已全量评测）**：`data/` 已扩至 **12 篇**（新增排序算法 / 图与最短路径 / 关系代数与 SQL / 函数依赖与范式 / OS 内存管理 / 计网 IP 与子网路由 / 组成原理指令系统与寻址），`eval_data.py` 扩至 **59 条**，`config.py` 已调 `CHUNK_SIZE=800 / CHUNK_OVERLAP=150 / RETRIEVE_K=50`（候选池扩到 50，让排 30+ 的难 query 正确块也能进池，reranker 才能纠回）。该扩展的 OFF/ON 全量对比**已执行完毕**（见上方「59 样本评估基线」），**最终结论以 59 样本全量为准**；上方 33 样本表作为子集参考保留。重跑命令见交接文档第 4 节（ON 轮须带 `HF_ENDPOINT=https://hf-mirror.com`）。
 >
-> **2026-08-22 追加**：`eval_data.py` 已扩至 **100 条**（新增 41 条教材题：微信小程序/Streamlit/Linux/算法引论/学习笔记）；乱码清洗白名单修复（剔除拉丁伪字符残留）后语料 697 块。**重测已完成（2026-08-22 17:57）**：上方表格已更新为 100 题 × 697 块的最新基线。
-> **2026-08-22 晚间追加**：新增合规公开语料「廖雪峰 Python 教程核心章节」（CC BY-NC-SA 4.0，来源署名见文件头），索引 697→**993 块**（21 源文件）。**注意**：上方 A/B 数字（100 题 × 697 块）为加料前基线，加料后未重测——新旧基线跨语料不可直接比较，重测见路线图。
+> **追加**：`eval_data.py` 已扩至 **100 条**（新增 41 条教材题：微信小程序/Streamlit/Linux/算法引论/学习笔记）；乱码清洗白名单修复（剔除拉丁伪字符残留）后语料 697 块。**重测已完成**：上方表格已更新为 100 题 × 697 块的最新基线。
+> **晚间追加**：新增合规公开语料「廖雪峰 Python 教程核心章节」（CC BY-NC-SA 4.0，来源署名见文件头），索引 697→**993 块**（21 源文件）。**注意**：上方 A/B 数字（100 题 × 697 块）为加料前基线，加料后未重测——新旧基线跨语料不可直接比较，重测见路线图。
 
 ## 路线图（进行中）
 
@@ -404,13 +526,13 @@ python eval_local.py
 - [x] **P1-3 查询日志**：每轮落 `.query_log.jsonl`（模式 / 来源 / 接地判定 / 引用标记）
 - [x] **P1-4 增量索引 + 去重**：稳定 id 自动去重，上传仅增量 upsert，按 source 删单文档（不再全量重建）
 - [x] **P2-1 核心算法单测**：零依赖 `test_core.py`，脱离 LLM 栈亦可实跑（7 用例全绿）
-- [x] **T9 集成测试 + CI（2026-08-22）**：API 端点测试 17 用例（TestClient + mock，无需 Ollama）+ 检索冒烟 8 用例（无 Ollama 自动 skip）+ GitHub Actions（3.11 矩阵，`python -m pytest test_core.py test_api.py` 全绿）
+- [x] **T9 集成测试 + CI**：API 端点测试 17 用例（TestClient + mock，无需 Ollama）+ 检索冒烟 8 用例（无 Ollama 自动 skip）+ GitHub Actions（3.11 矩阵，`python -m pytest test_core.py test_api.py` 全绿）
 - [x] 最小可跑闭环 + 配置外置 + 引用溯源
 - [x] 接入 bge-reranker 重排并实测（混合检索；代码已验证可启用，难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败，现默认开）
 - [x] 引用溯源工程化（分数 + 偏移，可喂评估）
 - [x] 本地自实现 RAG 评估（小样本测检索/回答质量，本机 Ollama 当裁判，零额外依赖）
 - [x] 中文 prompt + 中文感知切分（W4：prompt 改为中文防幻觉指令；切分器加中文分隔符。指标未明显提升，但暴露了跨主题检索拉错文档的真问题）
-- [x] FastAPI 接口 + Docker（2026-08-20 已完成）：`main.py` / `api_schemas.py` / `Dockerfile` / `docker-compose.yml` / `requirements-api.txt`，见「API 服务」章节
+- [x] FastAPI 接口 + Docker：`main.py` / `api_schemas.py` / `Dockerfile` / `docker-compose.yml` / `requirements-api.txt`，见「API 服务」章节
 
 ## 说明
 
