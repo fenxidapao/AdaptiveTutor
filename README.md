@@ -23,6 +23,7 @@
 - 💬 本地流式问答界面（Streamlit）
 - 📊 **本地自实现 RAG 评估**：本机 Ollama 当裁判，四个核心指标测检索/回答质量，零额外依赖
 - 🪵 **查询日志（P1-3）**：每轮对话后追加 `.query_log.jsonl`，记录模式 / 来源 / 接地判定 / 引用标记，便于事后回溯检索质量
+- 🔌 **MCP 标准工具层（自实现协议子集）**：`mcp_server.py` 仅用 Python 标准库实现 MCP stdio 传输的最小协议子集（initialize 能力协商 / tools list / tools call，JSON-RPC 2.0），把混合检索暴露为标准 `course_retrieve` 工具（与 `/retrieve` 同一检索实现，fast/accurate 同语义）；经官方 MCP Inspector 互操作实测通过，任意 MCP 兼容 Agent Runtime 可直接挂载（证据见 `mcp_interop_evidence.md`）。零新依赖。
 - ➕ **增量索引 + 去重（P1-4）**：稳定 id（`md5(source::start_index)`）自动去重，上传仅增量 upsert 新文件；按 source 删除单文档，其余不受影响，不再全量重建
 - ✅ **核心算法单测（P2-1）**：零依赖 `test_core.py` 覆盖 BM25 排序 / RRF 融合去重 / 稳定 id 去重 / 接地判定 / 日志格式，脱离 chromadb/ollama/streamlit 亦可在任意干净 Python 环境实跑
 - ✅ **集成测试 + CI（T9）**：`test_api.py`（17 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护）+ `test_retrieval.py`（8 用例，检索链路冒烟，无 Ollama 自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 三套测试）
@@ -36,6 +37,7 @@ CourseRAG/
 ├── rag_core.py        # RAG 核心：加载切分 / 嵌入建库 / 混合检索(hybrid_retrieve) + 重排 / 增量索引(add_documents/delete_by_source) / 拼链
 ├── rag_search_utils.py# 零依赖纯算法（P2-1 抽出）：分词 / BM25 / RRF 融合 / 稳定 id，供 test_core 独立测试
 ├── reranker.py        # bge-reranker 跨编码器重排（混合检索的精排段；默认开——难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败）
+├── mcp_server.py      # MCP stdio 工具层：零依赖自实现协议子集（initialize/tools list/tools call），course_retrieve 与 /retrieve 同链路
 ├── query_log.py       # P1-3 查询日志：每轮落 .query_log.jsonl
 ├── app.py             # Streamlit 演示界面（含来源展示与内联 [n] 引用跳转）
 ├── main.py            # FastAPI 服务入口（部署层，与 app.py 共用同一套 rag_core）

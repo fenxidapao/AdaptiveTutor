@@ -134,8 +134,12 @@ def test_log_query_format():
     rec1 = json.loads(lines[-2])
     rec2 = json.loads(lines[-1])
     for rec in (rec1, rec2):
+        # 字段集契约：2026-08-25 看板 #15 给 log_query 扩了 4 个可观测字段，
+        # 断言同步（此前漏更导致 CI 红，2026-08-29 补）
         assert set(rec) == {"ts", "question", "mode", "top_sources",
-                             "has_citation", "grounded", "answer_len"}
+                             "has_citation", "grounded", "answer_len",
+                             "latency_ms", "est_tokens", "rejected", "feedback"}
+        assert rec["feedback"] is None  # 未点击 👍/👎 时为空
     # 正常可答：接地 + 有引用 + 长度 > 0 + 来源排名正确
     assert rec1["grounded"] is True
     assert rec1["has_citation"] is True
