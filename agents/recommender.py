@@ -92,6 +92,22 @@ def recommend(user_id: str, course: str = "python", top_n: int = 5,
     candidates.sort(key=lambda x: (x[0], x[1]))
     picked = [ex for _, _, ex in candidates[:top_n]]
 
+    if not picked:
+        # 兜底（F 阶段复核队列）：全错新手会被"blocked 掌握门槛 + 前置依赖闭包"
+        # 排除到无题可推，但"先回去巩固基础"得有题可练——退回 blocked/薄弱
+        # 知识点自身的题（做错的优先重练），保证弱者恰好最需要推荐时不为空
+        fb_kps = [k["kp_id"] for k in kps if k.get("status") == "blocked"]
+        if not fb_kps:
+            fb_kps = [kp["kp_id"] for kp in graph["knowledge_points"]]
+        fb: list[tuple[int, int, dict]] = []
+        for i, kp_id in enumerate(fb_kps):
+            for ex in learning_pack.exercises_by_kp(course).get(kp_id, []):
+                st = attempts.get(ex["ex_id"])
+                pri = 0 if (st and not st["correct"]) else (1 if st is None else 2)
+                fb.append((pri, i, ex))
+        fb.sort(key=lambda x: (x[0], x[1]))
+        picked = [ex for _, _, ex in fb[:top_n]]
+
     # LLM 生成理由（失败退回规则文案）
     reasons = _reasons(weak, titles, picked)
     recs = [{"ex_id": ex["ex_id"], "kp_id": ex.get("kp_id", ""),

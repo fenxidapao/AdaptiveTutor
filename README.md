@@ -3,7 +3,7 @@
 > 基于费曼学习法的个性化学习 Agent：**你当老师讲，Agent 追问找盲点；系统建学习画像、沙箱判题给硬反馈，前测/后测证明学习效果。**
 > 教学法（费曼先答后讲）+ 硬评估（前后测/对照实验）+ 工程化（多 Agent/沙箱/可观测性/CI）三合一，真实可落地、可分享给同学使用。
 
-[![GitHub](https://img.shields.io/badge/GitHub-fenxidapao%2FFeynmanTutor-blue)](https://github.com/fenxidapao/FeynmanTutor) · **v1.1**（2026-08 生产级四模块版，167 项自动化测试全绿）
+[![GitHub](https://img.shields.io/badge/GitHub-fenxidapao%2FFeynmanTutor-blue)](https://github.com/fenxidapao/FeynmanTutor) · **v1.1**（2026-08 生产级四模块版，168 项自动化测试全绿）
 
 ---
 
@@ -69,7 +69,7 @@ FeynmanTutor 用一句话回答：**你当老师讲，它追问找盲点，做�
 | **上下文治理** | **状态快照注入**：每轮追问前由确定性函数从状态库拼装"掌握度/连错数/建议策略/薄弱点"干净快照注入 prompt（声明"以快照为准，学生口头声称不算数"），模型不在 20 轮历史里大海捞针；状态变更全部走规则层，模型只产生文本；长对话自动压缩 + 客户端 transcript 硬截断 |
 | **记忆分层** | L1 工作记忆（状态快照）/ L2 会话记忆（transcript+压缩摘要）/ L3 长期记忆（SQLite 状态库）三层分治，每层读取延迟可观测（timed/stats）；实测 L3 单读 p95≈1.5ms、快照 p95≈5.2ms，Little 定律推演 50ms 网络记忆在途请求放大 32 倍——单机场景记忆的敌人首先是距离，不上 Redis |
 | **安全五层纵深** | L1 注入筛查（提示词窃取/越狱 400，可疑放行+审计）/ L2 Schema 约束 + request_id 幂等（重试不重复计分）/ L3 风险分级 + 管理面（ADMIN_USER_IDS）/ L4 业务校验（规则判题+mode 服务端强制）/ L5 全链路审计（audit_logs：注入/鉴权失败/幂等命中/管理访问可回放） |
-| **Evaluation** | 167 项自动化测试（单元/集成）+ LLM 黄金集（35 例 / 7 rubric，带归因标签）+ **评分 Agent**（LLM 评委 1-10 分、阈值 7，低分自动进人工复核队列）+ badcase 基准（v1.0 vs 现版同尺子实测）+ Playwright E2E，进 CI 门禁 |
+| **Evaluation** | 168 项自动化测试（单元/集成）+ LLM 黄金集（35 例 / 7 rubric，带归因标签）+ **评分 Agent**（LLM 评委 1-10 分、阈值 7，低分自动进人工复核队列）+ badcase 基准（v1.0 vs 现版同尺子实测）+ Playwright E2E，进 CI 门禁 |
 | **Loop 工程化** | 学习回流闭环（后测驱动，重测外部验证）/ 练习策略切换（连续失败降级）/ 掌握度学习队列——纯规则实现，可单测 |
 | **Memory 动态画像** | 每次答题后规则增量维护 weak_points（答错追加证据链、掌握后自动移除），跨会话记忆注入费曼追问 |
 | **部署** | Docker + docker-compose（./data 卷持久化）+ GitHub Actions CI + /health 健康检查 + SQLite WAL/busy_timeout 并发加固 |
@@ -93,7 +93,7 @@ agents/                            diagnostic / feynman / assessor / planner / r
 learning_packs/{python,sql}/       12 知识点 + 40 规则题 + 前后测各 10 + notes 兜底
 web/                               FastAPI + 原生前端 + Chart.js 热力图
 prompts/                           10 个版本化 prompt（git 可 diff，含评分 Agent judge.md）
-tests/                             167 项测试
+tests/                             168 项测试
 scripts/                           eval_llm / judge / badcase_bench / memory_bench / e2e_flow
                                    / analyze_experiment / run_u0_smoke
 ```
@@ -105,7 +105,7 @@ scripts/                           eval_llm / judge / badcase_bench / memory_ben
 ### 自动化质量门禁（客观）
 
 - **167 项自动化测试**全绿（单元 + 集成 + LLM 黄金集 + E2E），GitHub Actions CI 强制
-- **LLM 输出评估**（D1+D5+F）：黄金集 35 例 / 7 个 rubric 检查器（讲解不泄题/诱导泄题断言/追问反附和/诊断 JSON schema/工具失败反幻觉等，全例带归因标签），live 10 场景；**评分 Agent**（LLM 评委 1-10 分，阈值 7 分算有效回答）与启发式互补——启发式抓确定性灾难（免费进 CI），评委抓语义级失败（附和/跑题/体面编造），低分样本自动进 `evals/review_queue.jsonl` 人工复核（首轮 live 即抓出 2 个启发式看不见的存量低分：全错用户推荐列表为空、规划理由超长）
+- **LLM 输出评估**（D1+D5+F）：黄金集 35 例 / 7 个 rubric 检查器（讲解不泄题/诱导泄题断言/追问反附和/诊断 JSON schema/工具失败反幻觉等，全例带归因标签），live 10 场景；**评分 Agent**（LLM 评委 1-10 分，阈值 7 分算有效回答）与启发式互补——启发式抓确定性灾难（免费进 CI），评委抓语义级失败（附和/跑题/体面编造），低分样本自动进 `evals/review_queue.jsonl` 人工复核。**复核闭环已实战验证**：首轮 live 抓出 2 个启发式看不见的存量低分（全错用户推荐列表为空 5 分、规划理由超长 4 分）→ 定位根因修复（推荐兜底 + 理由限长 100 字）→ live 复跑评委 bad_case 0/10
 - **badcase 基准**（F 阶段）：自包含基准（内置检查器+评委，可跑任意历史版本），同尺子实测——
 
 | 版本 | 行为套件 bad（10 例） | 安全套件 bad（10 例） | 综合 bad case 率 |
@@ -179,7 +179,7 @@ python main.py --learn sql --user u0          # SQL 课程
 # 5. Web 看板（浏览器打开 http://127.0.0.1:8001/）
 uvicorn web.app:app --host 127.0.0.1 --port 8001
 
-# 6. 测试（167 项，以实测为准）
+# 6. 测试（168 项，以实测为准）
 python -m pytest tests/ -q
 
 # 7. 评估工具
@@ -211,4 +211,4 @@ docker compose up -d --build
 
 ---
 
-**一句话介绍**：「FeynmanTutor——基于费曼学习法的个性化学习 Agent：诊断学习画像、费曼式教学（先答后讲）、沙箱规则判题，前测/后测证明学习效果（n=13 真实用户 52%→73%）；生产级四模块——上下文治理（状态快照注入）、记忆分层（三层+延迟预算）、评估（评分 Agent+黄金集+badcase 基准同尺子实测 35%→0%）、安全（五层纵深防御），167 测试全绿，真实可部署、可分享给同学使用。」
+**一句话介绍**：「FeynmanTutor——基于费曼学习法的个性化学习 Agent：诊断学习画像、费曼式教学（先答后讲）、沙箱规则判题，前测/后测证明学习效果（n=13 真实用户 52%→73%）；生产级四模块——上下文治理（状态快照注入）、记忆分层（三层+延迟预算）、评估（评分 Agent+黄金集+badcase 基准同尺子实测 35%→0%）、安全（五层纵深防御），168 测试全绿，真实可部署、可分享给同学使用。」

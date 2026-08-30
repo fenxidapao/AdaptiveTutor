@@ -187,3 +187,35 @@ def test_recommender_skips_blocked(tmp_db):
     r = recommender.recommend(user, top_n=10, db_path=tmp_db)
     kps = {rec["kp_id"] for rec in r["recommendations"]}
     assert "python.string.methods" not in kps
+
+
+def test_recommend_fallback_when_all_blocked(tmp_db, monkeypatch):
+    """复核队列修复回归：全错新手被 blocked+依赖闭包排除到无题可推时，
+    兜底推荐 blocked 知识点自身的题（做错的优先重练），推荐列表不得为空。"""
+    import model
+    from agents import recommender
+
+    def _offline(*a, **k):
+        raise model.ModelError("测试离线")
+
+    monkeypatch.setattr(model, "chat", _offline)
+    user = "u_rec_allblocked"
+    db.get_user(user, db_path=tmp_db)
+    graph = learning_pack.load_graph()
+    by_kp = learning_pack.exercises_by_kp()
+    # 造"每个 kp 连错 3 次（真实题目 id）"的极端全错新手 → 全部 blocked，
+    # 依赖闭包排除整图，主路径无题可推
+    wrong_ids: set[str] = set()
+    for kp in graph["knowledge_points"]:
+        for ex in by_kp.get(kp["kp_id"], [])[:3]:
+            db.log_exercise(user, ex["ex_id"], kp["kp_id"], False,
+                            "x", "错", db_path=tmp_db)
+            wrong_ids.add(ex["ex_id"])
+    db.save_profile(user, {
+        "weak_points": [kp["kp_id"] for kp in graph["knowledge_points"]],
+        "learning_style": "代码", "avg_correct": 0.0}, db_path=tmp_db)
+    r = recommender.recommend(user, top_n=3, db_path=tmp_db)
+    assert r["recommendations"], "全错新手也必须拿到推荐（兜底）"
+    assert len(r["recommendations"]) == 3
+    # 兜底优先给做错过的题重练
+    assert all(rec["ex_id"] in wrong_ids for rec in r["recommendations"])
