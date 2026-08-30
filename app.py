@@ -350,6 +350,16 @@ if prompt := st.chat_input("问任何专业课问题..."):
                         state="running",
                     )
 
+            # ---- 真实流式回调（评审 P3）：生成中的片段实时渲染到消息占位符。
+            # 快速模式在 answer_question 内逐段回调；精确模式因接地自检需要完整
+            # 答案（未接地要整段替换为拒答文案），在 answer_question 内自动降级
+            # 为缓冲——流式回调不会触发，最终一次性渲染。----
+            _stream_parts = []
+
+            def _on_token(piece):
+                _stream_parts.append(piece)
+                message_placeholder.markdown("".join(_stream_parts) + "▋")
+
             with st.status("正在处理…", expanded=True) as status:
                 res = answer_question(
                     prompt,
@@ -357,6 +367,7 @@ if prompt := st.chat_input("问任何专业课问题..."):
                     custom_prompt=st.session_state.custom_prompt,
                     history=history_text,
                     on_stage=_stage,
+                    on_token=_on_token,
                 )
                 if res["cached"]:
                     status.update(label="⚡ 语义缓存命中", state="complete")
@@ -378,10 +389,8 @@ if prompt := st.chat_input("问任何专业课问题..."):
             if res["cached"]:
                 st.caption(f"⚡ 语义缓存命中（相似度 {res['cache_sim']:.2f}）")
 
-            # 流式回显（在状态框外，避免与阶段进度混淆）
-            for i in range(len(full_response)):
-                message_placeholder.markdown(full_response[: i + 1] + "▋")
-            # P1-2 内联引用：把 [n] 渲染为可点击锚点（仅合法编号），定位到下方来源
+            # 收尾渲染：真实流式下用完整答案（经 render_answer_html 处理 [n] 引用
+            # 锚点）替换流式过程中的原始文本；非流式路径（精确/缓存命中）直接渲染
             message_placeholder.markdown(
                 render_answer_html(full_response, len(citations), mid),
                 unsafe_allow_html=True,

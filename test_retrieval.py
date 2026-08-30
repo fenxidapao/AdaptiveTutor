@@ -106,3 +106,13 @@ def test_confidence_on_hit():
     docs = rag_core.retrieve_vector("数据库事务的 ACID", k=3)
     conf = rag_core.get_confidence(docs)
     assert conf is not None and 0.0 <= conf <= 1.0
+
+
+# ==================== 真实流式生成（评审 P3，2026-08-30） ====================
+def test_stream_generation():
+    """真实流式冒烟：invoke_stream 逐片段产出、聚合非空，检索/拼链与 invoke 同源。"""
+    chain = rag_core.build_rag_chain()["chain"]
+    docs = rag_core.retrieve_vector("数据库事务的 ACID 特性是什么", k=3)
+    parts = list(chain.invoke_stream("什么是ACID", docs=docs))
+    assert len(parts) >= 1, "流式应至少产出一个片段"
+    assert "".join(parts).strip(), "流式片段聚合后应为非空答案"

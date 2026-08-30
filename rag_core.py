@@ -68,6 +68,22 @@ def ollama_chat(messages, temperature=None):
     return resp["message"]["content"]
 
 
+def ollama_chat_stream(messages, temperature=None):
+    """ollama_chat 的流式版（评审 P3，2026-08-30）：逐片段 yield 生成的文本。
+
+    ollama stream=True，片段内容与非流式完全一致，只是分块到达。
+    供 UI 真实流式渲染；调用方负责把片段聚合回完整答案（缓存/日志用）。
+    """
+    opts = {"temperature": temperature} if temperature is not None else None
+    stream = _client.chat(
+        model=config.LLM_MODEL, messages=messages, options=opts, stream=True
+    )
+    for chunk in stream:
+        piece = chunk["message"]["content"]
+        if piece:
+            yield piece
+
+
 # ====================== 1. 加载 + 切分 ======================
 _SEPARATORS = ["\n\n", "\n", "。", "；", "！", "？", "，", "、", " ", ""]
 
@@ -758,7 +774,9 @@ class RagChain:
         self.custom_prompt = custom_prompt
         self.history = history
 
-    def invoke(self, question, docs=None):
+    def _compose_prompt(self, question, docs):
+        """检索（docs 未预计算时）+ 拼 prompt。invoke / invoke_stream 共用同一份
+        拼链逻辑，保证流式与非流式的上下文、引用编号完全一致。"""
         # docs 由调用方预计算时直接复用（UI 用同一份做引用，避免重复检索/来源不一致）；
         # 不传则自行检索（eval_local 等场景），保持向后兼容。
         if docs is None:
@@ -781,8 +799,19 @@ class RagChain:
         else:
             rules = SYSTEM_RULES
 
-        prompt = _build_prompt(rules, self.history, context, question, sources=sources)
+        return _build_prompt(rules, self.history, context, question, sources=sources)
+
+    def invoke(self, question, docs=None):
+        prompt = self._compose_prompt(question, docs)
         return ollama_chat(
+            [{"role": "user", "content": prompt}], temperature=config.LLM_TEMPERATURE
+        )
+
+    def invoke_stream(self, question, docs=None):
+        """invoke 的流式版（评审 P3）：检索/拼链与 invoke 完全一致，生成段逐片段
+        yield。调用方负责聚合片段得到完整答案（用于缓存/日志/落盘）。"""
+        prompt = self._compose_prompt(question, docs)
+        yield from ollama_chat_stream(
             [{"role": "user", "content": prompt}], temperature=config.LLM_TEMPERATURE
         )
 
@@ -822,7 +851,7 @@ def build_citations(docs):
 
 
 def answer_question(question, mode="fast", custom_prompt=None, history="",
-                    use_cache=True, on_stage=None):
+                    use_cache=True, on_stage=None, on_token=None):
     """统一问答入口：Streamlit / FastAPI / 评估三个出口共用同一套
     「缓存 → 检索 → 硬拒答 → 生成 → 接地自检 → 缓存写入」管线。
 
@@ -837,6 +866,11 @@ def answer_question(question, mode="fast", custom_prompt=None, history="",
     use_cache   语义缓存开关（评估侧必须传 False，避免吃到线上缓存污染结果）
     on_stage    可选回调 fn(stage)，stage ∈ {"retrieve","rerank","generate"}，
                 供 UI 展示分阶段进度；缓存命中不触发。
+    on_token    可选回调 fn(piece)，真实流式（评审 P3）：生成中每到达一个文本片段
+                即回调一次。仅快速模式生效——精确模式的接地自检必须拿到完整答案
+                才能判定/替换（未接地的答案替换为拒答文案），边生成边展示会让
+                已展示的未验证内容无法撤回，故精确模式一律缓冲。回调后仍把完整
+                答案聚合进返回值，缓存/日志语义不变；缓存命中不触发。
 
     返回 dict：
       answer            最终答案（硬拒/未接地时已被替换为 HARD_REJECT_ANSWER）
@@ -885,9 +919,17 @@ def answer_question(question, mode="fast", custom_prompt=None, history="",
         stage("generate")
         rag = build_rag_chain(custom_prompt=custom_prompt, history=history)
         if mode == "accurate":
+            # 精确模式：缓冲生成（接地自检需要完整答案，见 on_token docstring）
             answer, grounded, grounded_score = grounded_generate(question, docs, rag["chain"])
             grounding_ran = config.GROUNDED_VERIFY_ENABLED
             not_grounded = grounding_ran and not grounded
+        elif on_token is not None:
+            # 快速模式 + on_token：真实流式——边生成边回调，聚合回完整答案
+            parts = []
+            for piece in rag["chain"].invoke_stream(question, docs=docs):
+                parts.append(piece)
+                on_token(piece)
+            answer = "".join(parts)
         else:
             answer = rag["chain"].invoke(question, docs=docs)
 

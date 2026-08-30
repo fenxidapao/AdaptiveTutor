@@ -232,6 +232,58 @@ def test_answer_question_accurate_normal(monkeypatch):
     assert store_calls == [False]
 
 
+def test_answer_question_fast_stream(monkeypatch):
+    """评审 P3 真实流式：快速模式 on_token 逐段回调，聚合回完整答案
+    （缓存/日志语义不变——store 收到的仍是完整答案而非片段）。"""
+    import rag_core
+
+    pieces = ["ACID ", "包括", "原子性[1]。"]
+
+    class _StreamChain:
+        def invoke_stream(self, question, docs=None):
+            yield from pieces
+
+    monkeypatch.setattr(rag_core, "retrieve_and_rerank",
+                        lambda q, force_no_rerank=False: [_mk_doc(0.90)])
+    monkeypatch.setattr(rag_core, "build_rag_chain",
+                        lambda custom_prompt=None, history="": {"chain": _StreamChain()})
+    monkeypatch.setattr(rag_core.semantic_cache, "lookup", lambda q, m: None)
+    store_calls = []
+    monkeypatch.setattr(rag_core.semantic_cache, "store",
+                        lambda q, m, a, c, reject=False: store_calls.append((a, reject)))
+    got = []
+    res = rag_core.answer_question("什么是ACID", mode="fast",
+                                   on_token=got.append, use_cache=True)
+    assert got == pieces  # 生成中逐段回调
+    assert res["answer"] == "ACID 包括原子性[1]。"  # 聚合为完整答案
+    assert store_calls == [("ACID 包括原子性[1]。", False)]
+
+
+def test_answer_question_accurate_stream_ignored(monkeypatch):
+    """评审 P3 安全语义：精确模式即使传 on_token 也不流式（接地自检需完整答案，
+    未接地时整段替换为拒答文案——边生成边展示会让已展示内容无法撤回）。"""
+    import rag_core
+
+    class _Chain:
+        def invoke(self, question, docs=None):
+            return "缓冲路径的完整答案[1]。"
+
+    monkeypatch.setattr(rag_core, "retrieve_and_rerank",
+                        lambda q, force_no_rerank=False: [_mk_doc(0.90)])
+    monkeypatch.setattr(rag_core, "build_rag_chain",
+                        lambda custom_prompt=None, history="": {"chain": _Chain()})
+    monkeypatch.setattr(rag_core, "grounded_generate",
+                        lambda q, d, chain: ("缓冲路径的完整答案[1]。", True, 1.0))
+    monkeypatch.setattr(rag_core.semantic_cache, "lookup", lambda q, m: None)
+    monkeypatch.setattr(rag_core.semantic_cache, "store",
+                        lambda q, m, a, c, reject=False: None)
+    got = []
+    res = rag_core.answer_question("什么是ACID", mode="accurate",
+                                   on_token=got.append, use_cache=True)
+    assert got == []  # 未触发任何流式回调
+    assert res["answer"] == "缓冲路径的完整答案[1]。"
+
+
 # ==================== /retrieve ====================
 def test_retrieve(client, monkeypatch):
     monkeypatch.setattr(
