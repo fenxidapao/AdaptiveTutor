@@ -195,7 +195,8 @@ with st.sidebar:
         if st.button("⤴️ 增量索引上传文件", type="primary"):
             # P1-4：基础库为空（首次/清空后）时退化为全量重建，避免 data/ 已有文件被静默漏索引；
             # 基础库已存在则只增量 upsert 刚上传的文件（稳定 id 自动去重，不重建全库）。
-            if get_vector_store().count() == 0:
+            # 评审 P2-3：显式判空走首建分支（auto_rebuild=False 避免内部隐式重建的双重劳动）。
+            if get_vector_store(auto_rebuild=False).count() == 0:
                 with st.spinner("首次建库：从 data/ 全量重建索引..."):
                     chunks = load_and_chunk_documents()
                     get_vector_store(chunks)

@@ -404,7 +404,8 @@ def test_get_vector_store_empty_chunks(monkeypatch, tmp_path):
 
 def test_index_stats(client, monkeypatch):
     col = FakeCol(count=7, metas=[{"source": "/x/a.md"}, {"source": "/x/b.md"}, {"source": "/x/b.md"}])
-    monkeypatch.setattr(main, "get_vector_store", lambda: col)
+    # 评审 P2-3 后 /index/stats 走 get_vector_store(auto_rebuild=False)，mock 须收 kwargs
+    monkeypatch.setattr(main, "get_vector_store", lambda *a, **k: col)
     r = client.get("/index/stats")
     assert r.status_code == 200
     body = r.json()
@@ -414,9 +415,88 @@ def test_index_stats(client, monkeypatch):
 
 
 def test_index_stats_unavailable(client, monkeypatch):
-    def _boom():
+    def _boom(*a, **k):
         raise RuntimeError("vector store unavailable")
 
     monkeypatch.setattr(main, "get_vector_store", _boom)
     r = client.get("/index/stats")
     assert r.status_code == 503
+
+
+# ==================== 评审 P2 回归 ====================
+def test_split_structured_offset_remap():
+    """评审 P2-1 回归：含代码块的文档，切分产出的 start_index 必须是「原文偏移」。
+    修复前偏移落在哨兵保护后的坐标系——代码块（原文 314 字符）被换成 4 字符哨兵后，
+    其后所有块的 start_index 整体前漂 310 字符，text[start:start+len(chunk)] != chunk。"""
+    import rag_core
+
+    head = "前导文字。" * 30                            # 150 字符单行
+    code = "```python\n" + "x = 1\n" * 50 + "```"      # 314 字符 → 哨兵 §B0§ 仅 4 字符
+    text = head + "\n" + code + "\n" + "尾注文字。" * 30  # 尾注起点原文偏移 = 466
+    chunks = rag_core._split_structured(text, 200, 0, rag_core._SEPARATORS)
+    assert len(chunks) >= 2
+    hit_code = False
+    for chunk, start, _chapter in chunks:
+        assert 0 <= start and start + len(chunk) <= len(text)
+        # 核心断言：报告的偏移处，原文必须与块内容逐字对齐（引用溯源可定位的前提）
+        assert text[start : start + len(chunk)] == chunk, (
+            f"start_index={start} 处原文与块内容不匹配（偏移漂移）"
+        )
+        if "```" in chunk:
+            hit_code = True
+    assert hit_code  # 代码块被整体保护并进入某个块
+
+
+def test_bm25_cache_built_once_per_corpus(monkeypatch):
+    """评审 P2-4 回归：BM25 索引按语料版本缓存（同语料两次查询只建一次），
+    _invalidate_all_chunks（增删/重建索引）后重建。"""
+    import rag_core
+
+    docs = [rag_core.Document("事务的 ACID 特性。", {"source": "a.txt", "start_index": 0}),
+            rag_core.Document("死锁的四个必要条件。", {"source": "a.txt", "start_index": 20})]
+
+    class _FakeCol:
+        def count(self):
+            return len(docs)
+
+        def get(self, include=None):
+            return {"documents": [d.page_content for d in docs],
+                    "metadatas": [d.metadata for d in docs]}
+
+    monkeypatch.setattr(rag_core, "get_vector_store", lambda *a, **k: _FakeCol())
+    monkeypatch.setattr(rag_core, "retrieve_vector",
+                        lambda q, k=None: [rag_core.Document("x", {"source": "a.txt", "start_index": 0})])
+    built = {"n": 0}
+    _orig_bm25 = rag_core._BM25
+
+    def _spy(d):
+        built["n"] += 1
+        return _orig_bm25(d)
+
+    monkeypatch.setattr(rag_core, "_BM25", _spy)
+    monkeypatch.setattr(rag_core, "_all_chunks_cache", None)
+    monkeypatch.setattr(rag_core, "_all_chunks_count", -1)
+    monkeypatch.setattr(rag_core, "_bm25_cache", None)
+
+    rag_core.hybrid_retrieve("ACID", k=5)
+    rag_core.hybrid_retrieve("ACID", k=5)
+    assert built["n"] == 1, "同语料两次查询不应重建 BM25 索引"
+    rag_core._invalidate_all_chunks()
+    rag_core.hybrid_retrieve("ACID", k=5)
+    assert built["n"] == 2, "语料失效（增删/重建）后应重建 BM25 索引"
+
+
+def test_get_vector_store_readonly_no_rebuild(monkeypatch, tmp_path):
+    """评审 P2-3 回归：auto_rebuild=False 时空库不触发全量重建（只读端点零副作用）。"""
+    import rag_core
+
+    def _no_rebuild():
+        raise AssertionError("auto_rebuild=False 不应触发 load_and_chunk_documents")
+
+    monkeypatch.setattr(config, "PERSIST_DIRECTORY", str(tmp_path / "chroma"))
+    monkeypatch.setattr(rag_core, "load_and_chunk_documents", _no_rebuild)
+    # 绕开其他用例遗留的模块级单例缓存，确保真实走「空库 + auto_rebuild=False」分支
+    monkeypatch.setattr(rag_core, "_chroma_client", None)
+    monkeypatch.setattr(rag_core, "_vector_store", None)
+    col = rag_core.get_vector_store(auto_rebuild=False)
+    assert col.count() == 0  # 空库如实返回，没有建索引副作用

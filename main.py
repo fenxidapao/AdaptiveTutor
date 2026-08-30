@@ -84,9 +84,10 @@ def _safe_filename(name: str) -> str:
 
 
 def _load_index_or_raise():
-    """确保向量库可用；Ollama 未启动 / 库损坏时给出可操作的报错。"""
+    """确保向量库可用；Ollama 未启动 / 库损坏时给出可操作的报错。
+    评审 P2-3：/index/stats 是只读端点，空库不触发自动重建。"""
     try:
-        return get_vector_store()
+        return get_vector_store(auto_rebuild=False)
     except Exception as e:
         raise HTTPException(
             status_code=503,
@@ -163,7 +164,8 @@ def health():
     checks = collect_status(deps=["ollama", "chromadb", "pypdf", "docx", "dotenv"])
     count = None
     try:
-        count = get_vector_store().count()
+        # 评审 P2-3：只读端点零副作用——空库不触发自动重建，如实返回 count=None/0
+        count = get_vector_store(auto_rebuild=False).count()
     except Exception:
         pass
     return HealthResponse(
@@ -250,7 +252,8 @@ def list_documents():
 
     files, total = [], 0
     try:
-        col = get_vector_store()
+        # 评审 P2-3：只读端点零副作用（未建索引时各文件如实显示 chunks=0）
+        col = get_vector_store(auto_rebuild=False)
         # 按 source 统计每个文档的块数（metadata.source 为绝对/相对路径）
         all_meta = col.get(include=["metadatas"])["metadatas"]
         from collections import Counter
@@ -297,7 +300,9 @@ async def upload_document(file: UploadFile = File(..., description="PDF / TXT / 
     dest.write_bytes(content)
 
     try:
-        if get_vector_store().count() == 0:
+        # 评审 P2-3：显式判空走「首次建库」分支（auto_rebuild=False 避免
+        # get_vector_store 内部先隐式重建一遍、再进 else 增量分支的双重劳动）
+        if get_vector_store(auto_rebuild=False).count() == 0:
             # 首次建库：全量重建（与 app.py 逻辑一致）
             chunks = load_and_chunk_documents()
             get_vector_store(chunks)

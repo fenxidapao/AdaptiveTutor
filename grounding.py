@@ -81,11 +81,22 @@ def verify_grounded(context: str, answer: str) -> dict:
         except Exception:
             parsed = {}
 
+    detail = parsed.get("statements", []) if isinstance(parsed.get("statements"), list) else []
+    # 评审 P2（2026-08-30）：与 eval_local 同口径——分数从明细重算，不信裁判自报。
+    # 门控场景取「明细重算」与「裁判自报」的较小值（更保守）：
+    #   - 裁判漏列陈述时（P2 复核实测：自报 0.6 但明细 2/2 全 true），漏列的往往是
+    #     它没把握的陈述 → 自报分更接近真实，min 避免明细重算虚高放行幻觉；
+    #   - 明细与自报一致时二者相等，行为不变。
+    # 明细为空（裁判故障）：回退自报分，缺省 0.0（安全侧 → 拒答）。
+    recalculated = None
+    if detail:
+        sup = sum(1 for it in detail if isinstance(it, dict) and it.get("supported") is True)
+        recalculated = sup / len(detail)
     try:
-        score = float(parsed.get("score", 0.0))
+        reported = float(parsed.get("score", 0.0))
     except (TypeError, ValueError):
-        score = 0.0
+        reported = 0.0
+    score = min(recalculated, reported) if recalculated is not None else reported
     score = max(0.0, min(1.0, score))
     grounded = score >= config.GROUNDED_SCORE_THRESHOLD
-    detail = parsed.get("statements", []) if isinstance(parsed.get("statements"), list) else []
     return {"grounded": grounded, "score": round(score, 3), "detail": detail}

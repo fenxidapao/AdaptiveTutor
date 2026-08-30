@@ -320,10 +320,15 @@ def context_recall(question: str, reference: str, context: str) -> dict:
     """
     上下文召回：标准答案（reference）里的事实点是否都被检索到的上下文覆盖。
     score = 被覆盖的事实数 / 总事实数，范围 0~1。
+
+    评审 P2（2026-08-30）：与 faithfulness 同口径——分数一律从明细（facts 的
+    covered 逐条判定）重算，不信任裁判自报 score。P2 裁判口径复核曾实测
+    「裁判自报分与明细矛盾、不可复算」的故障，faithfulness 当时已改为重算，
+    本函数漏改；现补齐，四个指标中所有「拆明细判真伪」的指标口径统一。
     """
     system = (
         "你是严谨的 RAG 评估裁判。只依据【检索到的上下文】判断，不要使用外部知识。"
-        "必须只输出一个 JSON 对象，不要额外文字。"
+        "必须只输出一个 JSON 对象，不要额外文字或解释。"
     )
     user = f"""【问题】
 {question}
@@ -343,9 +348,22 @@ def context_recall(question: str, reference: str, context: str) -> dict:
 只输出 JSON，格式：
 {{"facts": [{{"fact": "事实点", "covered": true}}], "score": 0.0}}"""
     out = _judge_once(system, user)
-    score = float(out.get("score", 0.0))
-    score = max(0.0, min(1.0, score))
-    return {"score": round(score, 3), "detail": _clean_judgment_items(out.get("facts", []), key="fact")}
+    items = _clean_judgment_items(out.get("facts", []), key="fact")
+    if items:
+        # 分数从明细重算（可复算、可审计），不信裁判自报 score
+        cov = sum(1 for it in items if it.get("covered") is True)
+        score = max(0.0, min(1.0, cov / len(items)))
+        return {"score": round(score, 3), "detail": items}
+    # 明细为空（裁判解析失败/未拆出任何事实）：如实标注而非静默记 0 分，
+    # 让下游能看到「这是裁判故障」而不是「上下文完全没覆盖」
+    try:
+        fallback = float(out.get("score", 0.0))
+    except (TypeError, ValueError):
+        fallback = 0.0
+    return {
+        "score": round(max(0.0, min(1.0, fallback)), 3),
+        "detail": [{"fact": "JUDGE_FAILED: 裁判未返回有效拆解", "covered": False}],
+    }
 
 
 # ====================== 主流程 ======================

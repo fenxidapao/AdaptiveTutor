@@ -261,24 +261,44 @@ import re as _re
 
 
 def _protect_blocks(text):
-    """代码块(```...```)与连续表格行整体替换为哨兵，返回 (替换后文本, {哨兵: 原文本})。"""
+    """代码块(```...```)与连续表格行整体替换为哨兵。
+
+    返回 (替换后文本, {哨兵: 原文本}, 偏移重映射表)。
+    评审 P2-1（2026-08-30）：哨兵 §B0§（4 字符）远短于原代码块/表格，替换后所有
+    后续偏移进入「保护后坐标系」；若不重映射，切分产出的 start_index 对含代码块/
+    表格的文档整体漂移（引用溯源「原文偏移」定位不准）。segments 记录每个哨兵在
+    保护后文本中的 (起点, 哨兵长, 原文长)，供 _remap_offset 换算回原文偏移。
+    """
     blocks = {}
+    segments = []  # [(protected_start, protected_len, original_len), ...]
 
-    def _repl_code(m):
+    def _repl(m):
         key = f"§B{len(blocks)}§"
         blocks[key] = m.group(0)
+        segments.append((m.start(), len(key), len(m.group(0))))
         return key
 
-    text = _re.sub(r"```.*?```", _repl_code, text, flags=_re.S)
-
-    def _repl_table(m):
-        key = f"§B{len(blocks)}§"
-        blocks[key] = m.group(0)
-        return key
-
+    text = _re.sub(r"```.*?```", _repl, text, flags=_re.S)
     # 连续以 | 开头的行（markdown 表格）整体保护
-    text = _re.sub(r"(?:^\|.*\|\s*$(\n|$))+", _repl_table, text, flags=_re.M)
-    return text, blocks
+    text = _re.sub(r"(?:^\|.*\|\s*$(\n|$))+", _repl, text, flags=_re.M)
+    segments.sort()  # 代码块/表格分两次 sub 替换，protected_start 需统一排序
+    return text, blocks, segments
+
+
+def _remap_offset(offset, segments):
+    """把「保护后坐标系」的偏移换算回原文偏移（评审 P2-1）。
+
+    segments 按 protected_start 升序。偏移落在哨兵区间内时映射到块首（原文中该
+    代码块/表格的起点）——哨兵是原子、正常切分不会产生块中间的偏移；落在哨兵
+    之后则累加前面所有哨兵的长度差（original_len - protected_len）。"""
+    shift = 0
+    for p_start, p_len, o_len in segments:
+        if offset < p_start:
+            return offset + shift
+        if offset < p_start + p_len:
+            return p_start + shift
+        shift += o_len - p_len
+    return offset + shift
 
 
 def _restore_blocks(text, blocks):
@@ -292,8 +312,11 @@ def _split_structured(text, chunk_size, chunk_overlap, separators):
     - 代码块/表格整体保护（哨兵替换→切分→还原，永不切断）
     - 按标题分层：标题行作为节边界，块不跨章节；每节内走原 _split_with_index
     - 无标题文档退化为单节（chapter=None），行为与旧版一致
+    - start_index 为「原文偏移」：切分在哨兵保护后的文本上进行，还原块内容时
+      同步经 _remap_offset 把偏移换算回原文坐标系（评审 P2-1），保证引用溯源
+      的原文定位对含代码块/表格的文档同样准确
     """
-    protected, blocks = _protect_blocks(text)
+    protected, blocks, segments = _protect_blocks(text)
     lines = protected.split("\n")
     sections = []  # (chapter, section_start_offset, section_text)
     cur_title, cur_lines, cur_start = None, [], 0
@@ -317,7 +340,11 @@ def _split_structured(text, chunk_size, chunk_overlap, separators):
         if not sec_text.strip():
             continue
         for chunk, rel_start in _split_with_index(sec_text, chunk_size, chunk_overlap, separators):
-            out.append((_restore_blocks(chunk, blocks), sec_start + rel_start, chapter))
+            # 评审 P2-1：sec_start/rel_start 是保护后坐标系的偏移，还原块内容的同时
+            # 把 start_index 重映射回原文偏移（否则含代码块/表格的文档整体漂移）
+            out.append((_restore_blocks(chunk, blocks),
+                        _remap_offset(sec_start + rel_start, segments),
+                        chapter))
     return out
 
 
@@ -450,8 +477,15 @@ def _get_chroma_client():
     return _chroma_client
 
 
-def get_vector_store(chunks=None):
-    """chunks 不为 None → 重建并落盘；为 None → 懒加载已有库（问答阶段用）。"""
+def get_vector_store(chunks=None, auto_rebuild=True):
+    """chunks 不为 None → 重建并落盘；为 None → 懒加载已有库（问答阶段用）。
+
+    auto_rebuild（评审 P2-3，2026-08-30）：库为空且 data/ 有资料时是否自动全量重建。
+    默认 True（懒加载 / 启动预热 / 上传建库路径保持「免手动点重建」的既有行为）；
+    **只读端点必须传 False**（GET /health、GET /index/stats、GET /documents）——
+    只读操作不应有「顺手建索引」的副作用（此前空库 + Ollama 就绪时 GET /health
+    会同步触发数分钟的全量重建，且该副作用对调用方完全不可见）。
+    """
     global _vector_store
     ef = get_embeddings()
     client = _get_chroma_client()
@@ -499,8 +533,9 @@ def get_vector_store(chunks=None):
             _vector_store = _chroma_client.get_or_create_collection(
                 _COLLECTION_NAME, embedding_function=ef
             )
-        # 集合为空但本地有资料 → 自动重建（切换集合名 / 首次部署后免手动点「重建索引」）
-        if _vector_store.count() == 0:
+        # 集合为空但本地有资料 → 自动重建（切换集合名 / 首次部署后免手动点「重建索引」）；
+        # 只读端点（auto_rebuild=False）跳过，空库如实返回 count()==0
+        if _vector_store.count() == 0 and auto_rebuild:
             chunks = load_and_chunk_documents()
             if chunks:
                 return get_vector_store(chunks)
@@ -592,13 +627,15 @@ def retrieve_vector(question, k=None):
 # ====================== 3.1 混合检索（向量 + BM25 双通道，RRF 融合） ======================
 _all_chunks_cache = None
 _all_chunks_count = -1
+_bm25_cache = None  # (corpus_count, _BM25, all_chunks)——评审 P2-4：BM25 索引按语料版本缓存
 
 
 def _invalidate_all_chunks():
     """增删文档后调用：强制下次查询重新拉取全库（BM25 通道同步最新语料）。"""
-    global _all_chunks_cache, _all_chunks_count
+    global _all_chunks_cache, _all_chunks_count, _bm25_cache
     _all_chunks_cache = None
     _all_chunks_count = -1
+    _bm25_cache = None  # 评审 P2-4：BM25 索引与全库块缓存同款失效机制
 
 
 def _get_all_chunks():
@@ -620,22 +657,39 @@ def _get_all_chunks():
     return _all_chunks_cache
 
 
+def _get_bm25_cache():
+    """（评审 P2-4，2026-08-30）BM25 索引 + 全库块缓存：按语料块数失效，
+    与 _all_chunks_cache 同款机制（增删/重建索引时 _invalidate_all_chunks 一并清掉）。
+
+    此前 hybrid_retrieve 每次查询都 new 一个 _BM25、对全库重新分词建 df 表
+    （O(语料)/query）；1219 块时尚可忽略（瓶颈在 CPU reranker），但属于纯算法层
+    的重复劳动，语料扩大后线性恶化。返回 (bm25_index, all_chunks)——二者取自
+    同一次构建，保证下标一一对应。"""
+    global _bm25_cache
+    cnt = get_vector_store().count()
+    if _bm25_cache is None or _bm25_cache[0] != cnt:
+        chunks = _get_all_chunks()
+        _bm25_cache = (cnt, _BM25(chunks), chunks)
+    return _bm25_cache[1], _bm25_cache[2]
+
+
 def hybrid_retrieve(question, k=config.RETRIEVE_K):
     """真混合检索：两个独立召回通道，各自全库召回 top-K，RRF 融合取 top-N。
 
     - 通道 A：向量召回（双塔粗排，语义匹配）—— Chroma 全库
     - 通道 B：BM25 词面召回（精确术语匹配，如 ACID / 2NF / 死锁）—— 对全库打分
-    两路结果用倒数排名融合（RRF）互补，返回 top-N（RERANKER_TOP_N）。
+    两路结果用倒数排名融合（RRF）互补，返回 top-N（RERANK_CANDIDATE_K）。
 
     相比 v1「向量 top-50 池内 BM25 重排」的根本区别：
     旧版 BM25 只对已召回的 50 块重排，正确块若不在向量 top-50 就永远捞不到；
     新版 BM25 对全库打分，正确块即使向量排名很低，只要词面匹配也能独立召回进池。
+    评审 P2-4：BM25 索引经 _get_bm25_cache 按语料版本缓存，不再每次查询重建。
     """
     vector_docs = retrieve_vector(question, k=k)  # 通道 A：向量全库 top-K
     if not vector_docs:
         return []
-    all_chunks = _get_all_chunks()
-    bm25_docs = _bm25_rank(question, all_chunks, top_n=config.BM25_TOP_K)  # 通道 B：BM25 全库 top-K
+    bm25, all_chunks = _get_bm25_cache()
+    bm25_docs = _bm25_rank(question, all_chunks, top_n=config.BM25_TOP_K, index=bm25)  # 通道 B：BM25 全库 top-K
     # B 专项：融合候选池扩到 RERANK_CANDIDATE_K（>RERANKER_TOP_N），
     # 让「仅 BM25 命中、向量缺席」的正确块先进池，再由 reranker 精排回 top-N（见 retrieve_and_rerank）。
     return _rrf_fuse([vector_docs, bm25_docs], top_n=config.RERANK_CANDIDATE_K)

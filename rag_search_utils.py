@@ -71,12 +71,18 @@ class _BM25:
         return out
 
 
-def _bm25_rank(question, docs, top_n=None):
-    """对 docs（同一批向量候选）做 BM25 词面打分，返回按分数降序的 Document 列表。"""
+def _bm25_rank(question, docs, top_n=None, index=None):
+    """对 docs（同一批向量候选）做 BM25 词面打分，返回按分数降序的 Document 列表。
+
+    index（评审 P2-4，2026-08-30）：可选，传入已构建的 _BM25 实例则跳过重建——
+    调用方（rag_core）按语料版本缓存索引，避免每次查询都对全库重新分词
+    （O(语料)/query）。index 与 docs 必须来自同一次构建（下标一一对应）。
+    """
     if not docs:
         return []
-    bm25 = _BM25(docs)
-    scores = bm25.scores(question)
+    if index is None:
+        index = _BM25(docs)
+    scores = index.scores(question)
     ranked = sorted(range(len(docs)), key=lambda i: scores[i], reverse=True)
     if top_n:
         ranked = ranked[:top_n]

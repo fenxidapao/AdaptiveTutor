@@ -84,6 +84,22 @@ def test_bm25_rank():
     assert _bm25_rank("x", []) == []
 
 
+def test_bm25_rank_with_prebuilt_index():
+    """评审 P2-4：_bm25_rank 支持传入预构建索引——结果与现场构建一致，且索引可
+    重复使用（scores 无状态副作用）。rag_core 据此按语料版本缓存 BM25 索引，
+    避免每次查询对全库重新分词。"""
+    docs = _build_docs()
+    bm25 = _BM25(docs)
+    a = _bm25_rank("事务隔离级别 ACID", docs, top_n=2)
+    b = _bm25_rank("事务隔离级别 ACID", docs, top_n=2, index=bm25)
+    assert [d.page_content for d in a] == [d.page_content for d in b]
+    assert "ACID" in b[0].page_content
+    # 同一索引多次打分结果稳定
+    r1 = _bm25_rank("死锁", docs, index=bm25)
+    r2 = _bm25_rank("死锁", docs, index=bm25)
+    assert [d.page_content for d in r1] == [d.page_content for d in r2]
+
+
 def test_rrf_fuse():
     docs = _build_docs()
     vec_order = list(docs)
