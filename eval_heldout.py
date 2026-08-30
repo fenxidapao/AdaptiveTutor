@@ -24,14 +24,7 @@ import csv
 os.environ.setdefault("EVAL_CSV_NAME", "eval_results_heldout_A.csv")
 os.environ.setdefault("SKIP_REBUILD", "1")  # 复用现有索引（已存在的 chroma_db）
 
-import config
-from rag_core import (
-    build_rag_chain,
-    retrieve_and_rerank,
-    is_hard_reject,
-    HARD_REJECT_ANSWER,
-)
-from grounding import verify_grounded
+from rag_core import answer_question
 from eval_data_heldout import HELDOUT_A, HELDOUT_B, HELDOUT_C
 from eval_local import run_evaluation, summarize_and_save, FIELDS
 
@@ -63,43 +56,30 @@ def _safe(v, nd=3):
 
 def run_group_bc():
     print("\n===== B/C 组（语料外 / 对抗，拒答验证）=====")
-    bundle = build_rag_chain()
-    chain = bundle["chain"]
-
     rows = []
     for grp, items in (("B", HELDOUT_B), ("C", HELDOUT_C)):
         for it in items:
             q = it["question"]
-            docs = retrieve_and_rerank(q)  # 精确路径（reranker 若开则生效）
-            reject_ret, sig = is_hard_reject(docs)
+            # 评审 P1（2026-08-30）起走统一问答入口：与 app.py / main.py 共用同一套
+            # 「硬拒答 + 接地自检」闸门，不再各自复刻一份拒答逻辑（避免出口间漂移）；
+            # use_cache=False 保证评估不吃语义缓存、逐题真实跑闸门。
+            res = answer_question(q, mode="accurate", use_cache=False)
+            docs = res["docs"] or []
             top_v = docs[0].metadata.get("vector_score") if docs else None
             top_r = docs[0].metadata.get("rerank_score") if docs else None
+            answer = res["answer"]
 
-            reject_ground = False
-            g_score = None
-            if reject_ret:
-                answer = HARD_REJECT_ANSWER
-            else:
-                answer = chain.invoke(q, docs=docs)
-                if config.GROUNDED_VERIFY_ENABLED:
-                    ctx = "\n\n".join(d.page_content for d in docs)
-                    g = verify_grounded(ctx, answer)
-                    g_score = g["score"]
-                    if not g["grounded"]:
-                        answer = HARD_REJECT_ANSWER
-                        reject_ground = True
-
-            final_reject = reject_ret or reject_ground
+            final_reject = res["rejected"] or res["not_grounded"]
             rows.append({
                 "group": grp,
                 "question": q,
                 "expect_reject": it.get("expect_reject"),
                 "final_reject": final_reject,
-                "reject_by_retrieval": reject_ret,
-                "reject_by_grounding": reject_ground,
+                "reject_by_retrieval": res["rejected"],
+                "reject_by_grounding": res["not_grounded"],
                 "top1_vector_score": _safe(top_v),
                 "top1_rerank_score": _safe(top_r),
-                "grounded_score": _safe(g_score),
+                "grounded_score": _safe(res["grounded_score"]),
                 "answer_head": (answer or "").replace("\n", " ")[:80],
             })
             mark = "拒答" if final_reject else "放通"

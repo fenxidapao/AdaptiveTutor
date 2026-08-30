@@ -33,12 +33,8 @@ from pathlib import Path
 from rag_core import (
     load_and_chunk_documents,
     get_vector_store,
-    build_rag_chain,
-    retrieve_and_rerank,
+    answer_question,
     get_confidence,
-    is_hard_reject,
-    grounded_generate,
-    HARD_REJECT_ANSWER,
     chunk_file,
     add_documents,
     delete_by_source,
@@ -336,97 +332,51 @@ if prompt := st.chat_input("问任何专业课问题..."):
         message_placeholder = st.empty()
         try:
             accurate = st.session_state.mode == "accurate"
-            rejected = False          # P1：精确模式是否触发硬拒答
-            grounded_score = None     # P1：生成接地自检得分（仅精确模式）
-            docs = None               # 语义缓存命中时无检索过程，docs 保持 None
-            _from_cache = False
 
-            # ---- P2 语义缓存（2026-08-25）：命中则跳过检索/重排/生成，直接复用历史答案 ----
-            mode_label = "精确" if accurate else "快速"
-            _cached = semantic_cache.lookup(prompt, mode_label)
-            if _cached:
-                full_response = _cached["answer"]
-                citations = _cached["citations"]
-                _from_cache = True
-            else:
-                # ---- P0-3 分阶段进度（覆盖 检索+重排+生成，结束显式标记完成）----
-                # 统一走 retrieve_and_rerank（fast=纯向量 top-5；accurate=向量+BM25 融合+可选 reranker），
-                # 把同一份 docs 既给引用展示、又传给链生成，杜绝重复检索与来源不一致。
-                with st.status("正在处理…", expanded=True) as status:
+            # ---- 统一问答入口（评审 P1，2026-08-30）：缓存 / 检索 / 硬拒答 / 生成 /
+            # 接地自检 / 缓存写入全部收敛在 rag_core.answer_question，Streamlit /
+            # FastAPI / 评估三个出口共用同一闸门；on_stage 回调保留分阶段进度展示 ----
+            def _stage(s):
+                if s == "retrieve":
                     if accurate:
                         status.update(label="① 向量召回 + BM25 融合 top-%d …" % config.RETRIEVE_K)
                     else:
                         status.update(label="① 向量召回 top-%d …" % config.RERANKER_TOP_N)
-                    docs = retrieve_and_rerank(prompt, force_no_rerank=not accurate)
-                    if accurate and config.RERANKER_ENABLED:
-                        status.update(label="② bge-reranker 精排 top-%d …" % config.RERANKER_TOP_N)
+                elif s == "rerank":
+                    status.update(label="② bge-reranker 精排 top-%d …" % config.RERANKER_TOP_N)
+                elif s == "generate":
+                    status.update(
+                        label="③ 生成回答…" + ("（含接地自检）" if accurate else ""),
+                        state="running",
+                    )
 
-                    # 引用溯源结构（两种模式共用，均基于同一份 docs）
-                    citations = []
-                    for rank, doc in enumerate(docs, 1):
-                        source = Path(doc.metadata.get("source", "unknown")).name
-                        content = doc.page_content.strip()
-                        # T3: 分数展示优先级 rerank_score → hybrid_score → vector_score
-                        score = (
-                            doc.metadata.get("rerank_score")
-                            or doc.metadata.get("hybrid_score")
-                            or doc.metadata.get("vector_score")
-                        )
-                        start = doc.metadata.get("start_index")
-                        citations.append({
-                            "rank": rank,
-                            "source": source,
-                            "content": content,
-                            "score": score,
-                            "start_index": start,
-                        })
-
-                    # ---- P1 硬拒答 + 接地自检（仅精确模式；快速模式保留软提示与低延迟）----
-                    if accurate:
-                        reject, _sig = is_hard_reject(docs)
-                        if reject:
-                            rejected = True
-                            full_response = HARD_REJECT_ANSWER
-                            status.update(
-                                label="🚫 已拒答（检索不相关，signal=%.2f）" % _sig,
-                                state="complete",
-                            )
-                        else:
-                            status.update(label="③ 生成回答…（含接地自检）", state="running")
-                            rag_result = build_rag_chain(
-                                custom_prompt=st.session_state.custom_prompt,
-                                history=history_text,
-                            )
-                            chain = rag_result["chain"]
-                            full_response, grounded_flag, grounded_score = grounded_generate(
-                                prompt, docs, chain
-                            )
-                            status.update(
-                                label="✅ 回答完成" + ("" if grounded_flag else "（未接地→已拒答）"),
-                                state="complete",
-                            )
-                    else:
-                        status.update(label="③ 生成回答…", state="running")
-                        # 构建带历史记忆的链并生成（复用上方同一份 docs，引用与上下文一致）
-                        rag_result = build_rag_chain(
-                            custom_prompt=st.session_state.custom_prompt,
-                            history=history_text,
-                        )
-                        chain = rag_result["chain"]
-                        response = chain.invoke(prompt, docs=docs)
-                        full_response = response
-                        # 显式标记完成，避免阶段标签「③ 生成回答…」残留为 running
-                        status.update(label="✅ 回答完成", state="complete")
-
-                # 写入语义缓存（拒答/未接地不缓存，避免把错误拒答当"热答案"复用）
-                semantic_cache.store(
-                    prompt, mode_label, full_response, citations,
-                    reject=(rejected or (grounded_score is not None
-                                         and grounded_score < config.GROUNDED_SCORE_THRESHOLD)),
+            with st.status("正在处理…", expanded=True) as status:
+                res = answer_question(
+                    prompt,
+                    mode=st.session_state.mode,
+                    custom_prompt=st.session_state.custom_prompt,
+                    history=history_text,
+                    on_stage=_stage,
                 )
+                if res["cached"]:
+                    status.update(label="⚡ 语义缓存命中", state="complete")
+                elif res["rejected"]:
+                    status.update(
+                        label="🚫 已拒答（检索不相关，signal=%.2f）" % (res["reject_signal"] or 0.0),
+                        state="complete",
+                    )
+                else:
+                    status.update(
+                        label="✅ 回答完成" + ("" if res["grounded"] else "（未接地→已拒答）"),
+                        state="complete",
+                    )
 
-            if _from_cache:
-                st.caption(f"⚡ 语义缓存命中（相似度 {_cached['sim']:.2f}）")
+            full_response = res["answer"]
+            citations = res["citations"]
+            docs = res["docs"]
+
+            if res["cached"]:
+                st.caption(f"⚡ 语义缓存命中（相似度 {res['cache_sim']:.2f}）")
 
             # 流式回显（在状态框外，避免与阶段进度混淆）
             for i in range(len(full_response)):
@@ -438,14 +388,11 @@ if prompt := st.chat_input("问任何专业课问题..."):
             )
 
             # ---- 拒答 / 低置信提示 ----
-            # P1 硬拒答：精确模式已判定资料不足/未接地 → 明确拒答横幅（替代软提示）。
+            # P1 硬拒答：精确模式已判定资料不足（检索不相关 rejected / 回答未接地
+            # not_grounded）→ 明确拒答横幅（替代软提示）。
             # 快速模式或精确模式漏拒 → 软提示「资料可能不足」（保留旧 T3 行为）。
             _conf = None if docs is None else get_confidence(docs)
-            if accurate and (
-                rejected
-                or (grounded_score is not None
-                    and grounded_score < config.GROUNDED_SCORE_THRESHOLD)
-            ):
+            if accurate and (res["rejected"] or res["not_grounded"]):
                 st.error(
                     "🚫 **已拒答**：根据提供的课程资料无法回答该问题"
                     "（检索不相关 / 回答未接地）。建议补充相关教材或笔记后重试。"
@@ -464,7 +411,7 @@ if prompt := st.chat_input("问任何专业课问题..."):
                 citations=citations,
                 answer=full_response,
                 latency_ms=int((time.time() - t0) * 1000),
-                rejected=(rejected if accurate else None),
+                rejected=(res["rejected"] if accurate else None),
             )
 
             st.session_state.messages.append({

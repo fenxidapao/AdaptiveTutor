@@ -94,24 +94,39 @@ def test_health(client):
 
 
 # ==================== /query ====================
-def _patch_rag(monkeypatch, answer="ACID 包括原子性、一致性、隔离性、持久性[1]。", confidence=0.9):
-    """把检索 + 生成 + 置信度 + 日志全部替换为假实现。"""
-    monkeypatch.setattr(
-        main, "retrieve_and_rerank",
-        lambda q, force_no_rerank=False: [FakeDoc(score=0.9), FakeDoc(content="第二范式 2NF 消除部分函数依赖。", source="db2.txt", start=50, score=0.7)],
-    )
+def _patch_answer(monkeypatch, answer="ACID 包括原子性、一致性、隔离性、持久性[1]。", low_confidence=False):
+    """把统一问答入口 answer_question 替换为假实现（评审 P1 起 /query 走该入口，
+    原先 mock 的 retrieve_and_rerank / build_rag_chain / get_confidence 已不在
+    API 层直接调用）。"""
+    citations = [
+        {"rank": 1, "source": "db.txt", "content": "ACID 包括原子性、一致性、隔离性、持久性。",
+         "score": 0.9, "start_index": 0},
+        {"rank": 2, "source": "db2.txt", "content": "第二范式 2NF 消除部分函数依赖。",
+         "score": 0.7, "start_index": 50},
+    ]
 
-    class _Chain:
-        def invoke(self, question, docs=None):
-            return answer
+    def _fake_answer_question(question, mode="fast", **kwargs):
+        return {
+            "answer": answer,
+            "citations": citations,
+            "docs": None,
+            "cached": False,
+            "cache_sim": None,
+            "rejected": False,
+            "reject_signal": None,
+            "grounding_ran": mode == "accurate",
+            "grounded": True,
+            "not_grounded": False,
+            "grounded_score": 1.0 if mode == "accurate" else None,
+            "low_confidence": low_confidence,
+        }
 
-    monkeypatch.setattr(main, "build_rag_chain", lambda custom_prompt=None, history="": {"chain": _Chain()})
-    monkeypatch.setattr(main, "get_confidence", lambda docs: confidence)
+    monkeypatch.setattr(main, "answer_question", _fake_answer_question)
     monkeypatch.setattr(main, "log_query", lambda **kw: None)
 
 
 def test_query_fast(client, monkeypatch):
-    _patch_rag(monkeypatch)
+    _patch_answer(monkeypatch)
     r = client.post("/query", json={"question": "什么是 ACID？", "mode": "fast"})
     assert r.status_code == 200
     body = r.json()
@@ -126,7 +141,7 @@ def test_query_fast(client, monkeypatch):
 
 
 def test_query_low_confidence(client, monkeypatch):
-    _patch_rag(monkeypatch, confidence=0.5)  # 低于阈值 0.69
+    _patch_answer(monkeypatch, low_confidence=True)  # 低于阈值 0.69
     r = client.post("/query", json={"question": "完全无关的问题？", "mode": "fast"})
     assert r.status_code == 200
     assert r.json()["low_confidence"] is True
@@ -138,10 +153,83 @@ def test_query_missing_question(client):
 
 
 def test_query_accurate_mode(client, monkeypatch):
-    _patch_rag(monkeypatch)
+    _patch_answer(monkeypatch)
     r = client.post("/query", json={"question": "什么是 2NF？", "mode": "accurate"})
     assert r.status_code == 200
-    assert r.json()["mode"] == "accurate"
+    body = r.json()
+    assert body["mode"] == "accurate"
+    # 评审 P1 后 accurate 在 API 侧同样过闸门：正常路径 grounded/cached 字段语义不变
+    assert body["grounded"] is True
+    assert body["cached"] is False
+
+
+# ==================== rag_core.answer_question 统一闸门（评审 P1） ====================
+def _patch_answer_pipeline(monkeypatch, docs, gen_answer="好的回答[1]。", grounded=(True, 1.0)):
+    """隔离 answer_question 的外部依赖：检索 / 链 / 接地自检 / 语义缓存。
+    返回 store_calls 列表，用于断言缓存写入的 reject 标志。"""
+    import rag_core
+
+    monkeypatch.setattr(rag_core, "retrieve_and_rerank", lambda q, force_no_rerank=False: docs)
+
+    class _Chain:
+        def invoke(self, question, docs=None):
+            return gen_answer
+
+    monkeypatch.setattr(rag_core, "build_rag_chain",
+                        lambda custom_prompt=None, history="": {"chain": _Chain()})
+    monkeypatch.setattr(rag_core, "grounded_generate",
+                        lambda q, d, chain: (gen_answer, grounded[0], grounded[1]))
+    store_calls = []
+    monkeypatch.setattr(rag_core.semantic_cache, "lookup", lambda q, m: None)
+    monkeypatch.setattr(rag_core.semantic_cache, "store",
+                        lambda q, m, a, c, reject=False: store_calls.append(reject))
+    return store_calls
+
+
+def _mk_doc(vector_score):
+    import rag_core
+
+    d = rag_core.Document("ACID 包括原子性。", {"source": "/x/db.txt", "start_index": 0})
+    d.metadata["vector_score"] = vector_score
+    return d
+
+
+def test_answer_question_fast_no_hard_reject(monkeypatch):
+    """快速模式：即使 top-1 向量分很低也不硬拒（只软提示 low_confidence）。"""
+    import rag_core
+
+    _patch_answer_pipeline(monkeypatch, [_mk_doc(0.30)])
+    # use_cache=True + lookup mock 未命中：验证「未命中→检索→写入」完整缓存路径
+    res = rag_core.answer_question("什么是ACID", mode="fast", use_cache=True)
+    assert res["rejected"] is False
+    assert res["low_confidence"] is True  # 0.30 < 0.69 软提示
+    assert res["answer"] == "好的回答[1]。"
+    assert res["grounding_ran"] is False  # 快速模式不跑接地自检
+
+
+def test_answer_question_accurate_hard_reject(monkeypatch):
+    """精确模式：top-1 向量分低于 HARD_REJECT_VECTOR_THRESHOLD → 硬拒 + 不入缓存。"""
+    import rag_core
+
+    store_calls = _patch_answer_pipeline(monkeypatch, [_mk_doc(0.30)])
+    res = rag_core.answer_question("怎么追女生", mode="accurate", use_cache=True)
+    assert res["rejected"] is True
+    assert res["answer"] == rag_core.HARD_REJECT_ANSWER
+    assert res["not_grounded"] is False  # 检索拒而非接地拒
+    assert store_calls == [True]  # 拒答不缓存
+
+
+def test_answer_question_accurate_normal(monkeypatch):
+    """精确模式正常路径：过闸门 → 接地自检通过 → 入缓存（reject=False）。"""
+    import rag_core
+
+    store_calls = _patch_answer_pipeline(monkeypatch, [_mk_doc(0.90)], grounded=(True, 0.95))
+    res = rag_core.answer_question("什么是ACID", mode="accurate", use_cache=True)
+    assert res["rejected"] is False
+    assert res["not_grounded"] is False
+    assert res["grounded_score"] == 0.95
+    assert res["answer"] == "好的回答[1]。"
+    assert store_calls == [False]
 
 
 # ==================== /retrieve ====================

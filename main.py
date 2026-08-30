@@ -56,10 +56,10 @@ from query_log import log_query
 import semantic_cache
 from rag_core import (
     add_documents,
-    build_rag_chain,
+    answer_question,
+    build_citations,
     chunk_file,
     delete_by_source,
-    get_confidence,
     get_vector_store,
     load_and_chunk_documents,
     retrieve_and_rerank,
@@ -70,28 +70,9 @@ ALLOWED_SUFFIXES = {".pdf", ".txt", ".md", ".docx", ".pptx"}
 
 
 # ==================== 通用工具 ====================
-def _build_citations(docs) -> list[Citation]:
-    """把检索到的 Document 列表转成与 app.py 完全一致的引用结构。"""
-    citations = []
-    for rank, doc in enumerate(docs, 1):
-        source = Path(doc.metadata.get("source", "unknown")).name
-        content = doc.page_content.strip()
-        score = doc.metadata.get("rerank_score") or doc.metadata.get("hybrid_score")
-        start = doc.metadata.get("start_index")
-        citations.append(
-            Citation(
-                rank=rank,
-                source=source,
-                content=content,
-                score=float(score) if score is not None else None,
-                start_index=start,
-            )
-        )
-    return citations
-
-
 def _retrieve(question: str, mode: str):
-    """统一检索入口：fast=纯向量 top-N；accurate=向量+BM25（+reranker）。"""
+    """统一检索入口：fast=纯向量 top-N；accurate=向量+BM25（+reranker）。
+    仅供 /retrieve（纯检索端点）使用；生成问答统一走 rag_core.answer_question。"""
     return retrieve_and_rerank(question, force_no_rerank=(mode != "accurate"))
 
 
@@ -197,56 +178,43 @@ def health():
 def query(req: QueryRequest):
     """核心问答：检索 + 重排 + 生成，返回带 [n] 内联引用的回答与来源列表。
 
-    与 Streamlit 完全同源：同一份 docs 既用于引用展示、又喂给 LLM，
-    杜绝『展示的来源 ≠ 生成的来源』。响应含 latency_ms 便于前端展示耗时。
+    评审 P1（2026-08-30）起走 rag_core.answer_question 统一入口：accurate 模式
+    在 API 侧同样生效硬拒答 + 接地自检闸门（此前仅 Streamlit 有，B 组拒答率口径
+    只对 UI 成立）；缓存策略（拒答/未接地不缓存）也与 UI 完全一致。
+    响应含 latency_ms 便于前端展示耗时。
     """
     t0 = time.time()
     try:
-        # P2 语义缓存（2026-08-25）：命中则跳过检索/重排/生成，直接复用历史答案
         mode_label = "精确" if req.mode == "accurate" else "快速"
-        cached = semantic_cache.lookup(req.question, mode_label)
-        if cached:
-            answer = cached["answer"]
-            citations = cached["citations"]
-            _from_cache = True
-        else:
-            docs = _retrieve(req.question, req.mode)
-            citations = _build_citations(docs)
+        res = answer_question(
+            req.question,
+            mode=req.mode,
+            custom_prompt=req.custom_prompt,
+            history=req.history or "",
+        )
+        answer = res["answer"]
+        citations = res["citations"]
 
-            rag = build_rag_chain(custom_prompt=req.custom_prompt, history=req.history or "")
-            answer = rag["chain"].invoke(req.question, docs=docs)
-            # 写入缓存（/query 不做硬拒答/接地自检，非空即可缓存）
-            semantic_cache.store(req.question, mode_label, answer,
-                                 [c.model_dump() for c in citations])
-            _from_cache = False
-
-        # 归一化 citations 为 dict 列表：命中缓存时是纯 dict，未命中时是 Citation 对象
-        cit_dicts = [c.model_dump() if hasattr(c, "model_dump") else c for c in citations]
         log_query(
             question=req.question,
             mode=mode_label,
-            citations=cit_dicts,
+            citations=citations,
             answer=answer,
             latency_ms=int((time.time() - t0) * 1000),  # #15 看板：整轮耗时
+            rejected=(res["rejected"] if req.mode == "accurate" else None),
         )
         # grounded 判定与 query_log._is_grounded 的启发式保持一致：
-        # 非空 且 未声称「无法回答」→ 视为接地
+        # 非空 且 未声称「无法回答」→ 视为接地（硬拒/未接地的替换文案均含
+        # 「无法回答」，故 accurate 闸门结果与该启发式天然一致）
         grounded = bool(answer.strip()) and "无法回答" not in answer
-        # T3：top-1 向量相似度低于阈值 → 资料可能不足（low_confidence=true，前端据此提示）；
-        # 缓存命中时无检索过程，docs 未定义 → 不判低置信
-        if _from_cache:
-            low_confidence = False
-        else:
-            _conf = get_confidence(docs)
-            low_confidence = _conf is not None and _conf < config.LOW_CONFIDENCE_THRESHOLD
         return QueryResponse(
             answer=answer,
             mode=req.mode,
-            citations=citations,
+            citations=[Citation(**c) for c in citations],
             latency_ms=int((time.time() - t0) * 1000),
             grounded=grounded,
-            low_confidence=low_confidence,
-            cached=_from_cache,
+            low_confidence=res["low_confidence"],
+            cached=res["cached"],
         )
     except HTTPException:
         raise
@@ -262,7 +230,11 @@ def retrieve(req: RetrieveRequest):
     """仅检索 + 重排（不调用 LLM），返回来源列表——供前端预检索 / 调试 / 评估。"""
     try:
         docs = _retrieve(req.question, req.mode)
-        return RetrieveResponse(query=req.question, mode=req.mode, docs=_build_citations(docs))
+        return RetrieveResponse(
+            query=req.question,
+            mode=req.mode,
+            docs=[Citation(**c) for c in build_citations(docs)],
+        )
     except HTTPException:
         raise
     except Exception as e:

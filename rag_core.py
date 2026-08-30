@@ -44,6 +44,7 @@ import chromadb
 import config
 from reranker import rerank_documents
 import grounding  # P1 接地自检（grounding 仅依赖 config/ollama，无循环依赖）
+import semantic_cache  # 统一问答入口的缓存查询/写入（仅依赖 config/ollama，无循环依赖）
 
 
 # ====================== 0. 轻量客户端 / Document ======================
@@ -794,3 +795,113 @@ def build_rag_chain(custom_prompt=None, history=""):
     """
     return {"chain": RagChain(custom_prompt=custom_prompt, history=history),
             "retrieve_and_rerank": retrieve_and_rerank}
+
+
+# ====================== 5. 统一问答入口（评审 P1，2026-08-30） ======================
+def build_citations(docs):
+    """检索结果 → 引用结构（UI / API / answer_question 三处共用，杜绝各写一份漂移）。
+
+    分数展示优先级：rerank_score → hybrid_score → vector_score
+    （快速模式只有 vector_score；混合未精排时是 hybrid_score；精排后是 rerank_score）。
+    """
+    citations = []
+    for rank, d in enumerate(docs, 1):
+        score = (
+            d.metadata.get("rerank_score")
+            or d.metadata.get("hybrid_score")
+            or d.metadata.get("vector_score")
+        )
+        citations.append({
+            "rank": rank,
+            "source": Path(d.metadata.get("source", "unknown")).name,
+            "content": d.page_content.strip(),
+            "score": score,
+            "start_index": d.metadata.get("start_index"),
+        })
+    return citations
+
+
+def answer_question(question, mode="fast", custom_prompt=None, history="",
+                    use_cache=True, on_stage=None):
+    """统一问答入口：Streamlit / FastAPI / 评估三个出口共用同一套
+    「缓存 → 检索 → 硬拒答 → 生成 → 接地自检 → 缓存写入」管线。
+
+    背景（2026-08-30 外部评审 P1）：此前硬拒答与接地自检只挂在 app.py 的精确模式，
+    main.py /query 明确绕过（「不做硬拒答/接地自检，非空即可缓存」）——held-out
+    B 组 95% 拒答率只对 UI 成立，API 消费者拿到无闸门回答，且 API 缓存策略与 UI
+    的「拒答不缓存」矛盾。现收敛为本函数，任何新增出口都必须走这里。
+
+    mode 语义（与检索模式一致）：
+      fast     纯向量 top-N + 软提示（low_confidence），无硬拒答/无接地自检（保护延迟）
+      accurate 混合检索（+可选 reranker）+ 硬拒答 + 接地自检
+    use_cache   语义缓存开关（评估侧必须传 False，避免吃到线上缓存污染结果）
+    on_stage    可选回调 fn(stage)，stage ∈ {"retrieve","rerank","generate"}，
+                供 UI 展示分阶段进度；缓存命中不触发。
+
+    返回 dict：
+      answer            最终答案（硬拒/未接地时已被替换为 HARD_REJECT_ANSWER）
+      citations         [{rank,source,content,score,start_index}]（缓存命中来自缓存）
+      docs              检索结果 List[Document]（缓存命中时 None）
+      cached/cache_sim  是否命中语义缓存及相似度
+      rejected/reject_signal                 检索阶段硬拒答及信号分
+      grounding_ran/grounded/not_grounded    接地自检：是否执行/是否通过/是否未通过
+      grounded_score    接地自检得分（未执行或检索拒时为 None）
+      low_confidence    top-1 向量分 < LOW_CONFIDENCE_THRESHOLD（软提示，两模式都有）
+    """
+    stage = on_stage or (lambda s: None)
+    mode_label = "精确" if mode == "accurate" else "快速"
+
+    # 1) 语义缓存：命中跳过检索/重排/生成；写入策略（拒答/未接地不缓存）统一在下方 store
+    if use_cache:
+        cached = semantic_cache.lookup(question, mode_label)
+        if cached:
+            return {
+                "answer": cached["answer"], "citations": cached["citations"],
+                "docs": None, "cached": True, "cache_sim": cached["sim"],
+                "rejected": False, "reject_signal": None,
+                "grounding_ran": False, "grounded": True,
+                "not_grounded": False, "grounded_score": None,
+                "low_confidence": False,
+            }
+
+    # 2) 检索（accurate=混合+可选精排；fast=纯向量）
+    stage("retrieve")
+    docs = retrieve_and_rerank(question, force_no_rerank=(mode != "accurate"))
+    if mode == "accurate" and config.RERANKER_ENABLED:
+        stage("rerank")
+    citations = build_citations(docs)
+
+    # 3) 硬拒答（仅精确模式；快速模式保留软提示 low_confidence，不拦）
+    rejected, reject_signal = False, None
+    if mode == "accurate":
+        rejected, reject_signal = is_hard_reject(docs)
+
+    # 4) 生成 + 接地自检（仅精确模式）
+    grounded, grounded_score, grounding_ran, not_grounded = True, None, False, False
+    if rejected:
+        answer = HARD_REJECT_ANSWER
+        grounded = False
+    else:
+        stage("generate")
+        rag = build_rag_chain(custom_prompt=custom_prompt, history=history)
+        if mode == "accurate":
+            answer, grounded, grounded_score = grounded_generate(question, docs, rag["chain"])
+            grounding_ran = config.GROUNDED_VERIFY_ENABLED
+            not_grounded = grounding_ran and not grounded
+        else:
+            answer = rag["chain"].invoke(question, docs=docs)
+
+    # 5) 缓存写入：拒答（检索拒/未接地）不入缓存，与 UI 既有口径一致
+    if use_cache:
+        semantic_cache.store(question, mode_label, answer, citations,
+                             reject=(rejected or not_grounded))
+
+    conf = get_confidence(docs)
+    return {
+        "answer": answer, "citations": citations, "docs": docs,
+        "cached": False, "cache_sim": None,
+        "rejected": rejected, "reject_signal": reject_signal,
+        "grounding_ran": grounding_ran, "grounded": grounded,
+        "not_grounded": not_grounded, "grounded_score": grounded_score,
+        "low_confidence": bool(conf is not None and conf < config.LOW_CONFIDENCE_THRESHOLD),
+    }
