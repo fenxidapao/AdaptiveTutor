@@ -23,3 +23,6 @@ venv/
 # 系统
 .DS_Store
 Thumbs.db
+
+# 实验数据归档（含真实参与者数据，绝不入库）
+data/
