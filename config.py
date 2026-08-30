@@ -64,6 +64,15 @@ CONTEXT_COMPRESS_AFTER = int(os.environ.get("CONTEXT_COMPRESS_AFTER", "8"))
 # 压缩时保留原文的最近消息条数（追问需要最近的上下文）
 CONTEXT_RAW_TAIL = int(os.environ.get("CONTEXT_RAW_TAIL", "4"))
 
+# ---------- F 阶段 安全（五层纵深防御，PLAN 22） ----------
+# L3 风险分级：管理操作（审计查看/用户列表等）仅限这些 user_id（EXPERIMENT_AUTH=1 时强制）
+ADMIN_USER_IDS = [x.strip() for x in os.environ.get("ADMIN_USER_IDS", "u0").split(",") if x.strip()]
+# L2 幂等：request_id → 首次响应的保留时长（秒），过期键顺带清理
+IDEMPOTENCY_TTL_SECONDS = int(os.environ.get("IDEMPOTENCY_TTL_SECONDS", "3600"))
+# L1 Prompt 边界：客户端 transcript 的条数上限与单条字符上限（LLM 边界硬截断）
+TRANSCRIPT_MAX_MSGS = int(os.environ.get("TRANSCRIPT_MAX_MSGS", "40"))
+TRANSCRIPT_MSG_CHARS = int(os.environ.get("TRANSCRIPT_MSG_CHARS", "2000"))
+
 
 def load_dotenv(path: str | None = None) -> None:
     """极简 .env 加载：只读 KEY=VALUE 行，不覆盖已存在的环境变量。"""

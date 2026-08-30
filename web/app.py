@@ -27,7 +27,8 @@ import grader  # noqa: E402
 import learning_pack  # noqa: E402
 import model  # noqa: E402
 import sandbox  # noqa: E402
-from agents import assessor, diagnostic, feynman, loop, planner, recommender  # noqa: E402
+import security  # noqa: E402
+from agents import assessor, context, diagnostic, feynman, loop, planner, recommender  # noqa: E402
 
 app = FastAPI(title="FeynmanTutor", description="基于费曼学习法的个性化学习 Agent")
 app.add_middleware(
@@ -61,15 +62,21 @@ WEB_DIR = Path(__file__).resolve().parent / "static"
 
 def _require_auth(session_id: str | None, user_id: str) -> str:
     """EXPERIMENT_AUTH=1 时强制 session 鉴权：session 解析的 user_id 必须与请求一致。
-    返回最终 user_id。默认 0 时原样返回（兼容本机演示与既有测试）。"""
+    返回最终 user_id。默认 0 时原样返回（兼容本机演示与既有测试）。
+    拒绝路径写审计（安全 L5：鉴权失败是攻击路径回放的起点）。"""
     if not config.EXPERIMENT_AUTH:
         return user_id
     if not session_id:
+        security.audit("auth_fail", user_id, None, detail={"reason": "no_session"})
         raise HTTPException(401, "未登录，请先注册/登录")
     uid = db.get_session_user(session_id)
     if uid is None:
+        security.audit("auth_fail", user_id, session_id,
+                       detail={"reason": "invalid_session"})
         raise HTTPException(401, "会话无效或已过期，请重新登录")
     if uid != user_id:
+        security.audit("auth_fail", uid, session_id,
+                       detail={"reason": "user_mismatch", "requested": user_id})
         raise HTTPException(403, "无权访问该用户数据")
     return uid
 
@@ -193,8 +200,11 @@ def api_me(session_id: str = Query(None)):
 @app.get("/api/users")
 def api_users(session_id: str = Query(None)):
     """全部用户列表（实验统计用）。鉴权 + 剥离 password_hash（P0-2 修复：
-    原实现直接返回整行，未登录可读全部用户密码哈希）。"""
-    _require_session(session_id)
+    原实现直接返回整行，未登录可读全部用户密码哈希）。
+    安全 L3/L5：管理操作（T3）+ 审计"谁看过全部用户"。"""
+    uid = _require_session(session_id)
+    if uid:
+        security.audit("users_list", uid, session_id)
     return [_public_user(u) for u in db.list_users()]
 
 
@@ -268,10 +278,11 @@ def api_quiz_submit(course: str, kind: str,
     user_id = _start_req(session_id, str(payload.get("user_id") or ""))
     if not user_id:
         raise HTTPException(400, "user_id 必填")
+    # 安全 L2：payload 二次约束（answers 结构/大小/类型）
+    errs = security.validate_submit_payload(payload)
+    if errs:
+        raise HTTPException(400, errs[0])
     answers = payload.get("answers") or {}  # 空 answers 合法（全错提交）
-    if not isinstance(answers, dict):
-        raise HTTPException(400, "answers 必须是对象")
-    answers = payload["answers"]
     chapter = payload.get("chapter")
     mode = payload.get("mode", "feynman")
     if config.EXPERIMENT_AUTH:
@@ -302,6 +313,10 @@ def api_quiz_submit(course: str, kind: str,
     score = correct / len(qs) if qs else 0.0
     db.record_assessment(user_id, chapter or "all", kind, mode, score, len(qs),
                          elapsed_seconds=payload.get("elapsed_seconds"))
+    # 安全 L5：测评提交是 T2 写操作（影响实验数据），强制审计
+    security.audit("assessment_submit", user_id, session_id,
+                   detail={"kind": kind, "chapter": chapter, "mode": mode,
+                           "score": score, "total": len(qs)})
     # E1 学习回流（PLAN 20.2）：后测提交后驱动回流状态机（外部验证=重测分数）
     reflow = None
     if kind == "posttest":
@@ -330,14 +345,28 @@ def api_exercises(course: str, kp_id: str | None = None):
 
 @app.post("/api/grade")
 def api_grade(payload: dict):
-    """判一道题。payload: {user_id, session_id?, ex_id, answer}"""
+    """判一道题。payload: {user_id, session_id?, ex_id, answer, request_id?}
+
+    安全 L2：payload 二次约束 + 显式 request_id 幂等——客户端为每次
+    交卷点击生成唯一 request_id，网络重试/双击重放时返回首次响应、
+    不重复写 exercise_logs（策略升级/掌握度不被重复提交污染）。
+    安全 L5：判题写操作（T1）落审计。
+    """
     session_id = payload.get("session_id")
     user_id = _start_req(session_id, str(payload.get("user_id") or ""))
     if not user_id:
         raise HTTPException(400, "user_id 必填")
+    errs = security.validate_grade_payload(payload)
+    if errs:
+        raise HTTPException(400, errs[0])
     ex_id = payload.get("ex_id")
-    if not ex_id:
-        raise HTTPException(400, "ex_id 必填")
+    request_id = payload.get("request_id")
+    cached = security.idempotent_response(request_id, user_id)
+    if cached is not None:
+        security.audit("grade_idempotent_hit", user_id, session_id,
+                       detail={"request_id": str(request_id)[:128],
+                               "ex_id": cached.get("ex_id")})
+        return cached
     answer = payload.get("answer", "")
     ex = _find_exercise(ex_id)
     if ex is None:
@@ -351,6 +380,9 @@ def api_grade(payload: dict):
             "strategy": strategy}
     if strategy == "prereq":
         resp["prereq_titles"] = loop.prereq_titles(ex["kp_id"])
+    security.store_idempotent(request_id, user_id, resp)
+    security.audit("practice_grade", user_id, session_id,
+                   detail={"ex_id": ex_id, "correct": bool(ok)})
     return resp
 
 
@@ -380,30 +412,56 @@ def api_explain(course: str, kp_id: str, user_id: str = Query("u0"),
 
 @app.post("/api/feynman/turn")
 def api_feynman_turn(payload: dict):
-    """费曼追问一轮。payload: {course, kp_id, user_id?, session_id?, transcript: [{role, content}...]}"""
+    """费曼追问一轮。payload: {course, kp_id, user_id?, session_id?, transcript: [{role, content}...]}
+
+    安全 L1：transcript 是不可信客户端输入——先结构校验（L2），再注入筛查
+    （高危 400+审计 / 可疑放行+审计），最后过 LLM 边界消毒（截断/过滤）。
+    """
     session_id = payload.get("session_id")
     uid = _start_req(session_id, str(payload.get("user_id") or "") or "u0")
     _enforce_feynman_group(uid)
     course = payload.get("course") or "python"
     kp_id = payload.get("kp_id") or ""
     transcript = payload.get("transcript", [])
+    errs = security.validate_transcript_payload(transcript)
+    if errs:
+        raise HTTPException(400, errs[0])
+    inj = security.screen_transcript_injection(transcript)
+    if inj["risk"] >= 2:
+        security.audit("injection_block", uid, session_id, detail=inj)
+        raise HTTPException(400, "输入包含不被允许的指令内容")
+    if inj["risk"] == 1:
+        security.audit("injection_flag", uid, session_id, detail=inj)
+    transcript = context.sanitize_transcript(transcript)
     graph = learning_pack.load_graph(course)
     kp = graph["_by_id"].get(kp_id)
     if kp is None:
         raise HTTPException(404, f"未知知识点: {kp_id or '缺失'}")
-    reply = feynman.generate_followup(kp, transcript, uid)
+    round_no = sum(1 for m in transcript if m["role"] == "user")
+    reply = feynman.generate_followup(kp, transcript, uid, round_no=round_no)
     return {"coach": reply, "transcript": transcript}
 
 
 @app.post("/api/feynman/summarize")
 def api_feynman_summarize(payload: dict):
-    """费曼结束，总结盲点。payload: {course, kp_id, transcript, user_id?, session_id?}"""
+    """费曼结束，总结盲点。payload: {course, kp_id, transcript, user_id?, session_id?}
+    安全 L1 同 /api/feynman/turn（校验→筛查→消毒）。"""
     session_id = payload.get("session_id")
     uid = _start_req(session_id, str(payload.get("user_id") or "") or "u0")
     _enforce_feynman_group(uid)
     course = payload.get("course") or "python"
     kp_id = payload.get("kp_id") or ""
     transcript = payload.get("transcript", [])
+    errs = security.validate_transcript_payload(transcript)
+    if errs:
+        raise HTTPException(400, errs[0])
+    inj = security.screen_transcript_injection(transcript)
+    if inj["risk"] >= 2:
+        security.audit("injection_block", uid, session_id, detail=inj)
+        raise HTTPException(400, "输入包含不被允许的指令内容")
+    if inj["risk"] == 1:
+        security.audit("injection_flag", uid, session_id, detail=inj)
+    transcript = context.sanitize_transcript(transcript)
     graph = learning_pack.load_graph(course)
     kp = graph["_by_id"].get(kp_id)
     if kp is None:
@@ -496,6 +554,24 @@ def api_heatmap(user_id: str, session_id: str = Query(None)):
             "explain": st.get("explain_count", 0),
         })
     return {"cells": cells}
+
+
+@app.get("/api/audit")
+def api_audit(session_id: str = Query(None), limit: int = Query(100),
+              user_id: str = Query(None)):
+    """审计日志查询（安全 L5 可见性面）：EXPERIMENT_AUTH=1 时仅管理员（L3 审批）。
+
+    攻击路径回放的入口：注入命中/鉴权失败/幂等重放/测评提交都在这里可查。
+    查看动作本身也落审计（谁在什么时候看过审计日志）。
+    """
+    if config.EXPERIMENT_AUTH:
+        uid = _require_session(session_id)
+        if not security.is_admin(uid):
+            security.audit("audit_denied", uid, session_id,
+                           detail={"path": "/api/audit"})
+            raise HTTPException(403, "仅管理员可查看审计日志")
+        security.audit("audit_view", uid, session_id)
+    return {"events": db.list_audit(user_id=user_id, limit=min(int(limit), 500))}
 
 
 # 静态资源（前端）

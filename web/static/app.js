@@ -326,9 +326,13 @@
       const btn = $("#practiceSubmit");
       btn.disabled = true; btn.textContent = "判题中…";
       try {
+        // 幂等键（安全 L2）：每次点击唯一，网络重试/双击重放时服务端返回
+        // 首次响应、不重复计分（连续故意提交同一答案不受影响——新点击有新键）
         const res = await api("/api/grade", {
           method: "POST",
-          body: JSON.stringify(sessBody({ user_id: state.user, ex_id: ex.ex_id, answer })),
+          body: JSON.stringify(sessBody({ user_id: state.user, ex_id: ex.ex_id, answer,
+                                          request_id: (crypto.randomUUID ? crypto.randomUUID()
+                                                                   : String(Date.now()) + Math.random()) })),
         });
         const fb = $(".q-feedback");
         fb.textContent = (res.correct ? "✓ " : "✗ ") + res.feedback;

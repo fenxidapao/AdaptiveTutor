@@ -26,3 +26,6 @@ Thumbs.db
 
 # 实验数据归档（含真实参与者数据，绝不入库）
 data/
+
+# 评估运行时产物（低分人工复核队列，非源码）
+evals/review_queue.jsonl

@@ -17,7 +17,7 @@ import db
 import model
 import prompts
 import rag
-from agents import context
+from agents import context, memory
 
 # 费曼各环节 prompt 已版本化：prompts/feynman_*.md（D3，PLAN 17.2）
 
@@ -79,21 +79,31 @@ def explain_kp(user_id: str, kp_id: str, course: str = "python",
 
 
 def generate_followup(kp: dict, transcript: list[dict], user_id: str | None = None,
-                      db_path: str | None = None, summary: str = "") -> str:
+                      db_path: str | None = None, summary: str = "",
+                      round_no: int = 0) -> str:
     """基于已有对话生成教练的下一轮提问。
 
-    user_id 传入时注入历史画像（E5 跨会话记忆），让追问针对学生已知薄弱点。
-    summary 非空 = 增量压缩结果（②Context：摘要 + 最近原文，由调用方缓存复用）。
+    上下文治理（F 阶段，PLAN 22）：
+    - transcript 先消毒（不可信客户端输入 → LLM 边界硬截断）；
+    - user_id 传入时注入**状态快照**（L1 工作记忆：掌握度/连错/建议策略/薄弱点，
+      声明"以快照为准"——学生口头声称的掌握情况不算数），
+      替代早期 profile_context 文本注入（薄弱点信息已并入快照）；
+    - L2 会话记忆：summary 非空 = 增量压缩结果（②Context，由调用方缓存复用）。
     """
+    transcript = context.sanitize_transcript(transcript)
     # ②Context 长对话压缩：超阈值时自动压缩旧轮次（增量压缩路径复用 summary）
     if not summary and context.should_compress(transcript):
         summary = context.compress_old(transcript, user_id, db_path)
-    lines = context.render_transcript(transcript, summary=summary) or "（刚开始）"
-    memory = profile_context(user_id, db_path) if user_id else ""
+    with memory.timed("L2"):
+        lines = context.render_transcript(transcript, summary=summary) or "（刚开始）"
+    state_block = ""
+    if user_id:
+        snap = context.build_snapshot(user_id, kp, db_path, round_no=round_no)
+        state_block = context.render_snapshot(snap)
     user_prompt = prompts.load("feynman_followup.md").format(
         kp_title=kp.get("title", kp["kp_id"]), transcript=lines)
-    if memory:
-        user_prompt += f"\n\n参考背景：{memory}"
+    if state_block:
+        user_prompt += f"\n\n{state_block}"
     raw = model.chat(
         [{"role": "system", "content": prompts.load("feynman_system.md")},
          {"role": "user", "content": user_prompt}],
@@ -104,17 +114,22 @@ def generate_followup(kp: dict, transcript: list[dict], user_id: str | None = No
 
 def summarize_gaps(kp: dict, transcript: list[dict], user_id: str | None = None,
                    db_path: str | None = None, summary: str = "") -> list[str]:
-    """3 轮后总结盲点。"""
+    """3 轮后总结盲点（快照注入逻辑同 generate_followup）。"""
     if not transcript:
         return []
+    transcript = context.sanitize_transcript(transcript)
     if not summary and context.should_compress(transcript):
         summary = context.compress_old(transcript, user_id, db_path)
-    lines = context.render_transcript(transcript, summary=summary)
-    memory = profile_context(user_id, db_path) if user_id else ""
+    with memory.timed("L2"):
+        lines = context.render_transcript(transcript, summary=summary)
+    state_block = ""
+    if user_id:
+        snap = context.build_snapshot(user_id, kp, db_path)
+        state_block = context.render_snapshot(snap)
     user_prompt = prompts.load("feynman_gaps.md").format(
         kp_title=kp.get("title", kp["kp_id"]), transcript=lines)
-    if memory:
-        user_prompt += f"\n\n参考背景：{memory}"
+    if state_block:
+        user_prompt += f"\n\n{state_block}"
     try:
         raw = model.chat(
             [{"role": "system", "content": "你只输出合法 JSON。"},
@@ -145,7 +160,7 @@ def feynman_round(user_id: str, kp_id: str, course: str = "python",
     summary = ""  # ②Context 增量压缩：只压一次，后续轮次复用
 
     try:
-        for _ in range(max_rounds):
+        for rnd in range(1, max_rounds + 1):
             # 用户当老师讲（第一轮先讲，之后回答追问）
             turn_prompt = "轮到你了：请用你自己的话讲解这个知识点" \
                           "（可以举例子，讲完回车）。" if not transcript \
@@ -161,7 +176,7 @@ def feynman_round(user_id: str, kp_id: str, course: str = "python",
                 if not summary and context.should_compress(transcript):
                     summary = context.compress_old(transcript, user_id, db_path)
                 coach = generate_followup(kp, transcript, user_id, db_path,
-                                          summary=summary)
+                                          summary=summary, round_no=rnd)
                 print(f"\n[教练] {coach}")
                 transcript.append({"role": "assistant", "content": coach})
     except model.ModelError as e:

@@ -107,15 +107,42 @@ CREATE TABLE IF NOT EXISTS reflow_logs (
   created_at TEXT,
   completed_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS audit_logs (   -- F 阶段安全 L5：全链路审计（只记安全相关事件）
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT,
+  session_id TEXT,
+  event TEXT NOT NULL,              -- injection_block/injection_flag/auth_fail/grade_idempotent_hit/
+                                    -- assessment_submit/users_list/audit_view/audit_denied ...
+  risk INTEGER DEFAULT 0,           -- 风险分级 T0-T3（security.RISK_TIERS）
+  detail TEXT,                      -- JSON 详情
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (  -- F 阶段安全 L2：写操作幂等（网络重试/双击不重复计分）
+  req_key TEXT PRIMARY KEY,         -- 客户端生成的 request_id
+  user_id TEXT,
+  response TEXT,                    -- 首次响应 JSON（重放时原样返回）
+  created_at TEXT
+);
 """
 
 
 def _conn(db_path: str | None = None) -> sqlite3.Connection:
-    """新建连接。SQLite 默认已开启，加 row_factory 方便 dict 读取。"""
+    """新建连接（F 阶段加固：WAL + busy_timeout）。
+
+    WAL：读写不互斥、写写由 busy_timeout 排队——多用户并发答题不再
+    "database locked"（此前每操作新建裸连接，无任何并发配置）。
+    busy_timeout=5000：写锁被占时等 5s 而不是立即抛错（会话级"锁"的
+    SQLite 等价物：靠引擎排队，不靠应用层分布式锁）。
+    journal_mode 是库文件级持久属性，重复设置无害（已是 WAL 时为空操作）。
+    """
     path = Path(db_path or config.DB_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
+    conn = sqlite3.connect(str(path), timeout=5.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -694,3 +721,62 @@ def llm_stats(db_path: str | None = None) -> dict:
         "total": {"calls": total["calls"], "tokens": total["tokens"],
                   "latency_ms": total["latency_ms"]},
     }
+
+
+# ==================== F 阶段：审计（L5）与幂等（L2）（PLAN 22） ====================
+
+def audit_log(event: str, user_id: str | None = None, session_id: str | None = None,
+              risk: int = 0, detail: dict | str | None = None,
+              db_path: str | None = None) -> None:
+    """写一条审计日志（安全 L5 全链路审计）。
+
+    只记安全相关事件（注入命中/鉴权失败/幂等命中/管理访问/测评提交），
+    常规业务读不记（噪音）。detail 为 dict 时序列化 JSON 存储。
+    """
+    if isinstance(detail, dict):
+        detail = json.dumps(detail, ensure_ascii=False)
+    with _conn(db_path) as c:
+        c.execute(
+            "INSERT INTO audit_logs (user_id, session_id, event, risk, detail, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (user_id, session_id, event, int(risk), detail,
+             datetime.now().isoformat(timespec="seconds")),
+        )
+
+
+def list_audit(user_id: str | None = None, limit: int = 200,
+               db_path: str | None = None) -> list[dict]:
+    """审计日志查询（最新在前，/api/audit 管理端点数据源）。"""
+    sql = "SELECT * FROM audit_logs"
+    args: list = []
+    if user_id:
+        sql += " WHERE user_id=?"
+        args.append(user_id)
+    sql += " ORDER BY id DESC LIMIT ?"
+    args.append(int(limit))
+    with _conn(db_path) as c:
+        rows = c.execute(sql, args).fetchall()
+        return [dict(r) for r in rows]
+
+
+def idempotency_get(req_key: str, db_path: str | None = None) -> dict | None:
+    """按 request_id 取首次响应（安全 L2 幂等：重放返回原响应，不再计分）。"""
+    with _conn(db_path) as c:
+        row = c.execute("SELECT * FROM idempotency_keys WHERE req_key=?",
+                        (req_key,)).fetchone()
+        return dict(row) if row else None
+
+
+def idempotency_put(req_key: str, user_id: str, response: str,
+                    db_path: str | None = None) -> None:
+    """存 request_id → 首次响应。顺带清理超过 TTL 的旧键（量小，每次顺手删）。"""
+    now = datetime.now()
+    cutoff = (now - timedelta(seconds=config.IDEMPOTENCY_TTL_SECONDS)) \
+        .isoformat(timespec="seconds")
+    with _conn(db_path) as c:
+        c.execute("DELETE FROM idempotency_keys WHERE created_at < ?", (cutoff,))
+        c.execute(
+            "INSERT OR REPLACE INTO idempotency_keys (req_key, user_id, response, created_at) "
+            "VALUES (?,?,?,?)",
+            (req_key, user_id, response, now.isoformat(timespec="seconds")),
+        )
