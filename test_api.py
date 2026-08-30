@@ -423,6 +423,28 @@ def test_index_stats_unavailable(client, monkeypatch):
     assert r.status_code == 503
 
 
+# ==================== 鉴权 / 上传上限（评审 P3 安全小项） ====================
+def test_require_auth_enforced_when_enabled(client, monkeypatch):
+    """AUTH_ENABLED=true：无密钥/错密钥 401，正确密钥放行。
+    （常量时间比较 secrets.compare_digest 只改实现不改行为——防时序侧信道。）"""
+    monkeypatch.setattr(config, "AUTH_ENABLED", True)
+    monkeypatch.setattr(config, "API_KEY", "secret-key")
+    r = client.get("/health")
+    assert r.status_code == 401
+    r = client.get("/health", headers={"X-API-Key": "wrong-key"})
+    assert r.status_code == 401
+    r = client.get("/health", headers={"X-API-Key": "secret-key"})
+    assert r.status_code == 200
+
+
+def test_documents_upload_too_large(client, monkeypatch):
+    """评审 P3 回归：超过 MAX_UPLOAD_MB → 413，且有界读取不落盘。"""
+    monkeypatch.setattr(config, "MAX_UPLOAD_MB", 0)  # 上限置 0：任何非空内容都超限
+    r = client.post("/documents", files={"file": ("big.txt", b"x" * 10, "text/plain")})
+    assert r.status_code == 413
+    assert not (Path(config.DATA_DIR) / "big.txt").exists()
+
+
 # ==================== 评审 P2 回归 ====================
 def test_split_structured_offset_remap():
     """评审 P2-1 回归：含代码块的文档，切分产出的 start_index 必须是「原文偏移」。

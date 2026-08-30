@@ -26,7 +26,7 @@
 - 🔌 **MCP 标准工具层（自实现协议子集）**：`mcp_server.py` 仅用 Python 标准库实现 MCP stdio 传输的最小协议子集（initialize 能力协商 / tools list / tools call，JSON-RPC 2.0），把混合检索暴露为标准 `course_retrieve` 工具（与 `/retrieve` 同一检索实现，fast/accurate 同语义）；经官方 MCP Inspector 互操作实测通过，任意 MCP 兼容 Agent Runtime 可直接挂载（证据见 `mcp_interop_evidence.md`）。零新依赖。
 - ➕ **增量索引 + 去重（P1-4）**：稳定 id（`md5(source::start_index)`）自动去重，上传仅增量 upsert 新文件；按 source 删除单文档，其余不受影响，不再全量重建
 - ✅ **核心算法单测（P2-1）**：零依赖 `test_core.py` 覆盖 BM25 排序 / RRF 融合去重 / 稳定 id 去重 / 接地判定 / 日志格式，脱离 chromadb/ollama/streamlit 亦可在任意干净 Python 环境实跑
-- ✅ **集成测试 + CI（T9）**：`test_api.py`（23 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护 + 统一闸门/流式聚合单测）+ `test_retrieval.py`（9 用例，检索链路 + 真实流式冒烟，无 Ollama 自动 skip）+ `test_mcp.py`（12 用例：11 个零依赖 MCP 协议/参数钳制用例 CI 直跑 + 1 个真实检索冒烟自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 四套测试）
+- ✅ **集成测试 + CI（T9）**：`test_api.py`（29 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护 + 统一闸门/流式聚合/鉴权/上传上限单测）+ `test_retrieval.py`（9 用例，检索链路 + 真实流式冒烟，无 Ollama 自动 skip）+ `test_mcp.py`（12 用例：11 个零依赖 MCP 协议/参数钳制用例 CI 直跑 + 1 个真实检索冒烟自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 四套测试）
 - 🔒 配置外置 `.env`，模型名/路径/调参不再写死代码
 
 ## 目录结构
@@ -174,6 +174,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 | `API_KEY` | 空 | 开启鉴权时设置的密钥 |
 | `RATE_LIMIT` | 空 | 每 IP 每分钟请求上限（如 `60`），空 = 不限 |
 | `CORS_ORIGINS` | `*` | 收紧跨域（生产填具体域名，如 `https://qa.example.com`） |
+| `MAX_UPLOAD_MB` | `100` | `/documents` 上传大小上限（MB），超限返回 413；超大扫描版 PDF 走本地 `ingest_ocr.py` |
 
 ```bash
 # 示例：开启鉴权 + 限流（docker compose 场景改环境变量或 .env）
@@ -331,11 +332,7 @@ python eval_heldout.py --bc-only                               # 重跑门控覆
 python eval_test.py   # 跑 eval_data_test.TEST_SET（从未参与调参），结果入 eval_results_test.csv
 ```
 
-**冻结测试集实测（24 题，从未参与调参；语料 1219 块 + 修复后裁判口径）**：faithfulness **0.976** / answer_relevancy 0.975 / context_precision 0.914 / context_recall **0.883**（当前官方基线）。
-对比校准集 A 组（0.895 / 0.819）——测试集显著高于校准集水位；对外引用绝对值以测试集为准。
-> **历史基线链路**：P0 温和化生成提示后 faithfulness 0.752→**0.811**；B 专项（修递归切分重叠逐层叠加 993→**978** 块、Q21 软链接正确块不再截断、RRF 融合候选池 8→16 `RERANK_CANDIDATE_K`）后复测 0.781 / 0.963 / 0.916 / 0.826，核心目标修复（软链接 0.43→0.86、小程序数据绑定 0→0.4、BFS/Dijkstra 0→0.8），0.811↔0.781 差异在裁判噪声带（±0.05）内。
-> **裁判口径复核（P2 收尾）**：逐题排查发现旧口径三类系统性故障——①裁判在陈述中嵌入未转义双引号导致 JSON 解析全灭（两题空 detail 被静默记 0 分）；②示例代码被逐行拆成陈述逐条判 false；③裁判自报 score 与明细矛盾、不可复算。修复评估工具（容错 JSON 提取 + prompt 明确代码块整体判定 + 分数一律从明细重算，未改任何 RAG 参数）后全量回归得 0.897。旧口径 0.781 与新口径不可直接比较。详见 `P2_裁判口径复核报告.md`。
-> **语料修复链路（PyMuPDF）**：小程序 PDF 乱码根因为 CID→Unicode 映射缺失（非扫描版），pypdf 提取乱码/空，换 PyMuPDF 优先提取（pypdf 兜底）后语料 978→**1219** 块，冻结测试集 0.897→**0.976**（小程序数据绑定 0.5→1.0、3NF/BCNF 0.667→1.0、软链接 0.75→1.0 等）；语料扩增会改变检索重排，held-out 三组已全量重验（见下节）。
+当前官方基线与完整演化时间线（含生成提示温和化 → 切分修复 → 裁判口径修复 → 语料修复的 faithfulness 链路 0.811→0.781→0.897→0.976）统一维护在「评估（本地自实现）→ 当前官方基线」一节，此处不再重复放数字。
 
 ## 架构（离线构建 / 在线问答）
 
@@ -408,7 +405,7 @@ python eval_local.py
 指标含义（四个均由 `eval_local.py` 自实现，LLM-as-judge）：
 - `faithfulness`：回答是否真的基于检索到的 context（把回答拆陈述逐条验证，防幻觉，最关键）
 - `answer_relevancy`：回答是否切题、是否直接回应问题
-- `context_precision`：召回结果里相关内容是否排在前面（理论上 reranker 改善这项；33 样本整体增益≈0，扩到 59 样本全量后 precision 升 +0.120，见下方「59 样本评估基线」）
+- `context_precision`：召回结果里相关内容是否排在前面（reranker OFF/ON 与混合检索的实测增益见下方「当前官方基线」表）
 - `context_recall`：检索是否覆盖了回答问题所需的信息（需 `eval_data.py` 里的 reference）
 
 **对比用法（重点）**：先在 `RERANKER_ENABLED=false` 跑一次得【基线】，开 reranker 再跑一次，
@@ -416,6 +413,35 @@ python eval_local.py
 这比"拍脑袋说 reranker 有用"有说服力得多。
 
 评估样本在 `eval_data.py`（基于 `data/` 课程笔记 + `data/教材/` 真实教材的知识点，现 100 条），扩文档后往里追加即可。
+
+### 当前官方基线（对外引用口径）
+
+| 实验 | 结果 | 口径说明 |
+|---|---|---|
+| **冻结测试集**（24 题，从未参与调参；语料 1219 块 + 修复后裁判口径） | faithfulness **0.976** / answer_relevancy 0.975 / context_precision 0.914 / context_recall **0.883** | **对外引用的绝对值口径**；`python eval_test.py` 可复现 |
+| **held-out A 组**（30 题语料内校准集；门控 faith≥0.85 且 recall≥0.80） | faith 0.895 / relevancy 0.920 / precision 0.746 / recall 0.819 → **PASS**（边缘，recall 余量 +0.019 处于裁判噪声带边缘） | 只准用它调参；同源自评，绝对值偏乐观 |
+| **held-out B 组**（20 题语料外；门控拒答率≥90%） | **19/20 = 95% → PASS**（唯一放通为组件类语义近邻问题，门控容忍 1 题） | 硬拒答 + 接地自检生效 |
+| **混合检索 vs 纯向量**（隔离 reranker 的 A/B 差值） | precision **+0.18** / recall **+0.16** / faithfulness +0.09 / relevancy +0.05，四项全正向 | 100 题 × 697 块历史语料；**只看差值**（同裁判同语料） |
+| **reranker OFF vs ON**（59 题全量语料） | precision +0.120 / relevancy +0.133 / recall +0.096 / faithfulness +0.032，四项全正向 | 8b 自评历史口径；reranker 救「正确块排 30+」的难 query（`RETRIEVE_K=50` 扩池 + 精排纠回） |
+| **性能**（本地 CPU 推理，数字硬件绑定跨机不可比） | fast 全链路 P50 **5.9s** / P95 13.4s（生成段主导）；accurate 检索+精排段 P50 21s / P95 44s（瓶颈 = CPU reranker）；语义缓存命中 6.4s→**40ms** 对冲 | 明细见 EVALUATION.md「性能基线」 |
+
+> 注：context_recall 绝对值为裁判自报口径；明细重算口径已启用（与 faithfulness 同标准），待下次全量回归刷新（见 EVALUATION.md「裁判口径注记」）。
+
+**裁判与噪声**：裁判为独立模型 qwen2.5:7b（与生成 llama3.1:8b 不同源，破自评偏差）；小模型判定噪声 ±0.02~0.03——结论只看方向与粗粒度差值，0.001 精度的绝对值无意义。已知边界：评估题与语料同源（自出题自答），recall/precision 可能虚高（详见 EVALUATION.md「已知限制」）。
+
+### 基线演化时间线（faithfulness 主线；跨语料/跨裁判口径不可直接比较）
+
+| 阶段 | 语料 / 裁判 | faithfulness | 说明 |
+|---|---|---|---|
+| 小样本起步（21 题） | 旧语料 / 8b 自评 | 0.577 | 暴露纯向量多主题下拉错文档的真问题 |
+| 多主题扩展（33 题） | 5 篇笔记 / 8b 自评 | 0.686（reranker OFF） | 整体增益≈0，但难 query 正确块常排 30+ |
+| 全量笔记（59 题） | 12 篇 / 8b 自评 | 0.639（reranker ON） | 四项全正向，reranker 价值清晰显现 |
+| 真混合检索 v2（100 题） | 697 块 / qwen2.5:7b 独立裁判 | 0.81（混合）vs 0.72（纯向量） | BM25 全库独立召回，precision +0.18 / recall +0.16 |
+| 冻结测试集立项（24 题） | 993→978 块 / 修复前裁判口径 | 0.811 → 0.781 | 生成提示温和化 +0.06；切分修复在裁判噪声带内 |
+| 裁判口径修复 | 978 块 / 修复后口径 | 0.897 | 容错 JSON 提取 + 代码块整体判定 + 分数从明细重算；与旧口径不可比 |
+| 语料修复（PyMuPDF） | **1219 块** / 修复后口径 | **0.976（当前）** | 小程序 PDF 提取碎片化修复（列表渲染等题 0.5→1.0） |
+
+历史逐题明细：`eval_compare_hybrid.md`（混合检索 A/B）与各 `eval_results_*.csv`（部分历史 CSV / 对比报告仅存本地未入库）。
 
 ### held-out 门控评估（工程化 P0）
 
@@ -430,109 +456,11 @@ python eval_local.py
   python eval_heldout.py --bc-only   # B/C 拒答验证 → eval_results_heldout_BC.csv
   python eval_heldout.py             # 全量 + 总门控
   ```
-- **实测（语料 1219 块，RERANKER_TOP_N=8 已固化 config.py）**：
-  - A 组：faithfulness **0.895** / answer_relevancy 0.920 / context_precision 0.746 / context_recall **0.819** → **PASS ✅**（recall 超门控 +0.019，处于裁判噪声带边缘，见下方"语料变更纪律"）
-  - B 组：拒答 **19/20 = 95%** → **PASS ✅**（唯一放通："React 待办列表组件"被小程序/前端组件类语料语义近邻带 rerank 高分放通，属语料扩增的预期副作用，门控容忍 1 题）
-  - C 组（无门控，仅记录）：期望应拒题全部正确拒（含提示注入），2 题对宽泛/辨析类问题保守拒绝，Linux vs Windows 跨系统比较为既有误放通行为、多轮稳定
-  - 调参依据：TOP_N 5→8（top-5 时正确块常排 6~8 名导致模型"无法完整回答"，faith 仅 0.746；调 8 后 +0.165）。
+- **实测**：A 组 / B 组门控结果见上方「当前官方基线」表（A 组 PASS 边缘、B 组 95% PASS）。C 组无门控仅记录：期望应拒题全部正确拒（含提示注入），2 题对宽泛/辨析类问题保守拒绝，Linux vs Windows 跨系统比较为既有误放通行为、多轮稳定。
+- 调参依据：TOP_N 5→8（top-5 时正确块常排 6~8 名导致模型"无法完整回答"，faith 仅 0.746；调 8 后 +0.165，已固化 config.py）。
 - ⚠️ **语料变更纪律**：每次语料/切分/检索参数变更后，必须重验 A 组与 B/C 门控，不能只看冻结测试集——语料扩增会改变检索重排（本轮 978→1219 块后：A 组校准集指标下移、B 组拒答 100%→95%，均为检索重排变化的直接体现；A 组单点波动含生成/裁判噪声，判断回归需看多轮而非单次）。
 - ⚠️ 重跑 A 组前**先移走旧 CSV**（`eval_local.py` 有断点续跑，同名 CSV 会让全部题目被跳过）。
 - 阈值可调：`config.py` 的 `HARD_REJECT_VECTOR_THRESHOLD` / `HARD_REJECT_RERANK_THRESHOLD` / `GROUNDED_SCORE_THRESHOLD`（改阈值重跑，**禁止为刷指标删 B 组题**）。
-
-### 评估基线（21 样本，W4，reranker 关，纯向量召回）
-
-| 指标 | 均值 |
-|---|---|
-| faithfulness | 0.577 |
-| answer_relevancy | 0.933 |
-| context_precision | 0.912 |
-| context_recall | 0.805 |
-
-**这次 21 样本（对比最初 6 样本）真正暴露的问题，比"指标持平"有价值：**
-- 6 样本时 context_precision=1.0 是假象（样本太小、没碰到跨主题题）；扩到 21 样本后降到 0.912，
-  原因是**多主题语料下纯向量召回会拉错文档**（例如问 ACID 却召回"树"那篇，答案被迫"无法回答"）。
-- `answer_relevancy` 始终 0.93 上下，说明回答切题没问题；短板全在**检索质量**（faithfulness/precision 被拉错文档拖垮）。
-- （修正：此前预期"解锁 reranker 后会直接抬升 faithfulness/precision"——**在 33 样本（正确块多在 top-10）场景下被实测推翻**：precision 增益≈0、faithfulness 略降，见下方 reranker OFF vs ON 对比。**但难 query 正确块常排 30+（如"进程和线程的区别"原排 33），此时 reranker 在 RETRIEVE_K=50 候选池里能将其精排回 top-5，故现默认开启。**）
-- 备注：裁判是 llama3.1:8b，对回答里的英文术语注释（如 Lost Update）会误判为"超出上下文"，
-  faithfulness 绝对值偏保守；但**对比（基线 vs reranker 开）的差值**才是硬证据，绝对值仅作参考。
-
-`eval_results.csv` 为最近一次明细；`eval_results_v1_baseline.csv` 为最初 6 样本（英文 prompt）备份，供对照。
-
-### 评估基线（33 样本，多主题，reranker OFF vs ON）
-
-语料扩到 5 篇（数据库 / 数据结构 / OS / 计网 / 组成原理），评估题扩到 33 条。**OFF 与 ON 均对齐到向量 top-5 上下文**（修正了此前 OFF 喂 10 块 / ON 喂 5 块的不公平对比，见 `rag_core.py` 的 `else` 分支），唯一变量是 reranker 是否开启。
-
-| 指标 | reranker OFF | reranker ON | 差值 |
-|---|---|---|---|
-| faithfulness | 0.686 | 0.623 | -0.062 |
-| answer_relevancy | 0.897 | 0.861 | -0.036 |
-| context_precision | 0.730 | 0.723 | -0.007 |
-| context_recall | 0.626 | 0.671 | +0.044 |
-
-**实测结论（修正了交接文档的预期）：**
-- reranker **未带来整体收益**：context_precision 基本持平（-0.007）。逐题看它把部分题的正确块提前（检查点 +0.675、中序遍历 +0.667、TCP TIME_WAIT +0.417），但也误排另一些题（树术语 -0.478、HTTPS -0.478、Cache -0.417），正负抵消。
-- context_recall 是唯一小幅正向（+0.044）：reranker 把向量排名靠后的相关块提到 top-5，使更多题正确块进入上下文。注意——OFF/ON 对齐到 top-5 后，reranker 实际改变了进入 LLM 的 5 块**集合**（不只顺序），所以 recall 会变，并非"重排不动 recall"（该假设仅在 top-N 子集固定时成立）。
-- faithfulness / answer_relevancy 轻微负向，主要源于 8b 裁判噪声 + 上下文集合改变后答案波动，非 reranker 直接贡献。
-- 根因：在 33 样本（正确块多在 top-10）场景下 reranker 纠错空间小、增益≈0；**但难 query 正确块常排 30+（如"进程和线程的区别"原排 33），扩 RETRIEVE_K=50 + reranker 可将其精排回 top-5（实测 rank 33→top1）**。单塔 reranker 在中文短课程文本上仍有效，关键是候选池要够大。
-
-**处置**：`config.RERANKER_ENABLED` 默认 `true`（难 query 必需）；33 样本整体增益≈0 不代表 reranker 无用——它救的是向量召回失败的难 query（正确块排 30+）。明细见 `eval_results_off_multi.csv` / `eval_results_on_multi.csv`，差值脚本 `compare.py`，结论 `eval_compare.md`。
-
-### 评估基线（59 样本，全量语料，reranker OFF vs ON）
-
-语料扩到 12 篇、评估扩到 59 条后，**已完成全量 OFF/ON 重跑**（此前因时间未执行，见下方「扩展语料说明」）。OFF/ON 仍对齐到向量 top-5 上下文，唯一变量是 reranker；权重已缓存，ON 轮带 `HF_ENDPOINT=https://hf-mirror.com` 加载。
-
-| 指标 | reranker OFF | reranker ON | 差值 |
-|---|---|---|---|
-| faithfulness | 0.607 | 0.639 | +0.032 |
-| answer_relevancy | 0.769 | 0.902 | +0.133 |
-| context_precision | 0.624 | 0.744 | +0.120 |
-| context_recall | 0.573 | 0.669 | +0.096 |
-
-**实测结论（59 样本全量，修正了 33 样本阶段「增益≈0」的判断）：**
-- **四项指标全部正向**，且 context_recall 明显上升（+0.096，相对 +17%）——核心证据。正确块在向量召回中位列 ~33，原本进不了 top-5；`RETRIEVE_K=50` 让其进入召回池，reranker 精排回 top-5 进入 LLM 上下文，召回随之上升。这是交接文档第 6 节「reranker 救难 query」假设的直接证实。
-- context_precision 升 +0.120：扩到 12 篇多主题语料后，纯向量召回拉错文档概率更高，reranker 在更大候选池里纠错空间也更大——相比 33 样本时的 -0.007，全量下 reranker 价值清晰显现。
-- answer_relevancy 升 +0.133：上下文更准 → 回答更贴题。
-- faithfulness 仅 +0.032：提升有限，因忠实度主要取决于「生成是否紧扣所给上下文」，受检索质量影响较小。
-- 注意：① 裁判为 8b 自身既生成又打分，faithfulness 绝对值偏保守、有自评价偏差，**看差值而非绝对值**；② precision 收益在题目间分布不均（多数题 Δprec=0，集中在少数「正确块原本排名靠后」的题，如 2NF/+1.0、虚拟内存/+0.604、立即寻址/+0.804），与「召回池内重排」机制一致；③ 代价：reranker 在 CPU 上跑 2.2GB 跨编码器，单题耗时约为 OFF 的 5 倍（~115s vs ~19s）。
-
-明细见 `eval_results_off_new.csv` / `eval_results_on_new.csv`，差值脚本 `compare.py`，结论 `eval_compare.md`。
-
-### 混合检索 vs 纯向量（100 样本 · v2 真混合检索 · 历史基线 697 块）
-
-> ⚠️ **口径提醒**：本节与下表数字均基于 **加廖雪峰教程前的 697 块语料**，是**历史基线**；
-> **当前语料为 1219 块**（PyMuPDF 语料修复后；演化路径 697 → 993 加廖雪峰教程 → 978 B 专项切分去重 → 1219 PyMuPDF 语料修复）。加料后未按 100 题重测，新旧基线跨语料不可直接比较（重测见路线图）。
-
-> ⚠️ **版本说明**：本节为 **v2 真混合检索**（向量全库 + BM25 全库双通道，RRF 融合）在**新语料 697 块**上的实测；
-> 裁判为独立模型 **qwen2.5:7b**（与生成模型 llama3.1:8b 不同源，破除自评偏差）。
-> v1 旧版（BM25 池内重排，8b 自评，旧语料 25 块）数据见 `eval_compare_hybrid.md` 历史记录。
-> **上一版数据（59 题 × 556 块）见 `eval_compare_hybrid.md` 历史记录；本节为加廖雪峰教程前的重测基线（100 题 × 697 块，含乱码清洗修复）。**
-
-隔离 reranker（`RERANKER_ENABLED=false`）后，对比 **纯向量 top-5** 与 **向量全库 + 自实现 BM25 全库 + RRF 融合 top-5**，量化 BM25 词面召回的纯贡献。
-
-| 指标 | 纯向量 | 混合 | 差值 |
-|---|---|---|---|
-| faithfulness | 0.72 | 0.81 | +0.09 |
-| answer_relevancy | 0.77 | 0.82 | +0.05 |
-| context_precision | 0.52 | 0.70 | +0.18 |
-| context_recall | 0.58 | 0.75 | +0.16 |
-
-区别类子集（27 题，含 区别/不同/比较/分别/差异/对比/区分/异同）：四项全正向，answer_relevancy **+0.10**、context_recall **+0.15**。
-
-**实测结论（v2 重测，含诚实边界）：**
-- **四项指标全部正向，context_recall 由 v1 的 -0.01 转正为 +0.16**：BM25 通道对全库独立召回，把「向量 top-50 之外但词面匹配」的正确块捞回——直接验证了 v2 设计假设（对比 v1 局限：BM25 只在向量池内重排，召回集合不变）。
-- 收益同时落在排序层（context_precision **+0.18**）与召回层（context_recall **+0.16**），回答相关性 +0.05。
-- **与上一版（59 题 × 556 块：+0.08/+0.10/+0.12/+0.13）对比**：precision/recall 增益**扩大**（+0.12→+0.18、+0.13→+0.16），faithfulness/relevancy 略收窄——教材题（微信小程序/Linux 等术语密集）让 BM25 词面通道更有用武之地；faithfulness 增益收窄部分来自 697 块语料下向量基线本身更强（0.72 vs 旧 0.75 的差异需同语料内看 A/B 差值）。
-- **绝对值注意**：context_recall 绝对值（0.58/0.75）低于旧版（0.77/0.89），原因是 100 题里新增了 41 道教材题、正确块更分散，检索难度整体上升——**看 A/B 差值（同裁判同语料）不看绝对值**。
-- **数字精度说明**：上方差值四舍五入到 0.01。裁判 qwen2.5:7b 存在小模型判定噪声（实测约 ±0.02~0.03），0.001 精度的绝对值无意义；结论只看方向与粗粒度差值（precision/recall 提升约 +0.16~0.18，远超噪声）。
-- 裁判为独立模型 qwen2.5:7b（与生成不同源），仍有小模型判定噪声。
-- 语料为 697 块（12 篇课程笔记 + 真实教材/课件 PDF/PPTX），外推到更大语料需谨慎。
-
-明细见 `eval_results_vector.csv` / `eval_results_hybrid.csv`，runner（断点续跑）`run_ab.py`，对比脚本 `compare_hybrid.py`，结论 `eval_compare_hybrid.md`。
-
-> **扩展语料说明（已全量评测）**：`data/` 已扩至 **12 篇**（新增排序算法 / 图与最短路径 / 关系代数与 SQL / 函数依赖与范式 / OS 内存管理 / 计网 IP 与子网路由 / 组成原理指令系统与寻址），`eval_data.py` 扩至 **59 条**，`config.py` 已调 `CHUNK_SIZE=800 / CHUNK_OVERLAP=150 / RETRIEVE_K=50`（候选池扩到 50，让排 30+ 的难 query 正确块也能进池，reranker 才能纠回）。该扩展的 OFF/ON 全量对比**已执行完毕**（见上方「59 样本评估基线」），**最终结论以 59 样本全量为准**；上方 33 样本表作为子集参考保留。重跑命令见交接文档第 4 节（ON 轮须带 `HF_ENDPOINT=https://hf-mirror.com`）。
->
-> **追加**：`eval_data.py` 已扩至 **100 条**（新增 41 条教材题：微信小程序/Streamlit/Linux/算法引论/学习笔记）；乱码清洗白名单修复（剔除拉丁伪字符残留）后语料 697 块。**重测已完成**：上方表格已更新为 100 题 × 697 块的最新基线。
-> **晚间追加**：新增合规公开语料「廖雪峰 Python 教程核心章节」（CC BY-NC-SA 4.0，来源署名见文件头），索引 697→**993 块**（21 源文件）。**注意**：上方 A/B 数字（100 题 × 697 块）为加料前基线，加料后未重测——新旧基线跨语料不可直接比较，重测见路线图。
 
 ## 路线图（进行中）
 
@@ -541,7 +469,7 @@ python eval_local.py
 - [x] **P1-3 查询日志**：每轮落 `.query_log.jsonl`（模式 / 来源 / 接地判定 / 引用标记）
 - [x] **P1-4 增量索引 + 去重**：稳定 id 自动去重，上传仅增量 upsert，按 source 删单文档（不再全量重建）
 - [x] **P2-1 核心算法单测**：零依赖 `test_core.py`，脱离 LLM 栈亦可实跑（7 用例全绿）
-- [x] **T9 集成测试 + CI**：API 端点测试 23 用例（TestClient + mock，无需 Ollama）+ 检索冒烟 9 用例（无 Ollama 自动 skip）+ MCP 协议 12 用例 + GitHub Actions（3.11 矩阵，py_compile + 四套测试全绿）
+- [x] **T9 集成测试 + CI**：API 端点测试 29 用例（TestClient + mock，无需 Ollama）+ 检索冒烟 9 用例（无 Ollama 自动 skip）+ MCP 协议 12 用例 + GitHub Actions（3.11 矩阵，py_compile + 四套测试全绿）
 - [x] 最小可跑闭环 + 配置外置 + 引用溯源
 - [x] 接入 bge-reranker 重排并实测（混合检索；代码已验证可启用，难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败，现默认开）
 - [x] 引用溯源工程化（分数 + 偏移，可喂评估）

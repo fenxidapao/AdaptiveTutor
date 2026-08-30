@@ -105,6 +105,11 @@ API_KEY = os.getenv("API_KEY", "")
 RATE_LIMIT = int(os.getenv("RATE_LIMIT", "0"))            # 每 IP 每分钟请求上限，0=不限
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 
+# 上传大小上限（MB，评审 P3，2026-08-30）：/documents 上传接口此前无大小限制，
+# 任意大文件会被整体读入内存再写盘。100MB 覆盖正常课程资料（几百页文字层 PDF
+# 通常 <20MB）；扫描版大 PDF 走本地 ingest_ocr.py 接入，不经上传接口。
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
+
 # ---------- 语义缓存（P2，2026-08-25） ----------
 # 缓解精确模式 reranker 19~115s 延迟：命中"语义相似"的重复/改写问句时跳过检索/重排/生成。
 #   - SEMANTIC_CACHE_ENABLED：总开关（单用户可关；多人在线热问题重复率高时开着最划算）

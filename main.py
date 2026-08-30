@@ -294,7 +294,22 @@ async def upload_document(file: UploadFile = File(..., description="PDF / TXT / 
     data_dir.mkdir(parents=True, exist_ok=True)
     dest = data_dir / name
 
-    content = await file.read()
+    # 有界读取（评审 P3）：按 1MB 分块累计，超过 MAX_UPLOAD_MB 立即 413——
+    # 不先把整个请求体读进内存再判长度，避免超大上传打爆内存
+    max_bytes = config.MAX_UPLOAD_MB * 1024 * 1024
+    buf = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if len(buf) > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"文件过大（>{config.MAX_UPLOAD_MB}MB）。"
+                "如需接入大体积扫描版 PDF，请用本地脚本 ingest_ocr.py，不经上传接口。",
+            )
+    content = bytes(buf)
     if not content.strip():
         raise HTTPException(status_code=400, detail="文件内容为空")
     dest.write_bytes(content)
