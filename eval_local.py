@@ -197,6 +197,21 @@ def _judge_once(system: str, user: str, retries: int = 2):
 
 
 # ====================== 四个指标 ======================
+def _content_sentence_estimate(answer: str) -> int:
+    """估计回答的正文句数（代码块/行内代码整体各算 1 句），用作陈述覆盖下限。
+
+    Q15 提取塌缩（2026-08-31）根因之一：裁判把多句回答只拆出 1 条陈述，
+    漏掉的句子恰好是被支撑的支撑句 → 单句误判把 faith 打成 0。
+    这里用保守切分（。！？；换行）估句数，仅触发重试，不参与计分。
+    """
+    text = answer or ""
+    est = len(re.findall(r"```.*?```", text, flags=re.DOTALL))
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    text = re.sub(r"`[^`]*`", " ", text)
+    est += sum(1 for seg in re.split(r"[。！？；\n]+", text) if seg.strip())
+    return max(est, 1)
+
+
 def faithfulness(context: str, answer: str) -> dict:
     """
     忠实度：把回答拆成若干独立陈述，逐条判断是否可由上下文推导。
@@ -214,17 +229,34 @@ def faithfulness(context: str, answer: str) -> dict:
 
 任务：
 1. 只把【回答】的正文内容拆成若干条彼此独立的陈述（statements）。
-   注意：不要拆分本任务指令、格式说明等任何非回答内容。
-   注意：回答中的代码示例（代码块、命令行、示例片段）必须整体合并为一条陈述，
+   注意：必须逐句覆盖——回答正文的每一句都要对应恰好一条陈述，不得合并、不得遗漏；
+   例外：回答中的代码示例（代码块、命令行、示例片段）必须整体合并为一条陈述，
    不要逐行拆分；该陈述判断的是「示例用法是否与上下文一致」——核心参数/调用方式
    一致即为 supported，界面文案、变量命名等无关细节差异不影响判定。
 2. 对每条陈述，判断是否能从【上下文】中直接推导或支持（supported 为 true/false）。
+   注意：概括性重述（如「通过 X 可以实现 Y」类总结句）只要其核心主张能从上下文
+   推导即为 supported——上下文允许转述，不要求措辞逐字对应；
+   只有上下文推导不出的主张才判 false。
 3. 计算 score = 被支撑的陈述数 / 总陈述数（0~1，保留两位小数）。
 
 只输出 JSON，格式：
 {{"statements": [{{"statement": "陈述内容", "supported": true}}], "score": 0.0}}"""
     out = _judge_once(system, user)
     items = _clean_judgment_items(out.get("statements", []))
+    # 覆盖下限保护（Q15 提取塌缩修复）：陈述数 < 正文句数估计 → 裁判漏拆，
+    # 带强化指令重试一次，取覆盖更全的一份。漏拆会让被漏句的支撑与否完全随机
+    # 影响分数（Q15 三轮 0/0.5/0 的直接根因）。仅多花一次裁判调用，命中即重试。
+    est = _content_sentence_estimate(answer)
+    if items and len(items) < est:
+        user_retry = (
+            user
+            + f"\n\n注意：上一轮只拆出 {len(items)} 条陈述，但回答正文约有 {est} 句；"
+            "必须逐句覆盖——每一句正文对应一条陈述，不得合并或遗漏（代码示例整体一条除外）。"
+        )
+        out_retry = _judge_once(system, user_retry)
+        items_retry = _clean_judgment_items(out_retry.get("statements", []))
+        if len(items_retry) > len(items):
+            items = items_retry
     if items:
         # P2 复核：裁判自报 score 偶发与明细不一致（漏列陈述时出现 score=0.6 但
         # 明细 2/2 全 true）。统一以明细重算，保证每个分数可复算、可审计。
