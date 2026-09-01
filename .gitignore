@@ -51,3 +51,17 @@ _eval_prev_59/
 
 # pytest 缓存
 .pytest_cache/
+
+# 评估文档 / 评估数据（2026-09-01 起仅存本地；公开仓库只留代码 + README）
+EVALUATION.md
+private-notes.md
+BUSINESS_SCENARIO.md
+G2_*.md
+P2_*.md
+eval_compare*.md
+mcp_interop_evidence.md
+eval_results_*.csv
+_latency_bench.csv
+judge_*.csv
+judge_compare_*.json
+p2_rejudge_results.csv
