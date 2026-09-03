@@ -15,10 +15,17 @@ ingest_ocr.py — 教材接入（Gate 1，2026-08-24 修订）
     只有真正 0 文字层才降级走 OCR 兜底。
 
 OCR 兜底（本地优先，数据不出机，均懒加载，未安装不影响仓库编译/其他模块）：
-  - ocrmypdf：扫描 PDF → 可搜索 PDF → pypdf 提取（最稳；依赖 ghostscript + tesseract，
-    Windows 装系统依赖麻烦，仅当本机已有时用）。
-  - PaddleOCR + PyMuPDF：纯 pip 方案（`pip install paddleocr paddlepaddle pymupdf`），
-    PyMuPDF 把每页渲染成 PNG（替代 Windows 上没有的 pdftoppm/poppler），PaddleOCR 识别中文。
+  - ocrmypdf：扫描 PDF → 可搜索 PDF → 提取（最稳；依赖 ghostscript + tesseract，
+    Windows 装系统依赖麻烦，本机未装，仅当已有时生效）。
+  - RapidOCR + PyMuPDF（2026-09-03 起为正式兜底）：纯 pip 方案
+    （`pip install rapidocr-onnxruntime pymupdf`），onnx 模型内置 wheel、离线可用，
+    onnxruntime 后端与 rag_core 链（PyMuPDF/chromadb）同进程无 DLL 冲突（已冒烟实测）。
+    实测（2026-09-03，RTX 4060 Laptop CPU 推理）：识别 3.4s/页 + 渲染 0.2s/页（200dpi），
+    413 页全本约 0.4h；单栏正文近乎零错，双栏目录行序会乱（版面分析是已知边界）。
+  - PaddleOCR：**已判死，勿再尝试**（2026-09-03 最小复现钉死：paddlepaddle 3.3.1 的
+    Windows inference 层加载 PIR JSON 模型必抛 json parse_error.101，与 paddlex/
+    设备检测/模型缓存均无关；且 paddle 原生 DLL 与 rag_core 链同进程 WinError 127）。
+    判死证据链见 _archive/_ocr_pilot_standalone.py 头注释。
   - 云 API（TextIn xParse）仅在本地乱码不可接受时再考虑（文本出本机）。
 
 原件一律保留不删（用户 2026-08-24 明确）——删除原始 PDF 不在本脚本职责内。
@@ -88,82 +95,51 @@ def _ocr_ocrmypdf(pdf_path: Path, work_pdf: Path) -> Path:
     return work_pdf
 
 
-def _ocr_paddle(pdf_path: Path, max_pages: int | None = None) -> str:
-    """PaddleOCR 兜底：PyMuPDF 渲染每页为 PNG（替代 Windows 缺失的 pdftoppm）→ 识别。
+def _ocr_rapid(pdf_path: Path, max_pages: int | None = None) -> str:
+    """RapidOCR 兜底（正式，2026-09-03 起）：PyMuPDF 逐页渲染 → onnxruntime 识别。
 
-    纯 pip 依赖：`pip install paddleocr paddlepaddle pymupdf`。首次运行自动下载模型（需联网）。
-
-    兼容 2.x/3.x：
-      - 3.x 的旧式 `ocr()` 在 Windows 上会走兼容转换层，触发 nlohmann json
-        parse_error.101（2026-08-24 实测：paddleocr 3.x + paddlepaddle 3.x）→
-        优先用原生 `predict()`，失败再回退 `ocr()`。
-      - 构造参数：3.x 用 use_textline_orientation，2.x 用 use_angle_cls（try/except 兼容）。
+    纯 pip 依赖：`pip install rapidocr-onnxruntime pymupdf`；onnx 模型内置 wheel，
+    首次运行无需联网。同进程安全：onnxruntime 与 rag_core 链（PyMuPDF/chromadb）
+    无 DLL 符号冲突（2026-09-03 冒烟：import rag_core 后初始化+识别全通），
+    故无需 subprocess 隔离（Paddle 路线才需要，已判死）。
     """
-    from paddleocr import PaddleOCR
-    import tempfile
-
     try:
         import pymupdf  # PyMuPDF 3.x 推荐名（替代 fitz，消 deprecation warning）
     except ImportError:
         import fitz as pymupdf
+    from rapidocr_onnxruntime import RapidOCR
+    import tempfile
 
-    img_dir = Path(tempfile.mkdtemp(prefix="ocr_img_"))
+    ocr = RapidOCR()  # PP-OCRv4 det+cls+rec onnx，懒加载约 1s
     doc = pymupdf.open(str(pdf_path))
     total = len(doc)
     upto = total if max_pages is None else min(max_pages, total)
-    print(f"[ocr-paddle] 渲染前 {upto}/{total} 页 → PNG（dpi=200）…")
-    imgs = []
+    print(f"[ocr-rapid] 渲染+识别前 {upto}/{total} 页（dpi=200）…")
+    tmp_png = Path(tempfile.gettempdir()) / "_ingest_ocr_page.png"  # 逐页覆盖写
+    lines = []
     for i in range(upto):
         pix = doc[i].get_pixmap(dpi=200)
-        img_path = img_dir / f"page_{i + 1:04d}.png"
-        pix.save(str(img_path))
-        imgs.append(img_path)
-    doc.close()
-
-    try:
-        ocr = PaddleOCR(use_textline_orientation=True, lang="ch")  # 3.x
-    except TypeError:
-        ocr = PaddleOCR(use_angle_cls=True, lang="ch")             # 2.x
-
-    lines = []
-    for img in imgs:
-        res = None
+        pix.save(str(tmp_png))
         try:
-            res = ocr.predict(str(img))  # 3.x 原生（Windows 上避开 ocr() 的 json bug）
+            result, elapse = ocr(str(tmp_png))
         except Exception as e:
-            print(f"[ocr-paddle] predict() 失败 {e!r}，回退 ocr()…")
-            try:
-                res = ocr.ocr(str(img), cls=True)  # 2.x / 3.x 旧式
-            except Exception as e2:
-                print(f"[ocr-paddle] ocr() 也失败: {e2!r}，跳过该页")
-        lines.extend(_parse_paddle(res))
+            print(f"[ocr-rapid] 第 {i + 1} 页识别失败 {e!r}，跳过")
+            continue
+        if result:
+            lines.extend(row[1] for row in result)  # row = [box, text, score]
+        print(f"[ocr-rapid] 第 {i + 1}/{upto} 页：{len(result) if result else 0} 行")
+    try:
+        tmp_png.unlink(missing_ok=True)
+    except OSError:
+        pass  # 临时文件清理失败不影响主流程
+    doc.close()
     return "\n".join(lines)
 
 
-def _parse_paddle(res) -> list:
-    """兼容 paddleocr 2.x（嵌套 list）与 3.x（dict / list[dict]）返回结构。"""
-    texts = []
-    if isinstance(res, dict):
-        texts.extend(res.get("rec_texts", []) or [])
-    elif isinstance(res, list):
-        for item in res:
-            if isinstance(item, dict):
-                texts.extend(item.get("rec_texts", []) or [])
-            elif isinstance(item, list):
-                for line in item:
-                    if isinstance(line, (list, tuple)) and len(line) >= 2 and isinstance(line[1], (list, tuple)):
-                        texts.append(line[1][0])
-                    elif isinstance(line, dict):
-                        texts.append(line.get("text", ""))
-                    elif isinstance(line, str):
-                        texts.append(line)
-    return texts
-
-
 def ocr_to_text(pdf_path: Path, max_pages: int | None = None) -> str:
-    """兜底：无文字层时走 OCR（ocrmypdf 优先，PaddleOCR 兜底）。
+    """兜底：无文字层时走 OCR（ocrmypdf 优先（若本机已装），RapidOCR 正式兜底）。
 
-    max_pages 非 None（试点模式）：跳过 ocrmypdf（整本转换，不适合试点），直接 PaddleOCR 前 N 页。
+    max_pages 非 None（试点模式）：跳过 ocrmypdf（整本转换，不适合试点），直接 RapidOCR 前 N 页。
     """
     if max_pages is None:
         work = pdf_path.with_name(pdf_path.stem + "_searchable.pdf")
@@ -173,10 +149,10 @@ def ocr_to_text(pdf_path: Path, max_pages: int | None = None) -> str:
             if text and text.strip():
                 return text
         except Exception as e:
-            print(f"[ocr] ocrmypdf 失败: {e!r}，转 PaddleOCR 兜底…")
+            print(f"[ocr] ocrmypdf 不可用/失败: {e!r}，转 RapidOCR 兜底…")
     else:
-        print(f"[ocr] 试点模式（前 {max_pages} 页），直接走 PaddleOCR…")
-    return _ocr_paddle(pdf_path, max_pages=max_pages)
+        print(f"[ocr] 试点模式（前 {max_pages} 页），直接走 RapidOCR…")
+    return _ocr_rapid(pdf_path, max_pages=max_pages)
 
 
 def ingest_one(pdf_path: Path, max_pages: int | None = None) -> Path:
