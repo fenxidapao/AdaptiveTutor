@@ -214,43 +214,43 @@ def _split_recursive(text, chunk_size, separators):
 def _split_text(text, chunk_size, chunk_overlap, separators):
     """递归切分（模仿 RecursiveCharacterTextSplitter）：分割后只在顶层一次性合并。
 
-    修复（B 专项）：原实现递归内部也 _merge_splits，overlap 多层叠加导致
-    同一文本块在单 chunk 内重复。现 _split_recursive 只切不合并，_merge_splits
-    只在外层调用一次，overlap 仅作用一次，杜绝块内重复。
+    返回 [(chunk_text, start_index)]，start_index 为块在 text 中的精确字符起点。
+    2026-09-03：原实现返回纯文本列表、由 _split_with_index 用 text.find(ch, cursor)
+    反推起点——overlap 使第 k 块的真实起点 = 上块尾 - chunk_overlap < cursor，
+    find 必失败、fallback 到 cursor，start_index 每块累积偏晚 chunk_overlap（pdf
+    等无标题单节长文档实测第 k 块偏晚 (k-1)×150）。改由合并阶段字符游标精确定位。
     """
     return _merge_splits(_split_recursive(text, chunk_size, separators), chunk_size, chunk_overlap)
 
 
 def _merge_splits(splits, chunk_size, chunk_overlap):
-    """按 chunk_size 合并，并在块间保留 chunk_overlap 字符重叠（避免切断句子）。"""
+    """按 chunk_size 合并，并在块间保留 chunk_overlap 字符重叠（避免切断句子）。
+
+    返回 [(chunk_text, start_index)]。splits 为 text 的连续切分（全部拼接 = 原 text），
+    合并以字符游标精确记录每块起点；overlap 转移时下块起点 = 上块结束 - chunk_overlap。
+    """
     docs = []
     current = ""
+    current_start = 0
     for piece in splits:
         if current and len(current) + len(piece) > chunk_size:
-            docs.append(current)
-            # 保留末尾 chunk_overlap 字符作为下一段开头
+            end = current_start + len(current)
+            docs.append((current, current_start))
             if chunk_overlap > 0 and len(current) > chunk_overlap:
                 current = current[-chunk_overlap:]
+                current_start = end - chunk_overlap
             else:
                 current = ""
+                current_start = end
         current += piece
     if current:
-        docs.append(current)
+        docs.append((current, current_start))
     return docs
 
 
 def _split_with_index(text, chunk_size, chunk_overlap, separators):
     """切分并记录每块在原文中的偏移（start_index），供引用溯源定位。"""
-    chunks = _split_text(text, chunk_size, chunk_overlap, separators)
-    result = []
-    cursor = 0
-    for ch in chunks:
-        start = text.find(ch, cursor)
-        if start == -1:
-            start = cursor
-        result.append((ch, start))
-        cursor = start + len(ch)
-    return result
+    return _split_text(text, chunk_size, chunk_overlap, separators)
 
 
 # ====================== 1.5 结构感知切分（T8，2026-08-22）======================
@@ -275,12 +275,20 @@ def _protect_blocks(text):
     def _repl(m):
         key = f"§B{len(blocks)}§"
         blocks[key] = m.group(0)
-        segments.append((m.start(), len(key), len(m.group(0))))
         return key
 
     text = _re.sub(r"```.*?```", _repl, text, flags=_re.S)
     # 连续以 | 开头的行（markdown 表格）整体保护
     text = _re.sub(r"(?:^\|.*\|\s*$(\n|$))+", _repl, text, flags=_re.M)
+
+    # 2026-09-03 修复：re.sub 回调里的 m.start() 是「本轮输入字符串」的坐标，不是最终
+    # protected 文本坐标——前序代码块/表格被替换缩短后，后续条目的起点坐标整体偏大
+    # （实测 §B1§ 记录 491、实际 407，差=前一代码块缩短量 84）。remap 拿偏大的坐标与
+    # 保护后 offset 比较会提前 return、漏补后续哨兵差 → start_index 偏前。
+    # 改为替换完成后在最终文本上扫描哨兵，坐标即最终坐标系；o_len 从 blocks 原文本取。
+    for m in _re.finditer(r"§B\d+§", text):
+        key = m.group(0)
+        segments.append((m.start(), len(key), len(blocks[key])))
     segments.sort()  # 代码块/表格分两次 sub 替换，protected_start 需统一排序
     return text, blocks, segments
 
@@ -304,6 +312,11 @@ def _remap_offset(offset, segments):
 def _restore_blocks(text, blocks):
     for k, v in blocks.items():
         text = text.replace(k, v)
+    # 2026-09-03：chunk_overlap 是字符级截断，若窗口落在哨兵中间会把 §B378§ 截成
+    # 残缺片段（§B378 / 378§），上方完整 replace 匹配不上 → 残留数字噪声进检索内容。
+    # 残缺哨兵无可还原内容（原代码块/表格已由含完整哨兵的相邻块还原），直接删标记。
+    text = _re.sub(r"§B\d+", "", text)   # 缺尾 §（overlap 截断最常见：块尾哨兵头保留）
+    text = _re.sub(r"(?<![§B])\d+§", "", text)  # 缺头 §B（块首哨兵尾保留，如 "378§"）
     return text
 
 
