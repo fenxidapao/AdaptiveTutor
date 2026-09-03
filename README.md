@@ -281,8 +281,10 @@ python ingest_ocr.py "data/教材\<书>.pdf"
 python run_ab.py
 ```
 
-> OCR 依赖（懒加载，未装不影响仓库）：`pip install paddleocr paddlepaddle pymupdf`
-> （PyMuPDF 渲染 PDF 页 → PaddleOCR 识别中文，纯 pip 无系统依赖；`data/教材` 原件一律保留不删）。
+> OCR 依赖（懒加载，未装不影响仓库）：`pip install rapidocr_onnxruntime pymupdf`
+> （PyMuPDF 渲染 PDF 页 → RapidOCR/PP-OCRv4 识别中文，onnx 模型内置 wheel、离线可用。
+> PaddleOCR 3.x 已判死勿装：paddlepaddle 3.3.1 Windows inference 加载 PIR JSON 模型必抛
+> parse_error.101（最小复现钉死，见 ingest_ocr.py 头注释）。`data/教材` 原件一律保留不删）。
 
 ## 可观测看板 · 反馈闭环 · 语义缓存（P1/P2）
 
@@ -322,7 +324,7 @@ python eval_heldout.py --bc-only                               # 重跑门控覆
 # .env 可调：SEMANTIC_CACHE_ENABLED=true / SEMANTIC_CACHE_SIM=0.93 / SEMANTIC_CACHE_MAX=128
 ```
 
-- 命中"语义相似"（embedding 余弦 ≥ 0.93）的重复/改写问句时，跳过检索 + reranker + 生成，直接返回历史答案，把精确模式 19~115s 压到秒级。
+- 命中"语义相似"（embedding 余弦 ≥ 0.93）的重复/改写问句时，跳过检索 + reranker + 生成，直接返回历史答案，把精确模式整条链路（检索+精排 GPU 稳态约 1~3s + 生成段）压到 40ms 级。
 - 只缓存正常答案（硬拒答/未接地不缓存）；**索引重建后自动失效**（`semantic_cache.invalidate()`）。
 - 内存 LRU，单进程够用；多副本需换 Redis（见路线图路线 β/ε）。
 
@@ -423,7 +425,7 @@ python eval_local.py
 | **held-out B 组**（20 题语料外；门控拒答率≥90%） | **19/20 = 95% → PASS**（唯一放通为组件类语义近邻问题，门控容忍 1 题） | 硬拒答 + 接地自检生效 |
 | **混合检索 vs 纯向量**（隔离 reranker 的 A/B 差值） | precision **+0.18** / recall **+0.16** / faithfulness +0.09 / relevancy +0.05，四项全正向 | 100 题 × 697 块历史语料；**只看差值**（同裁判同语料） |
 | **reranker OFF vs ON**（59 题全量语料） | precision +0.120 / relevancy +0.133 / recall +0.096 / faithfulness +0.032，四项全正向 | 8b 自评历史口径；reranker 救「正确块排 30+」的难 query（`RETRIEVE_K=50` 扩池 + 精排纠回） |
-| **性能**（本地 CPU 推理，数字硬件绑定跨机不可比） | fast 全链路 P50 **5.9s** / P95 13.4s（生成段主导）；accurate 检索+精排段 P50 21s / P95 44s（瓶颈 = CPU reranker）；语义缓存命中 6.4s→**40ms** 对冲 | 明细见本地 EVALUATION.md「性能基线」 |
+| **性能**（本地推理，数字硬件绑定跨机不可比） | fast 全链路 P50 **5.9s** / P95 13.4s（生成段主导）；accurate 检索+精排段 **GPU 稳态 P50 1.16s**（2026-09-03 GPU 化，CPU 基线 21.1s ≈ **18×** 提速）；语义缓存命中 6.4s→**40ms** 对冲 | 明细见本地 EVALUATION.md「性能基线」 |
 
 > 注：context_recall 已按明细重算口径刷新（旧口径自报 0.883 → 明细重算 0.872，漂移在裁判噪声带内，与预期一致）；历史单轮 faithfulness 0.976 经 3 轮独立回归证实为高水位采样；官方基线 0.886 ± 0.023 为旧裁判口径，裁判陈述提取修复（逐句覆盖 + 概括句口径 + 覆盖下限重试）后重测 3 轮为 0.912 ± 0.021（明细见本地 EVALUATION.md「裁判口径注记」）。
 

@@ -20,13 +20,35 @@ import config
 _reranker = None
 
 
+def _resolve_device() -> str:
+    """解析精排设备：auto=有 CUDA 用 GPU，否则 CPU；也支持强制 cuda/cpu（config.RERANKER_DEVICE）。"""
+    if config.RERANKER_DEVICE != "auto":
+        return config.RERANKER_DEVICE
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
+
+
 def get_reranker():
-    """懒加载 cross-encoder，进程内只实例化一次。"""
+    """懒加载 cross-encoder，进程内只实例化一次。
+
+    2026-09-03 GPU 化改造：设备由 config.RERANKER_DEVICE 决定（auto 时探测 CUDA）。
+    前提是 venv 里装了 CUDA 版 torch（CPU 轮子时 auto 会静默回退 CPU，行为与旧版一致）。
+    """
     global _reranker
     if _reranker is None:
         # trust_remote_code=True：bge-reranker-v2-m3 含自定义模型代码，必须开
         from sentence_transformers import CrossEncoder
-        _reranker = CrossEncoder(config.RERANKER_MODEL, trust_remote_code=True)
+
+        device = _resolve_device()
+        _reranker = CrossEncoder(config.RERANKER_MODEL, trust_remote_code=True, device=device)
+        # fp16 默认关：分数会轻微漂移，硬拒答阈值按 fp32 校准，开启前须重验（见 config 注释）
+        if device == "cuda" and config.RERANKER_FP16:
+            _reranker.model.half()
+        print(f"[reranker] device={device}"
+              + (" (fp16)" if device == "cuda" and config.RERANKER_FP16 else ""))
     return _reranker
 
 
@@ -41,7 +63,7 @@ def rerank_documents(query, docs, top_n=None):
 
     reranker = get_reranker()
     pairs = [(query, doc.page_content) for doc in docs]
-    scores = reranker.predict(pairs)  # 一维数组，值越大越相关
+    scores = reranker.predict(pairs, batch_size=config.RERANKER_BATCH_SIZE)  # 一维数组，值越大越相关
 
     scored = list(zip(docs, scores))
     scored.sort(key=lambda x: x[1], reverse=True)

@@ -35,6 +35,17 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))  # 低温度压制�
 # 仅「精确模式」叠加 bge-reranker 精排（延迟 19~115s，已在 UI 文案明示）。
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")  # 多语言，中文友好
+# 运行设备（2026-09-03 GPU 化改造）：auto=有 CUDA 用 GPU，否则回退 CPU；可强制 cuda/cpu。
+# 前提：venv 里的 torch 必须是 CUDA 轮子（pip install torch==2.13.0 --index-url
+# https://download.pytorch.org/whl/cu126）；CPU 轮子装了也不会用 GPU。
+# 注意 8GB 卡与 Ollama（llama3.1:8b 约 5GB）共存：pipeline 中精排与生成串行，
+# 显存紧张时把 OLLAMA_KEEP_ALIVE 调短让两模型错峰。
+RERANKER_DEVICE = os.getenv("RERANKER_DEVICE", "auto")
+# 半精度开关（默认关）：fp16 推理再快约一倍，但 rerank_score 会轻微漂移——
+# 硬拒答阈值 HARD_REJECT_RERANK_THRESHOLD=0.30 按 fp32 校准，开 fp16 前必须重验 B 组拒答行为。
+RERANKER_FP16 = os.getenv("RERANKER_FP16", "false").lower() == "true"
+# GPU 上批量打分的 batch（16=候选池全量一次过；CPU 上该值无感）
+RERANKER_BATCH_SIZE = int(os.getenv("RERANKER_BATCH_SIZE", "16"))
 RETRIEVE_K = int(os.getenv("RETRIEVE_K", "50"))       # 向量召回候选数（扩到 50：难 query 正确块常排 30+，池不够捞不到；配合 reranker 精排纠回）
 # 重排后保留、进 LLM 的条数。2026-08-24 held-out A 组实测：5→8 后 faithfulness 0.746→0.911、
 # context_recall 0.823→0.873（正确块常排 6~8 名，top-5 供给不足导致模型「无法完整回答」）。
@@ -111,7 +122,7 @@ CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if 
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 
 # ---------- 语义缓存（P2，2026-08-25） ----------
-# 缓解精确模式 reranker 19~115s 延迟：命中"语义相似"的重复/改写问句时跳过检索/重排/生成。
+# 缓解精确模式 reranker 延迟（精确段口径见 EVALUATION.md）：命中"语义相似"的重复/改写问句时跳过检索/重排/生成。
 #   - SEMANTIC_CACHE_ENABLED：总开关（单用户可关；多人在线热问题重复率高时开着最划算）
 #   - SEMANTIC_CACHE_SIM：embedding 余弦阈值，同义改写（0.93 上下）命中，意图不同不误命中
 #   - SEMANTIC_CACHE_MAX：内存 LRU 上限（单进程；多副本需换 Redis，见文档路线 β/ε）

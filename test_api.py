@@ -398,6 +398,12 @@ def test_get_vector_store_empty_chunks(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "PERSIST_DIRECTORY", str(tmp_path / "chroma"))
     import rag_core
 
+    # 泄漏防护（与下方 test_get_vector_store_readonly_no_rebuild 同款）：
+    # get_vector_store 内部会把 _chroma_client/_vector_store 模块级单例绑定到本测试的
+    # 临时目录；不重置的话 monkeypatch 恢复 config 后单例仍指向 tmp，后续 test_retrieval
+    # 全量跑会连到空库（Ollama 未启动时该组被 skip，泄漏不可见——2026-09-03 暴露修复）
+    monkeypatch.setattr(rag_core, "_chroma_client", None)
+    monkeypatch.setattr(rag_core, "_vector_store", None)
     col = rag_core.get_vector_store([])
     assert col.count() == 0
 
