@@ -65,6 +65,12 @@ RERANK_CANDIDATE_K = int(os.getenv("RERANK_CANDIDATE_K", "16"))
 HYBRID_ENABLED = os.getenv("HYBRID_ENABLED", "true").lower() == "true"
 BM25_TOP_K = int(os.getenv("BM25_TOP_K", "50"))  # BM25 通道独立召回数（对全库打分，不再复用向量候选池）
 
+# ---------- P1a 元数据过滤多路召回（2026-09-04）----------
+# 问题命中教材/课程关键词（rag_search_utils.SOURCE_RULES）时，向量路与 BM25 路都
+# 限定到对应教材再 RRF 融合；未命中关键词 = 全库检索（行为与旧版一致）。
+# 关闭后自动路由失效，但显式 source 参数（API/UI 指定教材）仍可用。
+SOURCE_FILTER_ROUTING_ENABLED = os.getenv("SOURCE_FILTER_ROUTING_ENABLED", "true").lower() == "true"
+
 # ---------- 路径 ----------
 DATA_DIR = os.getenv("DATA_DIR", "./data")
 PERSIST_DIRECTORY = os.getenv("PERSIST_DIRECTORY", "./chroma_db")

@@ -116,3 +116,51 @@ def test_stream_generation():
     parts = list(chain.invoke_stream("什么是ACID", docs=docs))
     assert len(parts) >= 1, "流式应至少产出一个片段"
     assert "".join(parts).strip(), "流式片段聚合后应为非空答案"
+
+
+# ==================== P1a：教材过滤多路召回（2026-09-04） ====================
+def test_auto_route_scopes_to_textbook():
+    """自动路由：ACID 题 → 结果全部来自数据库教材（top-8 去污染）+ 生效标记。"""
+    docs = rag_core.retrieve_and_rerank("什么是数据库事务的 ACID 特性？请分别解释。")
+    assert docs, "路由后应有召回"
+    assert all("数据库" in d.metadata.get("source", "") for d in docs), \
+        f"存在教材外来源: {[d.metadata.get('source') for d in docs]}"
+    assert docs[0].metadata.get("source_filter"), "路由生效时应有 source_filter 标记"
+
+
+def test_no_route_keeps_full_corpus():
+    """未命中关键词 → 不过滤（无 source_filter 标记，行为同旧版）。"""
+    docs = rag_core.retrieve_and_rerank("今天天气怎么样")
+    if not docs:
+        pytest.skip("语料对该问题零召回，跳过")
+    assert all("source_filter" not in d.metadata for d in docs)
+
+
+def test_explicit_source_filter_and_error():
+    """显式子串过滤生效；解析不到源 → ValueError（不静默降级）。"""
+    docs = rag_core.retrieve_and_rerank("ls 命令的选项有哪些", source_filter="Linux")
+    assert docs
+    assert all("linux" in d.metadata.get("source", "").lower() for d in docs)
+    with pytest.raises(ValueError):
+        rag_core.retrieve_and_rerank("任意问题", source_filter="不存在的教材XYZ")
+
+
+def test_empty_filter_fallback(monkeypatch):
+    """空结果降级：过滤后召回为空 → 自动去掉 filter 重检索一次。"""
+    real = rag_core.retrieve_vector
+    calls = {"n": 0}
+
+    def fake(question, k=None, where=None):
+        calls["n"] += 1
+        if where:  # 带 filter 的首次调用 → 模拟召回为空
+            return []
+        return real(question, k=k, where=where)
+
+    monkeypatch.setattr(rag_core, "retrieve_vector", fake)
+    docs = rag_core.retrieve_and_rerank(
+        "数据库事务的 ACID 特性", force_no_rerank=True, source_filter="数据库"
+    )
+    monkeypatch.undo()
+    assert calls["n"] == 2, f"应恰好两次检索（带过滤 + 降级重试），实际 {calls['n']}"
+    assert docs, "降级后应有召回"
+    assert all("source_filter" not in d.metadata for d in docs), "降级结果不应带过滤标记"

@@ -166,6 +166,96 @@ def test_log_query_format():
     assert rec2["has_citation"] is False
 
 
+# ==================== P1a：教材规则路由 + BM25 来源过滤（2026-09-04） ====================
+from rag_search_utils import route_sources, SOURCE_RULES  # noqa: E402
+
+# 模拟真实语料源（与 data/ 下 21 个文件同构的路径形态）
+_FAKE_SOURCES = [
+    r"E:/data/数据库系统-事务与ACID.md",
+    r"E:/data/数据库-函数依赖与范式.md",
+    r"E:/data/数据结构-树与二叉树.md",
+    r"E:/data/操作系统-进程线程与调度.md",
+    r"E:/data/OS-内存管理.md",
+    r"E:/data/计算机网络-TCP与HTTP.md",
+    r"E:/data/Linux第2章基本命令.pdf",
+    r"E:/data/教材/微信小程序开发实战.pdf",
+    r"E:/data/教材/Streamlit参考手册.pdf",
+    r"E:/data/教材/算法引论第1章.pptx",
+    r"E:/data/Python-廖雪峰教程-核心章节.md",
+]
+
+
+def test_route_sources_single_subject():
+    """单一主题题 → 限定到对应教材（源子串模式命中）。"""
+    out = route_sources("什么是数据库事务的 ACID 特性", _FAKE_SOURCES)
+    assert out is not None and len(out) == 2
+    assert all("数据库" in s for s in out)
+    out = route_sources("二叉树有哪些重要性质", _FAKE_SOURCES)
+    assert out is not None and all("数据结构" in s for s in out)
+
+
+def test_route_sources_multi_rule_union():
+    """多规则命中取并集：银行家算法 → OS 两件套 + 算法引论。"""
+    out = route_sources("银行家算法是用来做什么的", _FAKE_SOURCES)
+    assert out is not None
+    joined = "|".join(out)
+    assert "OS-内存管理" in joined and "操作系统-进程线程" in joined
+    assert "算法引论" in joined
+    assert "数据库" not in joined  # 未命中的教材不进允许集
+
+
+def test_route_sources_case_insensitive():
+    """拉丁关键词大小写不敏感：TCP / streamlit / wx.request。"""
+    assert route_sources("TCP 如何保证可靠传输", _FAKE_SOURCES) == [
+        s for s in _FAKE_SOURCES if "计算机网络" in s
+    ]
+    assert all("Streamlit" in s for s in route_sources("streamlit 有哪些组件", _FAKE_SOURCES))
+    assert all("小程序" in s for s in route_sources("wx.request 的参数", _FAKE_SOURCES))
+
+
+def test_route_sources_no_match_returns_none():
+    """未命中任何规则 → None（全库检索，旧行为）。"""
+    assert route_sources("今天广州的天气怎么样", _FAKE_SOURCES) is None
+    assert route_sources("", _FAKE_SOURCES) is None
+    assert route_sources(None, _FAKE_SOURCES) is None
+
+
+def test_route_sources_all_match_returns_none():
+    """规则命中所有源（过滤无意义）→ None。"""
+    # 单独构造：源集合恰好都是命中的模式
+    assert route_sources("ACID 特性", [r"E:/data/数据库-事务.md"]) is None
+
+
+def test_route_sources_rules_shape():
+    """规则表契约：每条 = (关键词列表, 源子串模式列表)，均非空。"""
+    assert len(SOURCE_RULES) >= 10
+    for kws, pats in SOURCE_RULES:
+        assert kws and pats
+        assert all(isinstance(k, str) and k for k in kws)
+        assert all(isinstance(p, str) and p for p in pats)
+
+
+def test_bm25_rank_allowed_idx_filters_and_orders():
+    """BM25 来源过滤：仅 allowed_idx 内的文档可出现，且按分数降序。"""
+    docs = [
+        Doc("事务的ACID特性包括原子性一致性隔离性持久性", "db.md", 0),
+        Doc("数据库事务隔离级别与并发", "db.md", 50),
+        Doc("苹果是一种水果", "fruit.md", 0),
+        Doc("ACID 在事务中的含义", "db.md", 100),
+    ]
+    out = _bm25_rank("事务的ACID特性", docs, top_n=2, allowed_idx=[0, 1, 2])
+    assert len(out) == 2
+    assert all(d.metadata["source"] == "db.md" for d in out)  # fruit.md 被过滤
+    # 全部允许 = 不过滤的普通排名
+    out_all = _bm25_rank("事务的ACID特性", docs, top_n=4)
+    out_none = _bm25_rank("事务的ACID特性", docs, top_n=4, allowed_idx=None)
+    assert [d.metadata["start_index"] for d in out_all] == [
+        d.metadata["start_index"] for d in out_none
+    ]
+    # allowed_idx 为空列表 → 结果为空（不是退回全库）
+    assert _bm25_rank("事务的ACID特性", docs, top_n=4, allowed_idx=[]) == []
+
+
 def _run_all():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

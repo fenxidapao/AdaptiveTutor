@@ -36,6 +36,8 @@ from rag_search_utils import (
     _bm25_rank,
     _rrf_fuse,
     _stable_ids,
+    SOURCE_RULES,
+    route_sources,
 )
 
 import ollama
@@ -614,16 +616,21 @@ def delete_by_source(source):
 
 
 # ====================== 3. 检索 + 重排（两段式） ======================
-def retrieve_vector(question, k=None):
+def retrieve_vector(question, k=None, where=None):
     """
     仅做向量召回（双塔粗排），返回 top-k 个 Document（已按相似度降序）。
     单独暴露出来，供 app.py 分阶段显示进度（先召回、再重排），也供「快速模式」直出。
     T3（2026-08-22）：把 L2 distance 转 cosine 相似度写入 metadata['vector_score']，
     作为统一置信度信号（拒答/低置信阈值用）。
+    P1a（2026-09-04）：where 为 Chroma 元数据过滤（如 {"source": {"$in": [...]}}），
+    在过滤子集内召回 top-k；None = 全库检索（行为不变）。
     """
     k = k or config.RETRIEVE_K
     collection = get_vector_store()
-    res = collection.query(query_texts=[question], n_results=k)
+    if where:
+        res = collection.query(query_texts=[question], n_results=k, where=where)
+    else:
+        res = collection.query(query_texts=[question], n_results=k)
     texts = res["documents"][0]
     metas = res["metadatas"][0]
     dists = (res.get("distances") or [[]])[0] if res.get("distances") else [None] * len(texts)
@@ -635,6 +642,61 @@ def retrieve_vector(question, k=None):
             meta["vector_score"] = round(1.0 - (d * d) / 2.0, 4)
         docs.append(Document(page_content=t, metadata=meta))
     return docs
+
+
+# ====================== 3.0 源清单与教材过滤解析（P1a，2026-09-04） ======================
+def get_available_sources():
+    """当前索引中实际存在的 source 路径列表（去重排序）。
+    从 _get_all_chunks 派生（带缓存，count 不变时零成本）。"""
+    return sorted(
+        {d.metadata.get("source") for d in _get_all_chunks() if d.metadata.get("source")}
+    )
+
+
+def resolve_source_query(query_str, sources=None):
+    """把「源文件名子串」（如 '离散数学' / 'Linux' / '小程序'）解析为实际 source 路径列表。
+
+    - 匹配对大小写不敏感；一个子串可匹配多个源（全部返回，如 'Linux' → 四章 PDF）
+    - 无匹配 / 空串 → raise ValueError（报错信息带可用源清单，供 API 400 与 UI 提示）
+    显式指定的过滤条件解析不到源应报错而非静默降级——静默降级会让调用方以为
+    过滤生效了，实际却在全库检索。
+    """
+    sources = sorted(sources) if sources else get_available_sources()
+    q = (query_str or "").strip()
+    if not q:
+        raise ValueError(
+            "教材过滤条件为空；可用源：" + "、".join(Path(s).name for s in sources)
+        )
+    matched = sorted(s for s in sources if q.lower() in s.lower())
+    if not matched:
+        raise ValueError(
+            f"没有语料源匹配 {q!r}；可用源：" + "、".join(Path(s).name for s in sources)
+        )
+    return matched
+
+
+def _resolve_source_filter(question, source_filter):
+    """P1a：统一解析教材过滤意图。返回允许的 source 路径列表或 None（不过滤）。
+
+    source_filter 语义（retrieve_and_rerank / answer_question 对外统一）：
+      - None        → 自动路由：rag_search_utils.route_sources 按问题关键词规则表
+                      决定是否限定教材（SOURCE_FILTER_ROUTING_ENABLED 关闭时不路由）
+      - str         → 显式子串（API/UI 传入），resolve_source_query 解析；
+                      解析失败 raise ValueError（上层转 400 / UI 报错）
+      - list[str]   → 显式 source 路径列表（程序化调用直传）
+    """
+    if source_filter is None:
+        if not config.SOURCE_FILTER_ROUTING_ENABLED:
+            return None
+        try:
+            return route_sources(question, get_available_sources())
+        except Exception as e:  # 路由是增强项，任何故障都退回全库检索而非报错
+            print(f"[warn] 教材路由失败，忽略过滤: {e!r}")
+            return None
+    if isinstance(source_filter, str):
+        return resolve_source_query(source_filter)
+    allowed = [str(s) for s in source_filter]
+    return allowed or None
 
 
 # ====================== 3.1 混合检索（向量 + BM25 双通道，RRF 融合） ======================
@@ -686,29 +748,76 @@ def _get_bm25_cache():
     return _bm25_cache[1], _bm25_cache[2]
 
 
-def hybrid_retrieve(question, k=config.RETRIEVE_K):
-    """真混合检索：两个独立召回通道，各自全库召回 top-K，RRF 融合取 top-N。
+def hybrid_retrieve(question, k=config.RETRIEVE_K, source_filter=None):
+    """真混合检索：两个独立召回通道，各自在允许范围内召回 top-K，RRF 融合取 top-N。
 
-    - 通道 A：向量召回（双塔粗排，语义匹配）—— Chroma 全库
-    - 通道 B：BM25 词面召回（精确术语匹配，如 ACID / 2NF / 死锁）—— 对全库打分
+    - 通道 A：向量召回（双塔粗排，语义匹配）—— Chroma（P1a：可带 source where 过滤）
+    - 通道 B：BM25 词面召回（精确术语匹配，如 ACID / 2NF / 死锁）—— 对允许子集打分
     两路结果用倒数排名融合（RRF）互补，返回 top-N（RERANK_CANDIDATE_K）。
 
     相比 v1「向量 top-50 池内 BM25 重排」的根本区别：
     旧版 BM25 只对已召回的 50 块重排，正确块若不在向量 top-50 就永远捞不到；
     新版 BM25 对全库打分，正确块即使向量排名很低，只要词面匹配也能独立召回进池。
     评审 P2-4：BM25 索引经 _get_bm25_cache 按语料版本缓存，不再每次查询重建。
+
+    P1a（2026-09-04）：source_filter 为允许的 source 路径列表（None=全库）。
+    注意本函数只做执行、不做路由决策——自动路由/显式解析统一在
+    retrieve_and_rerank 完成（直调本函数的旧调用方保持旧行为）。
     """
-    vector_docs = retrieve_vector(question, k=k)  # 通道 A：向量全库 top-K
-    if not vector_docs:
+    where = {"source": {"$in": list(source_filter)}} if source_filter else None
+    vector_docs = retrieve_vector(question, k=k, where=where)  # 通道 A：允许范围内 top-K
+    if not vector_docs and not source_filter:
         return []
     bm25, all_chunks = _get_bm25_cache()
-    bm25_docs = _bm25_rank(question, all_chunks, top_n=config.BM25_TOP_K, index=bm25)  # 通道 B：BM25 全库 top-K
+    allowed_idx = None
+    if source_filter:
+        sset = set(source_filter)
+        allowed_idx = [
+            i for i, d in enumerate(all_chunks) if d.metadata.get("source") in sset
+        ]
+    # 通道 B：允许子集内独立召回（allowed_idx=None 即全库，行为与旧版一致）
+    bm25_docs = _bm25_rank(
+        question, all_chunks, top_n=config.BM25_TOP_K, index=bm25, allowed_idx=allowed_idx
+    )
+    if not vector_docs and not bm25_docs:
+        return []  # 过滤子集内两路皆空 → 交由上层「空结果降级」去 filter 重检索
     # B 专项：融合候选池扩到 RERANK_CANDIDATE_K（>RERANKER_TOP_N），
     # 让「仅 BM25 命中、向量缺席」的正确块先进池，再由 reranker 精排回 top-N（见 retrieve_and_rerank）。
     return _rrf_fuse([vector_docs, bm25_docs], top_n=config.RERANK_CANDIDATE_K)
 
 
-def retrieve_and_rerank(question, force_no_rerank=False):
+def _retrieve_once(question, force_no_rerank, sources):
+    """P1a：按给定 source 允许集执行一次检索（不含路由/降级决策）。
+    sources 非空时给命中块打 metadata['source_filter'] 标记（UI/调试可见实际生效范围）。"""
+    if force_no_rerank:
+        docs = retrieve_vector(
+            question, k=config.RERANKER_TOP_N,
+            where={"source": {"$in": sources}} if sources else None,
+        )
+    elif config.HYBRID_ENABLED:
+        docs = hybrid_retrieve(question, source_filter=sources)
+        if config.RERANKER_ENABLED:
+            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
+        else:
+            # 不开 reranker：候选池截回 RERANKER_TOP_N，保证进 LLM 的条数与旧版一致
+            docs = docs[: config.RERANKER_TOP_N]
+    else:
+        docs = retrieve_vector(
+            question, k=config.RETRIEVE_K,
+            where={"source": {"$in": sources}} if sources else None,
+        )
+        if config.RERANKER_ENABLED:
+            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
+        else:
+            docs = docs[: config.RERANKER_TOP_N]
+    if sources and docs:
+        tag = "|".join(Path(s).name for s in sources)
+        for d in docs:
+            d.metadata["source_filter"] = tag
+    return docs
+
+
+def retrieve_and_rerank(question, force_no_rerank=False, source_filter=None):
     """
     统一检索入口（UI 与 RAG 链共用，保证『看到的来源』=『喂给模型的来源』）：
       - force_no_rerank=True：纯向量 top-N（「快速模式」/ 评估纯向量对照），不进 hybrid 也不进 reranker。
@@ -717,24 +826,21 @@ def retrieve_and_rerank(question, force_no_rerank=False):
                                 若 RERANKER_ENABLED=True 再对候选做 bge-reranker 精排。
           HYBRID_ENABLED=False → 原两段式（向量 top-K → reranker top-N）；reranker 关则纯向量 top-N。
     返回按相关性排序的 Document 列表；reranker 开启时 metadata 含 rerank_score，否则含 hybrid_score。
-    """
-    if force_no_rerank:
-        # 纯向量对照：直接取 top-N，保证 A/B 差值纯粹反映 reranker/hybrid 的贡献。
-        return retrieve_vector(question, k=config.RERANKER_TOP_N)
 
-    if config.HYBRID_ENABLED:
-        docs = hybrid_retrieve(question)  # 已融合出 RERANK_CANDIDATE_K 候选
-        if config.RERANKER_ENABLED:
-            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
-        else:
-            # 不开 reranker：候选池截回 RERANKER_TOP_N，保证进 LLM 的条数与旧版一致
-            docs = docs[: config.RERANKER_TOP_N]
-    else:
-        docs = retrieve_vector(question, k=config.RETRIEVE_K)
-        if config.RERANKER_ENABLED:
-            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
-        else:
-            docs = docs[: config.RERANKER_TOP_N]
+    P1a（2026-09-04）教材过滤多路召回：
+      - source_filter=None（默认）→ 规则自动路由：问题命中教材/课程关键词（rag_search_utils.
+        SOURCE_RULES）时把向量路与 BM25 路都限定到对应教材，未命中 = 全库检索（旧行为）。
+      - source_filter=str → 显式源子串（如 '离散数学'），解析失败 raise ValueError。
+      - source_filter=list[str] → 显式 source 路径列表。
+      - 空结果降级：过滤后两路候选为空 → 自动去掉过滤重检索一次（防过度过滤召回为空）；
+        降级结果不带 source_filter 标记，调用方可据此区分。
+    """
+    sources = _resolve_source_filter(question, source_filter)
+    docs = _retrieve_once(question, force_no_rerank, sources)
+    if not docs and sources:
+        # 空结果降级（方案 §2.2-4）：过滤把召回滤空时退回全库，宁可宽不可空
+        print(f"[warn] 教材过滤后候选为空（{len(sources)} 个源），降级为全库检索")
+        docs = _retrieve_once(question, force_no_rerank, None)
     return docs
 
 
@@ -918,7 +1024,7 @@ def build_citations(docs):
 
 
 def answer_question(question, mode="accurate", custom_prompt=None, history="",
-                    use_cache=True, on_stage=None, on_token=None):
+                    use_cache=True, on_stage=None, on_token=None, source=None):
     """统一问答入口：Streamlit / FastAPI / 评估三个出口共用同一套
     「缓存 → 检索 → 硬拒答 → 生成 → 接地自检 → 缓存写入」管线。
 
@@ -944,6 +1050,11 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
     mode 语义（与检索模式一致）：
       fast     纯向量 top-N + 软提示（low_confidence），无硬拒答/无接地自检（降级档）
       accurate 混合检索（+可选 reranker）+ 硬拒答 + 接地自检（默认）
+    source（P1a，2026-09-04）教材过滤：
+      None      规则自动路由（问题命中教材关键词 → 限定对应教材，未命中=全库）
+      str       显式源文件名子串（如 '离散数学'），解析失败 raise ValueError；
+                显式指定时绕开语义缓存读写（缓存 key 不含 source 维度）
+      list[str] 显式 source 路径列表
     use_cache   语义缓存开关（评估侧必须传 False，避免吃到线上缓存污染结果）
     on_stage    可选回调 fn(stage)，stage ∈ {"retrieve","rerank","generate"}，
                 供 UI 展示分阶段进度；缓存命中不触发。
@@ -966,8 +1077,16 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
     stage = on_stage or (lambda s: None)
     mode_label = "精确" if mode == "accurate" else "快速"
 
+    # P1a：source 语义与 retrieve_and_rerank 对齐——None=规则自动路由；str=显式教材子串；
+    # list=显式 source 路径列表。语义缓存 key 不含 source 维度（lookup 只看 question+mode），
+    # 显式指定教材时必须绕开缓存读写，否则不同过滤范围的同问句会命中同一条历史答案；
+    # 自动路由是 question 的确定函数（同问题必同路由），缓存语义不受影响。
+    _explicit_source = source is not None
+    if _explicit_source and isinstance(source, str):
+        source = resolve_source_query(source)  # 解析失败 ValueError 上抛（API 400 / UI 报错）
+
     # 1) 语义缓存：命中跳过检索/重排/生成；写入策略（拒答/未接地不缓存）统一在下方 store
-    if use_cache:
+    if use_cache and not _explicit_source:
         cached = semantic_cache.lookup(question, mode_label)
         if cached:
             return {
@@ -979,9 +1098,11 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
                 "low_confidence": False,
             }
 
-    # 2) 检索（accurate=混合+可选精排；fast=纯向量）
+    # 2) 检索（accurate=混合+可选精排；fast=纯向量；P1a：source 教材过滤/自动路由）
     stage("retrieve")
-    docs = retrieve_and_rerank(question, force_no_rerank=(mode != "accurate"))
+    docs = retrieve_and_rerank(
+        question, force_no_rerank=(mode != "accurate"), source_filter=source
+    )
     if mode == "accurate" and config.RERANKER_ENABLED:
         stage("rerank")
     citations = build_citations(docs)
@@ -1014,8 +1135,9 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
         else:
             answer = rag["chain"].invoke(question, docs=docs)
 
-    # 5) 缓存写入：拒答（检索拒/未接地）不入缓存，与 UI 既有口径一致
-    if use_cache:
+    # 5) 缓存写入：拒答（检索拒/未接地）不入缓存，与 UI 既有口径一致；
+    #    显式指定教材的请求不写缓存（key 无 source 维度，见上方说明）
+    if use_cache and not _explicit_source:
         semantic_cache.store(question, mode_label, answer, citations,
                              reject=(rejected or not_grounded))
 

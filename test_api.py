@@ -169,7 +169,7 @@ def _patch_answer_pipeline(monkeypatch, docs, gen_answer="好的回答[1]。", g
     返回 store_calls 列表，用于断言缓存写入的 reject 标志。"""
     import rag_core
 
-    monkeypatch.setattr(rag_core, "retrieve_and_rerank", lambda q, force_no_rerank=False: docs)
+    monkeypatch.setattr(rag_core, "retrieve_and_rerank", lambda q, force_no_rerank=False, **kwargs: docs)
 
     class _Chain:
         def invoke(self, question, docs=None):
@@ -244,7 +244,7 @@ def test_answer_question_fast_stream(monkeypatch):
             yield from pieces
 
     monkeypatch.setattr(rag_core, "retrieve_and_rerank",
-                        lambda q, force_no_rerank=False: [_mk_doc(0.90)])
+                        lambda q, force_no_rerank=False, **kwargs: [_mk_doc(0.90)])
     monkeypatch.setattr(rag_core, "build_rag_chain",
                         lambda custom_prompt=None, history="": {"chain": _StreamChain()})
     monkeypatch.setattr(rag_core.semantic_cache, "lookup", lambda q, m: None)
@@ -269,7 +269,7 @@ def test_answer_question_accurate_stream_ignored(monkeypatch):
             return "缓冲路径的完整答案[1]。"
 
     monkeypatch.setattr(rag_core, "retrieve_and_rerank",
-                        lambda q, force_no_rerank=False: [_mk_doc(0.90)])
+                        lambda q, force_no_rerank=False, **kwargs: [_mk_doc(0.90)])
     monkeypatch.setattr(rag_core, "build_rag_chain",
                         lambda custom_prompt=None, history="": {"chain": _Chain()})
     monkeypatch.setattr(rag_core, "grounded_generate",
@@ -288,7 +288,7 @@ def test_answer_question_accurate_stream_ignored(monkeypatch):
 def test_retrieve(client, monkeypatch):
     monkeypatch.setattr(
         main, "retrieve_and_rerank",
-        lambda q, force_no_rerank=False: [FakeDoc(score=0.9), FakeDoc(content="死锁四必要条件：互斥、占有并等待、不可抢占、循环等待。", source="os.txt", start=10, score=0.6)],
+        lambda q, force_no_rerank=False, **kwargs: [FakeDoc(score=0.9), FakeDoc(content="死锁四必要条件：互斥、占有并等待、不可抢占、循环等待。", source="os.txt", start=10, score=0.6)],
     )
     r = client.post("/retrieve", json={"question": "什么是死锁？", "mode": "accurate"})
     assert r.status_code == 200
@@ -493,7 +493,7 @@ def test_bm25_cache_built_once_per_corpus(monkeypatch):
 
     monkeypatch.setattr(rag_core, "get_vector_store", lambda *a, **k: _FakeCol())
     monkeypatch.setattr(rag_core, "retrieve_vector",
-                        lambda q, k=None: [rag_core.Document("x", {"source": "a.txt", "start_index": 0})])
+                        lambda q, k=None, where=None: [rag_core.Document("x", {"source": "a.txt", "start_index": 0})])
     built = {"n": 0}
     _orig_bm25 = rag_core._BM25
 

@@ -39,6 +39,11 @@ class QueryRequest(BaseModel):
     mode: Mode = Field("accurate", description="accurate=向量+BM25 融合+reranker 精排（默认，质量最高，实测 context_recall +16.7%）；fast=纯向量 top-5（降级档：GPU 不可用/显存不足/高并发时使用）。延迟因硬件而异——有 CUDA 时精排亚秒级，纯 CPU 会显著变慢")
     custom_prompt: Optional[str] = Field(None, description="追加到系统提示词的用户自定义指令；留空用默认安全提示词")
     history: Optional[str] = Field(None, description="最近若干轮对话的文本（可选，做多轮记忆；格式随意，由调用方拼好）")
+    source: Optional[str] = Field(
+        None,
+        description="教材过滤（可选）：源文件名子串，如 '数据库' / 'Linux' / '小程序'，命中多个文件时全部纳入；"
+        "不传=按问题关键词自动路由到对应教材（rag_search_utils.SOURCE_RULES），未命中关键词=全库检索",
+    )
 
 
 class QueryResponse(BaseModel):
@@ -62,6 +67,10 @@ class RetrieveRequest(BaseModel):
 
     question: str = Field(..., min_length=1, max_length=2000, description="检索问题")
     mode: Mode = Field("accurate", description="同 /query 的 mode 语义（默认 accurate）")
+    source: Optional[str] = Field(
+        None,
+        description="教材过滤（可选）：源文件名子串，同 /query 的 source 语义；不传=自动路由",
+    )
 
 
 class RetrieveResponse(BaseModel):

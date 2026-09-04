@@ -70,10 +70,13 @@ ALLOWED_SUFFIXES = {".pdf", ".txt", ".md", ".docx", ".pptx"}
 
 
 # ==================== 通用工具 ====================
-def _retrieve(question: str, mode: str):
+def _retrieve(question: str, mode: str, source: str = None):
     """统一检索入口：fast=纯向量 top-N；accurate=向量+BM25（+reranker）。
+    source（P1a）：教材过滤子串（None=按问题关键词自动路由）。
     仅供 /retrieve（纯检索端点）使用；生成问答统一走 rag_core.answer_question。"""
-    return retrieve_and_rerank(question, force_no_rerank=(mode != "accurate"))
+    return retrieve_and_rerank(
+        question, force_no_rerank=(mode != "accurate"), source_filter=source
+    )
 
 
 def _safe_filename(name: str) -> str:
@@ -193,6 +196,7 @@ def query(req: QueryRequest):
             mode=req.mode,
             custom_prompt=req.custom_prompt,
             history=req.history or "",
+            source=req.source,
         )
         answer = res["answer"]
         citations = res["citations"]
@@ -220,6 +224,8 @@ def query(req: QueryRequest):
         )
     except HTTPException:
         raise
+    except ValueError as e:  # P1a：显式教材子串解析不到源 → 400 带可用源清单
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -229,9 +235,10 @@ def query(req: QueryRequest):
 
 @app.post("/retrieve", response_model=RetrieveResponse, tags=["rag"])
 def retrieve(req: RetrieveRequest):
-    """仅检索 + 重排（不调用 LLM），返回来源列表——供前端预检索 / 调试 / 评估。"""
+    """仅检索 + 重排（不调用 LLM），返回来源列表——供前端预检索 / 调试 / 评估。
+    P1a：可选 source 教材过滤（子串），None=按问题关键词自动路由。"""
     try:
-        docs = _retrieve(req.question, req.mode)
+        docs = _retrieve(req.question, req.mode, source=req.source)
         return RetrieveResponse(
             query=req.question,
             mode=req.mode,
@@ -239,6 +246,8 @@ def retrieve(req: RetrieveRequest):
         )
     except HTTPException:
         raise
+    except ValueError as e:  # P1a：显式教材子串解析不到源 → 400 带可用源清单
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"检索失败：{e}")
 

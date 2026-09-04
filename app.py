@@ -41,6 +41,7 @@ from rag_core import (
     get_vector_store,
     answer_question,
     get_confidence,
+    get_available_sources,
     chunk_file,
     add_documents,
     delete_by_source,
@@ -188,6 +189,24 @@ with st.sidebar:
         elif not config.RERANKER_ENABLED:
             st.info("精确模式当前为「向量 + BM25 融合」（未启用 reranker）；"
                     "设 RERANKER_ENABLED=true 可叠加 bge-reranker 精排。")
+
+    # ---- P1a（2026-09-04）教材过滤：限定检索范围 / 关键词自动路由 ----
+    st.subheader("📚 教材过滤")
+    try:
+        _src_names = sorted(Path(s).name for s in get_available_sources())
+    except Exception:
+        _src_names = []  # 索引未就绪（Ollama 未启动等）不阻塞页面
+    _AUTO = "全部（自动路由）"
+    _filter_choice = st.selectbox(
+        "限定检索范围",
+        [_AUTO] + _src_names,
+        help="默认：按问题关键词自动路由到对应教材（如提到 ACID 只查数据库教材），"
+        "未命中关键词时全库检索。也可手动指定某份教材，把检索范围限定在其内。",
+        disabled=not _src_names,
+    )
+    # 选择值 = 源文件名（basename 子串也能匹配到全路径，与 API source 语义一致）
+    st.session_state.source_filter = None if _filter_choice == _AUTO else _filter_choice
+    st.session_state.source_auto = _filter_choice == _AUTO
 
     st.markdown("---")
 
@@ -381,6 +400,7 @@ if prompt := st.chat_input("问任何专业课问题..."):
                     history=history_text,
                     on_stage=_stage,
                     on_token=_on_token,
+                    source=st.session_state.get("source_filter"),
                 )
                 if res["cached"]:
                     status.update(label="⚡ 语义缓存命中", state="complete")

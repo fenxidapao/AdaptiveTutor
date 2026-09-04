@@ -10,9 +10,10 @@ rag_search_utils.py — 零依赖的纯检索算法（P2-1 可单测核心）
 包含的纯函数：
   _tokenize(text)            中英文混合分词（拉丁串整词 + CJK 逐字）
   _BM25                       Okapi BM25 打分（自实现，无外部依赖）
-  _bm25_rank(question,docs)   对同一批候选做 BM25 词面打分并降序返回
+  _bm25_rank(question,docs)   对同一批候选做 BM25 词面打分并降序返回（P1a 支持 allowed_idx 来源过滤）
   _rrf_fuse(ranked_lists,N)   倒数排名融合（RRF），写回 metadata['hybrid_score']
   _stable_ids(chunks)         稳定 id = md5(source::start_index)，用于增量 upsert 去重
+  SOURCE_RULES / route_sources  P1a 教材级规则路由（query 关键词 → 允许的 source 集合）
 
 文档对象约定：只需有 .page_content（str）与 .metadata（dict）两个属性，
 因此单测里用轻量 duck-typed 对象即可，无需引入 langchain / rag_core.Document。
@@ -71,12 +72,18 @@ class _BM25:
         return out
 
 
-def _bm25_rank(question, docs, top_n=None, index=None):
+def _bm25_rank(question, docs, top_n=None, index=None, allowed_idx=None):
     """对 docs（同一批向量候选）做 BM25 词面打分，返回按分数降序的 Document 列表。
 
     index（评审 P2-4，2026-08-30）：可选，传入已构建的 _BM25 实例则跳过重建——
     调用方（rag_core）按语料版本缓存索引，避免每次查询都对全库重新分词
     （O(语料)/query）。index 与 docs 必须来自同一次构建（下标一一对应）。
+
+    allowed_idx（P1a，2026-09-04）：可选，允许参与排名的全库下标集合（元数据
+    过滤多路召回的 BM25 路过滤）。语义是「过滤语料内的 top-N」——先按分数对
+    全库降序排，再剔除不在 allowed_idx 的下标，最后截 top_n。与向量路的
+    Chroma where 过滤（子集内 top-K）语义对齐：两路各自在自己允许的子集上
+    独立召回，再 RRF 融合。
     """
     if not docs:
         return []
@@ -84,6 +91,9 @@ def _bm25_rank(question, docs, top_n=None, index=None):
         index = _BM25(docs)
     scores = index.scores(question)
     ranked = sorted(range(len(docs)), key=lambda i: scores[i], reverse=True)
+    if allowed_idx is not None:
+        allow = set(allowed_idx)
+        ranked = [i for i in ranked if i in allow]
     if top_n:
         ranked = ranked[:top_n]
     return [docs[i] for i in ranked]
@@ -120,3 +130,80 @@ def _stable_ids(chunks):
         ).hexdigest()
         for d in chunks
     ]
+
+
+# ====================== P1a：教材级规则路由（2026-09-04） ======================
+# 元数据过滤多路召回的「规则路由」层：query 命中课程/教材关键词 → 限定检索范围
+# 到对应教材（source 子串模式），未命中任何规则 → 不过滤（现行为不变）。
+#
+# 设计要点（对照 2026-09-04 方案 §2.2 / A 组 30 题逐题核对）：
+#   - 规则值是「源文件名子串模式」，不是写死的绝对路径——换机器/加语料不用改表；
+#   - 多规则命中取并集（如「银行家算法」同时命中 OS 与 算法引论），宁可放宽
+#     也不误杀正确教材；
+#   - 关键词刻意保守（单字不入表，如「图」「树」），漏路由 = 退回全库检索（安全
+#     旧行为），误路由 = 可能过滤掉正确教材（有害），两害取其轻；
+#   - B 组（语料外）安全性论证：filter 只收紧候选集 → top-1 相似度单调不升 →
+#     检索硬拒答只会更易触发，拒答率数学上不可能因路由下降。
+SOURCE_RULES = [
+    # 数据库三件套：数据库-关系代数与SQL / 数据库-函数依赖与范式 / 数据库系统-事务与ACID
+    (["数据库", "sql", "事务", "acid", "隔离级别", "范式", "2nf", "3nf", "bcnf",
+      "函数依赖", "关系代数", "候选码", "主键", "外键", "自然连接"],
+     ["数据库"]),
+    # 数据结构三件套：树与二叉树 / 排序算法 / 图与最短路径
+    (["数据结构", "二叉树", "哈夫曼", "遍历", "排序", "链表", "队列",
+      "哈希", "散列", "最短路径", "dijkstra", "图的", "时间复杂度"],
+     ["数据结构"]),
+    # OS 两件套：OS-内存管理 / 操作系统-进程线程与调度
+    (["操作系统", "进程", "线程", "调度", "死锁", "内存", "分页", "分段", "碎片",
+      "虚拟内存", "银行家", "信号量", "互斥", "存储管理", "页面置换"],
+     ["os-", "操作系统"]),
+    # 计网两件套：计算机网络-TCP与HTTP / 计网-IP与子网路由
+    (["计算机网络", "计网", "tcp", "udp", "http", "子网", "路由", "三次握手",
+      "四次挥手", "dns", "mtu", "分片", "cidr", "以太网", "网络协议", "osi"],
+     ["计算机网络", "计网"]),
+    # 组成原理两件套：指令系统与寻址 / 存储与流水线
+    (["组成原理", "计算机组成", "指令", "寻址", "流水线", "cache", "高速缓存",
+      "存储器", "cpu", "中断"],
+     ["组成原理", "计算机组成"]),
+    # Python（廖雪峰教程核心章节）
+    (["python", "列表", "字典", "元组", "切片", "迭代器", "生成器", "装饰器",
+      "廖雪峰"],
+     ["python"]),
+    # Linux 四件套 PDF
+    (["linux", "shell", "vim", "chmod", "软链接", "硬链接"],
+     ["linux"]),
+    # 微信小程序（wx. 前缀 API 调用如 wx.request）
+    (["小程序", "wx.", "wxml", "wxss"],
+     ["小程序"]),
+    # Streamlit 参考手册
+    (["streamlit"], ["streamlit"]),
+    # 算法引论 pptx
+    (["算法", "np", "p类", "np类", "贪心", "分治", "动态规划", "复杂度"],
+     ["算法引论"]),
+]
+
+
+def route_sources(question, sources):
+    """规则路由：question 命中 SOURCE_RULES 关键词 → 返回允许的 source 路径列表。
+
+    - 未命中任何规则 / 关键词 → None（调用方按全库检索，行为与旧版一致）
+    - 命中的模式匹配到全部源（过滤无意义）→ None
+    - 多规则命中取并集；匹配对大小写不敏感（拉丁关键词统一 lower 比较）
+    - sources：当前索引中实际存在的 source 路径列表（调用方从向量库取，表内
+      模式只是名字子串，不假设路径格式）
+    """
+    q = (question or "").lower()
+    if not q:
+        return None
+    patterns = []
+    for keywords, src_patterns in SOURCE_RULES:
+        if any(kw in q for kw in keywords):
+            patterns.extend(src_patterns)
+    if not patterns:
+        return None
+    allowed = sorted(
+        {s for s in sources if any(p.lower() in s.lower() for p in patterns)}
+    )
+    if not allowed or len(allowed) == len(set(sources)):
+        return None
+    return allowed
