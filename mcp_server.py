@@ -30,8 +30,11 @@ TOOLS = [
         "description": (
             "检索本地课程知识库（计算机/数学专业课笔记、教材、合规公开教程），"
             "返回带来源与相关性分数的文本块，作为课程知识点问答的事实依据。"
-            "mode=fast 纯向量召回（秒级）；mode=accurate 向量+BM25 混合检索并经 "
-            "bge-reranker 精排（质量更高，CPU 上可能需要数十秒）。"
+            "mode=accurate（默认）向量+BM25 混合检索并经 bge-reranker 精排，检索质量最高，"
+            "专治「ACID / 2NF / 死锁」等纯向量词面匹配弱的精确术语难 query；"
+            "mode=fast 纯向量召回，为降级档——GPU 不可用、显存不足或高并发时仍可用于保持服务可用。"
+            "延迟因硬件而异——有 CUDA 时精排亚秒级，无 CUDA 回落 CPU 会显著变慢；"
+            "本描述不写死延迟数字以免随硬件/版本过期。"
         ),
         "inputSchema": {
             "type": "object",
@@ -39,8 +42,8 @@ TOOLS = [
                 "query": {"type": "string", "description": "课程/课本知识点问题或检索词"},
                 "top_k": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5,
                           "description": "返回的文本块数量"},
-                "mode": {"type": "string", "enum": ["fast", "accurate"], "default": "fast",
-                         "description": "检索模式，语义与 CourseRAG API /retrieve 一致"},
+                "mode": {"type": "string", "enum": ["fast", "accurate"], "default": "accurate",
+                         "description": "检索模式（默认 accurate，与 CourseRAG API /retrieve 及 Web UI 一致）"},
             },
             "required": ["query"],
         },
@@ -134,7 +137,9 @@ def _call_tool(name: str, arguments: dict) -> dict:
     # 钳制到 schema 声明的 [1,20]：负值会让 docs[:top_k] 切片语义错乱，
     # 超上限会绕过 schema max——schema 只是给客户端的提示，服务端必须自守
     top_k = max(1, min(20, top_k))
-    mode = arguments.get("mode", "fast")
+    # 与 api_schemas.py / app.py 的默认值保持一致（2026-09-04：reranker GPU 化后
+    # accurate 端到端仅比 fast 慢约 0.9s，却换来 context_recall +16.7%，故上调为默认）
+    mode = arguments.get("mode", "accurate")
     if mode not in ("fast", "accurate"):
         raise JsonRpcError(-32602, "invalid params: 'mode' must be 'fast' or 'accurate'")
     try:

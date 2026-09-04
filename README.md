@@ -78,7 +78,7 @@ ollama pull llama3.1:8b
 streamlit run app.py
 # 浏览器打开 http://localhost:8501
 # 侧栏确认 data/ 下示例 md 存在 → 点「🔄 全量重建索引（data/ 全部）」→ 问「什么是 ACID？」应带来源回答
-# 检索模式：快速=纯向量 top-5（秒级）；精确=向量 top-50 + BM25 融合（+ bge-reranker 精排）top-5（救难 query）
+# 检索模式（默认 accurate）：精确=向量 top-50 + BM25 融合（+ bge-reranker 精排）top-5（救难 query，A/B 实测 context_recall +16.7% / context_precision +19.2%）；快速=纯向量 top-5（降级档：GPU 不可用 / 显存不足 / 高并发时使用）。延迟因硬件而异——有 CUDA 时精排亚秒级，纯 CPU 会显著变慢
 ```
 
 ### MCP 工具层（把检索挂给任意 MCP 兼容 Agent）

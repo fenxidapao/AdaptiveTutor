@@ -36,7 +36,7 @@ class QueryRequest(BaseModel):
     """POST /query 请求体。"""
 
     question: str = Field(..., min_length=1, max_length=2000, description="用户问题（课程 / 课本知识点）")
-    mode: Mode = Field("fast", description="fast=纯向量 top-5（秒级）；accurate=向量+BM25 融合（+ reranker 精排），救难 query")
+    mode: Mode = Field("accurate", description="accurate=向量+BM25 融合+reranker 精排（默认，质量最高，实测 context_recall +16.7%）；fast=纯向量 top-5（降级档：GPU 不可用/显存不足/高并发时使用）。延迟因硬件而异——有 CUDA 时精排亚秒级，纯 CPU 会显著变慢")
     custom_prompt: Optional[str] = Field(None, description="追加到系统提示词的用户自定义指令；留空用默认安全提示词")
     history: Optional[str] = Field(None, description="最近若干轮对话的文本（可选，做多轮记忆；格式随意，由调用方拼好）")
 
@@ -61,7 +61,7 @@ class RetrieveRequest(BaseModel):
     """POST /retrieve 请求体。"""
 
     question: str = Field(..., min_length=1, max_length=2000, description="检索问题")
-    mode: Mode = Field("fast", description="同 /query 的 mode 语义")
+    mode: Mode = Field("accurate", description="同 /query 的 mode 语义（默认 accurate）")
 
 
 class RetrieveResponse(BaseModel):

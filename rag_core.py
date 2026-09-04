@@ -917,7 +917,7 @@ def build_citations(docs):
     return citations
 
 
-def answer_question(question, mode="fast", custom_prompt=None, history="",
+def answer_question(question, mode="accurate", custom_prompt=None, history="",
                     use_cache=True, on_stage=None, on_token=None):
     """统一问答入口：Streamlit / FastAPI / 评估三个出口共用同一套
     「缓存 → 检索 → 硬拒答 → 生成 → 接地自检 → 缓存写入」管线。
@@ -927,9 +927,23 @@ def answer_question(question, mode="fast", custom_prompt=None, history="",
     B 组 95% 拒答率只对 UI 成立，API 消费者拿到无闸门回答，且 API 缓存策略与 UI
     的「拒答不缓存」矛盾。现收敛为本函数，任何新增出口都必须走这里。
 
+    2026-09-04 默认值由 fast 上调为 accurate（与 api_schemas.py / app.py / mcp_server.py
+    统一）。两条依据：
+      1. reranker GPU 化后 accurate 检索+精排段 P50 21.1s → 1.16s，端到端仅比 fast
+         慢约 0.9s，而检索质量 context_recall +16.7% / context_precision +19.2%
+         （reranker A/B 实证，见 EVALUATION.md §7）；
+      2. 更关键——fast 无硬拒答/无接地自检，默认 fast 等于让 API 与 MCP 调用方
+         默认拿到无闸门的回答，正是 2026-08-30 外部评审 P1 指出的「held-out B 组
+         95% 拒答率只对 UI 成立」问题。默认值上调后，所有出口默认带闸门。
+    ⚠️ 行为变更（对未显式传 mode 的调用方）：
+      - 语料外问题现在返回 HARD_REJECT_ANSWER 而非生成式答案；
+      - 流式 on_token 在 accurate 下一律缓冲（接地自检需完整答案），不再逐段回调；
+      - 拒答结果不写入语义缓存。
+    如需旧行为，显式传 mode="fast"。
+
     mode 语义（与检索模式一致）：
-      fast     纯向量 top-N + 软提示（low_confidence），无硬拒答/无接地自检（保护延迟）
-      accurate 混合检索（+可选 reranker）+ 硬拒答 + 接地自检
+      fast     纯向量 top-N + 软提示（low_confidence），无硬拒答/无接地自检（降级档）
+      accurate 混合检索（+可选 reranker）+ 硬拒答 + 接地自检（默认）
     use_cache   语义缓存开关（评估侧必须传 False，避免吃到线上缓存污染结果）
     on_stage    可选回调 fn(stage)，stage ∈ {"retrieve","rerank","generate"}，
                 供 UI 展示分阶段进度；缓存命中不触发。

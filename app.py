@@ -5,8 +5,14 @@ app.py — Streamlit 演示界面（改编自 RAG-KnowBot + W2 引用溯源增�
 P0 改造（2026-08-18）：
   - P0-1 启动自检：侧边栏顶部状态条（依赖 / Ollama / Reranker 权重），消灭神秘转圈。
   - P0-2 对话记忆：最近 N 轮对话喂给 LLM；历史落盘 .chat_history.json，刷新不丢；可清空。
-  - P0-3 检索体验：分阶段进度（向量召回 → [BM25 融合] → reranker 重排 → 生成）；「快速/精确」双模式
-          （快速=纯向量 top-5 ~19s 默认；精确=向量+BM25 融合+reranker，救难 query）。
+  - P0-3 检索体验：分阶段进度（向量召回 → [BM25 融合] → reranker 重排 → 生成）；「快速/精确」双模式。
+          2026-09-04 定位调整（精排 GPU 化后重新权衡）：
+          - 精确模式为**默认**。GPU 化后精排段 P50 21.1s → 1.16s，accurate 端到端仅比 fast 慢约 1s，
+            却换来 context_recall +16.7% / context_precision +19.2%（EVALUATION.md §7 / §6 A/B）。
+          - 快速模式改为**降级档**，保留理由是容错而非加速：RERANKER_DEVICE=auto 在无 CUDA 时回落
+            CPU（21.1s），此时 fast 是唯一可用选项；显存不足 / 高并发 / 首题冷启动同理。
+          - UI 不再硬编码延迟秒数（~19s 是过期 CPU 表述，且延迟硬件绑定、必然再次过期）；
+            一律以 EVALUATION.md「§7 性能基线」为准。
 
 注意：P1-4 起删除文件只按 source 从索引中移除该文档（不再全量重建）；上传只增量 upsert 新文件块。
 全量重建入口保留在侧边栏「全量重建索引（data/ 全部）」按钮（走 get_vector_store(chunks)）。
@@ -137,7 +143,11 @@ if "messages" not in st.session_state:
 if "custom_prompt" not in st.session_state:
     st.session_state.custom_prompt = None
 if "mode" not in st.session_state:
-    st.session_state.mode = "fast"  # 默认快速模式（~19s），精确模式手动开启
+    # 2026-09-04 起默认精确模式：GPU 化后精排段 P50 1.16s，端到端仅比 fast 慢约 1s，
+    # 检索质量却是 +16.7% context_recall / +19.2% context_precision（EVALUATION.md §6 A/B）。
+    # 快速模式保留为降级档：RERANKER_DEVICE=auto 在无 CUDA 时回落 CPU（21.1s），
+    # 以及显存不足 / 高并发 / 首题冷启动场景，由用户手动切换。
+    st.session_state.mode = "accurate"
 
 
 # ==================== 侧边栏 ====================
@@ -163,11 +173,13 @@ with st.sidebar:
         "选择检索模式",
         ["fast", "accurate"],
         index=0 if st.session_state.mode == "fast" else 1,
-        format_func=lambda m: "快速（纯向量 ~19s）" if m == "fast" else f"精确（向量 + BM25 {_rerank_label}）",
-        help="快速：纯向量 top-5，秒级响应，适合大多数问题。"
-        "精确：向量召回 top-50 + 自实现 BM25 词面召回，RRF 融合"
+        # 标签只标定位（默认 / 降级档），不写死秒数：延迟硬件绑定，写死必然再次过期
+        format_func=lambda m: "快速（纯向量 top-5 · 降级档）" if m == "fast" else f"精确（向量 + BM25 {_rerank_label} · 默认）",
+        help="精确（默认）：向量召回 top-50 + 自实现 BM25 词面召回，RRF 融合"
         + ("后再经 bge-reranker 精排，" if config.RERANKER_ENABLED else "（当前未启用 reranker），")
-        + "专治「ACID / 2NF / 死锁」等纯向量词面匹配弱的精确术语难 query。",
+        + "专治「ACID / 2NF / 死锁」等纯向量词面匹配弱的术语难 query。"
+        "快速（降级档）：纯向量 top-5，跳过融合与精排，用于无 CUDA / 显存不足 / 高并发 / 首题冷启动场景。"
+        "延迟基线以 EVALUATION.md「§7 性能基线」为准（数字硬件绑定，不写死在 UI）。",
     )
     st.session_state.mode = mode
     if mode == "accurate":
