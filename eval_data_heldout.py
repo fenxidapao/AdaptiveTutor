@@ -37,6 +37,57 @@ HELDOUT_A = [
     if 0 <= i < len(EVAL_SAMPLES)
 ]
 
+# ---------- A 组图片题（P2 多模态，2026-09-05；8 题） ----------
+# 口径版本化（RAG增强方案 §3.3 步骤5）：HELDOUT_A_V2 = HELDOUT_A(30, v1 冻结不动) + 本组 8 题。
+# 图片题进集后 A 组构成改变 → A v2 指标与 A v1 存量数据不可比，门控报告必须注明口径。
+# 每题 answer 必须依赖图中信息（caption 文本承载）；expected_image = 正确图像块
+# png_path 的子串（图片命中率判定的锚点，见 eval_heldout.run_image_hitrate）。
+HELDOUT_A_IMAGES = [
+    {
+        "question": "项目管理者下面直接管理哪些小组？",
+        "reference": "组织架构框图显示项目管理者直接管理四个小组：产品组、设计组、开发组、测试组。",
+        "expected_image": "微信小程序开发实战/p029",
+    },
+    {
+        "question": "产品开发从需求到发布要经过哪些阶段？",
+        "reference": "流程图节点：产品组提需求 → 设计 → 开发 → 体验 → 测试 → 发布，项目管理者统筹各阶段。",
+        "expected_image": "微信小程序开发实战/p030",
+    },
+    {
+        "question": "创建微信小程序项目时需要填写或选择哪些设置项？",
+        "reference": "创建小程序界面：项目名称、目录、AppID、开发模式、后端服务等设置项。",
+        "expected_image": "微信小程序开发实战/p020",
+    },
+    {
+        "question": "怎么打开资源监视器？从哪里进入？",
+        "reference": "通过任务管理器的「性能」选项卡进入资源监视器（图中还展示了 CPU 使用率与进程列表）。",
+        "expected_image": "Linux第1章概述/p030",
+    },
+    {
+        "question": "查看网络接口配置用什么命令？接口 ens33 的 IP 地址是多少？",
+        "reference": "用 ip addr 命令查看；ens33 的 IP 为 192.168.30.100/24，广播地址 192.168.30.255，永久有效。",
+        "expected_image": "Linux第1章概述/p056",
+    },
+    {
+        "question": "新建虚拟机向导提供了哪两种配置类型？推荐用哪种？",
+        "reference": "两种配置类型：典型（推荐）与自定义（高级）；推荐典型。",
+        "expected_image": "Linux第1章概述/p024",
+    },
+    {
+        "question": "ls -l 命令输出的每一行列出了文件的哪些信息？",
+        "reference": "文件类型与权限、链接数、文件属主、文件属组、文件大小、建立或最近修改时间、文件名。",
+        "expected_image": "Linux第2章基本命令/p065",
+    },
+    {
+        "question": "Streamlit 怎么把页面分成三列？各列标着什么？",
+        "reference": "页面分三列，分别标有「第1列」「第2列」「第3列」。",
+        "expected_image": "Streamlit参考手册/p015",
+    },
+]
+HELDOUT_A_V2 = HELDOUT_A + [
+    {"question": q["question"], "reference": q["reference"]} for q in HELDOUT_A_IMAGES
+]
+
 # ---------- B 组：语料外 / 应拒答（20） ----------
 # 这些问题在 data/ 课程语料（数据库/数据结构/OS/计网/组成原理/Linux/小程序/Streamlit/
 # 算法引论/Python）中均无答案，正确行为是被硬拒或低置信提示，而非编造。

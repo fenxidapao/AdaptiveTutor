@@ -342,6 +342,13 @@ for idx, message in enumerate(st.session_state.messages):
                         f"**#{cit['rank']} {cit['source']}**{score_txt}  `offset={cit.get('start_index')}`",
                         unsafe_allow_html=True,
                     )
+                    # P2 多模态：图像块渲染原图——caption 只是检索代理文本，原图才是最终证据
+                    if cit.get("type") == "image" and cit.get("image_path"):
+                        _img = Path(__file__).parent / cit["image_path"]
+                        if _img.exists():
+                            st.image(str(_img), caption=f"📎 教材插图 · 第 {cit.get('page')} 页", width=420)
+                        else:
+                            st.warning(f"图像文件缺失: {cit['image_path']}")
                     st.markdown(
                         f"```text\n{cit['content'][:500]}{'...' if len(cit['content']) > 500 else ''}\n```",
                         unsafe_allow_html=True,
@@ -478,6 +485,13 @@ if prompt := st.chat_input("问任何专业课问题..."):
                         f"**#{cit['rank']} {cit['source']}**{score_txt}  `offset={cit.get('start_index')}`",
                         unsafe_allow_html=True,
                     )
+                    # P2 多模态：同历史重放路径，图像块渲染原图
+                    if cit.get("type") == "image" and cit.get("image_path"):
+                        _img = Path(__file__).parent / cit["image_path"]
+                        if _img.exists():
+                            st.image(str(_img), caption=f"📎 教材插图 · 第 {cit.get('page')} 页", width=420)
+                        else:
+                            st.warning(f"图像文件缺失: {cit['image_path']}")
                     st.markdown(
                         f"```text\n{cit['content'][:500]}{'...' if len(cit['content']) > 500 else ''}\n```",
                         unsafe_allow_html=True,

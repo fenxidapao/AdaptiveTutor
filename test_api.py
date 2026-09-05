@@ -528,3 +528,25 @@ def test_get_vector_store_readonly_no_rebuild(monkeypatch, tmp_path):
     monkeypatch.setattr(rag_core, "_vector_store", None)
     col = rag_core.get_vector_store(auto_rebuild=False)
     assert col.count() == 0  # 空库如实返回，没有建索引副作用
+
+
+def test_build_citations_image_fields():
+    """P2 多模态（2026-09-05）：图像块 citation 透出 type/image_path/page；文本块不带这些键。"""
+    import rag_core
+
+    class ImgDoc:
+        page_content = "组织架构框图：项目管理者下设产品/设计/开发/测试四组。"
+        metadata = {
+            "source": "data/教材/微信小程序开发实战.pdf", "start_index": -29000,
+            "type": "image", "image_path": "data/images/微信小程序开发实战/p029_i00.png", "page": 29,
+        }
+
+    class TxtDoc:
+        page_content = "事务的 ACID 特性。"
+        metadata = {"source": "data/数据库-事务与ACID.md", "start_index": 120}
+
+    cits = rag_core.build_citations([ImgDoc(), TxtDoc()])
+    assert cits[0]["type"] == "image"
+    assert cits[0]["image_path"] == "data/images/微信小程序开发实战/p029_i00.png"
+    assert cits[0]["page"] == 29
+    assert "type" not in cits[1] and "image_path" not in cits[1]

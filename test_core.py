@@ -31,6 +31,12 @@ os.environ["QUERY_LOG_PATH"] = _TMP.name
 from rag_search_utils import _tokenize, _BM25, _bm25_rank, _rrf_fuse, _stable_ids
 import query_log
 
+# pytest 与 test_api 同进程连跑时 query_log 模块已被缓存（import 时 env 已被 test_api
+# 消费），上面的 env 设置不再生效 → 本文件的 log_query 用例读到空日志（组合污染，
+# HANDOVER 2026-09-04 事件 2）。显式把模块常量指回本文件的临时日志。
+if query_log.QUERY_LOG_PATH.name != _TMP.name.split(os.sep)[-1]:
+    query_log.QUERY_LOG_PATH = _TMP.name
+
 
 class Doc:
     """rag_core.Document 的轻量替身：只暴露 page_content + metadata 两属性。"""

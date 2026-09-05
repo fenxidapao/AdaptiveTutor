@@ -18,9 +18,12 @@ class Citation(BaseModel):
 
     rank: int = Field(..., description="最终排名（1 起）")
     source: str = Field(..., description="源文件名（不含路径）")
-    content: str = Field(..., description="命中的原文块")
+    content: str = Field(..., description="命中的原文块（图像块为 caption 描述文本）")
     score: Optional[float] = Field(None, description="相关性分数：reranker 开启为 rerank_score，否则为 hybrid_score 或 None")
-    start_index: Optional[int] = Field(None, description="该块在原文中的字符偏移，供溯源定位")
+    start_index: Optional[int] = Field(None, description="该块在原文中的字符偏移，供溯源定位；图像块为负值")
+    type: Optional[str] = Field(None, description="块类型：图像块为 'image'；文本块无此字段")
+    image_path: Optional[str] = Field(None, description="图像块对应 PNG 的相对路径（仅图像块有）")
+    page: Optional[int] = Field(None, description="图像块在教材 PDF 中的页码（仅图像块有）")
 
 
 class CheckItem(BaseModel):

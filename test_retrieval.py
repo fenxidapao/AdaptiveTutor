@@ -164,3 +164,57 @@ def test_empty_filter_fallback(monkeypatch):
     assert calls["n"] == 2, f"应恰好两次检索（带过滤 + 降级重试），实际 {calls['n']}"
     assert docs, "降级后应有召回"
     assert all("source_filter" not in d.metadata for d in docs), "降级结果不应带过滤标记"
+
+
+# ==================== P2：多模态图像块（2026-09-05） ====================
+def test_load_image_chunks_contract(tmp_path):
+    """load_image_chunks 契约（纯 CSV 解析，不依赖 Ollama/索引）：
+    - caption 正常行 → Document（source 同教材路径规律 / start_index 负值 / type=image / image_path / page）
+    - CAPTION_FAILED 行跳过
+    - 清单文件缺失 → 返回 []（绝不阻断文本建库）"""
+    import csv as _csv
+    manifest = tmp_path / "_manifest.csv"
+    with open(manifest, "w", newline="", encoding="utf-8-sig") as f:
+        w = _csv.DictWriter(f, fieldnames=["book", "page", "xrefs", "raw_w", "raw_h",
+                                           "out_w", "out_h", "png_path", "md5"])
+        w.writeheader()
+        w.writerow({"book": "测试教材", "page": "29", "xrefs": "1895", "raw_w": "1725",
+                    "raw_h": "592", "out_w": "622", "out_h": "215",
+                    "png_path": "data/images/测试教材/p029_i00.png", "md5": "a" * 32})
+        w.writerow({"book": "测试教材", "page": "30", "xrefs": "1900", "raw_w": "900",
+                    "raw_h": "700", "out_w": "900", "out_h": "700",
+                    "png_path": "data/images/测试教材/p030_i00.png", "md5": "b" * 32})
+    caps = tmp_path / "_image_captions.csv"
+    with open(caps, "w", newline="", encoding="utf-8-sig") as f:
+        w = _csv.writer(f)
+        w.writerow(["png_path", "caption", "elapsed_s"])
+        w.writerow(["data/images/测试教材/p029_i00.png", "组织架构框图：项目管理者下设四个组。", "2.1"])
+        w.writerow(["data/images/测试教材/p030_i00.png", "[CAPTION_FAILED] timeout", "90.0"])
+
+    docs = rag_core.load_image_chunks(str(tmp_path))
+    assert len(docs) == 1, "CAPTION_FAILED 行应被跳过"
+    d = docs[0]
+    assert d.page_content.startswith("组织架构框图")
+    assert d.metadata["source"].endswith("测试教材.pdf"), "source 应与文本块同教材路径规律"
+    assert d.metadata["start_index"] == -(29 * 1000 + 0), "start_index 负值（页码*1000+图序）"
+    assert d.metadata["type"] == "image"
+    assert d.metadata["image_path"] == "data/images/测试教材/p029_i00.png"
+    assert d.metadata["page"] == 29
+
+    # 清单缺失 → 空列表（首次部署 / 无图像资产时不影响建库）
+    assert rag_core.load_image_chunks(str(tmp_path / "nonexist")) == []
+
+
+def test_image_chunks_in_real_index():
+    """真实索引含图像块：captions CSV 存在时，库内 type=image 的块应与 caption 数一致（重建后）。"""
+    from pathlib import Path
+    caps = Path(config.DATA_DIR) / "images" / "_image_captions.csv"
+    if not caps.exists():
+        pytest.skip("无图像资产（data/images/_image_captions.csv 不存在）")
+    col = rag_core.get_vector_store(auto_rebuild=False)
+    got = col.get(where={"type": "image"}, include=["metadatas"])
+    n_caps = sum(1 for line in caps.read_text(encoding="utf-8-sig").splitlines()[1:] if line.strip())
+    assert len(got["metadatas"]) == n_caps, f"库内图像块 {len(got['metadatas'])} != caption 行数 {n_caps}"
+    for m in got["metadatas"]:
+        assert m.get("type") == "image" and m.get("image_path") and m.get("page", 0) > 0
+        assert m.get("start_index", 0) < 0, "图像块 start_index 必须为负（与文本块不冲突）"

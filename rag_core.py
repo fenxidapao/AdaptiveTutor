@@ -430,7 +430,60 @@ def load_and_chunk_documents(directory=config.DATA_DIR):
                 meta["chapter"] = chapter  # T8: 所属章节标题（md 有标题时）
             documents.append(Document(page_content=cleaned, metadata=meta))
     print(f"Loaded and chunked {len(documents)} pieces from documents.")
+    # P2 多模态（2026-09-05）：图像 caption 块并入重建链路——所有重建路径
+    # （首次自动建库 / 侧边栏全量重建 / API /index/rebuild）自动带上图像块。
+    # 增强项语义：图像清单缺失/损坏只 warn，绝不阻断文本建库。
+    try:
+        documents.extend(load_image_chunks())
+    except Exception as e:
+        print(f"[warn] 图像块加载失败（忽略，仅文本建库）: {e!r}")
     return documents
+
+
+def load_image_chunks(images_dir=None):
+    """P2 多模态：读 data/images/_manifest.csv + _image_captions.csv，图像描述转 Document。
+
+    - page_content = caption 文本（qwen2.5vl 生成的 2~3 句中文描述，检索/BM25/精排全链路
+      与文本块同构——caption 路线的核心：图像以文本代理身份进统一索引）
+    - metadata 与文本块同规律：
+      source = 教材 PDF 相对路径（与文本块完全一致 → P1a 教材过滤 / 按源删除天然覆盖图像块）
+      start_index = -(页码*1000+图序)（稳定 id 永不与文本块冲突，文本块 start_index ≥ 0）
+      type='image'、image_path=相对项目根的 PNG 路径（UI 引用区渲染原图用）、page=页码
+    """
+    import csv as _csv
+    images_dir = Path(images_dir) if images_dir else Path(config.DATA_DIR) / "images"
+    manifest = images_dir / "_manifest.csv"
+    captions = images_dir / "_image_captions.csv"
+    if not manifest.exists() or not captions.exists():
+        return []
+    cap_map = {}
+    with open(captions, encoding="utf-8-sig") as f:
+        for r in _csv.DictReader(f):
+            cap = (r.get("caption") or "").strip()
+            if cap and not cap.startswith("[CAPTION_FAILED]"):
+                cap_map[r["png_path"]] = cap
+    docs = []
+    with open(manifest, encoding="utf-8-sig") as f:
+        for r in _csv.DictReader(f):
+            cap = cap_map.get(r["png_path"])
+            if not cap:
+                continue
+            page_i = int(r["page"])
+            gi = int(r["png_path"].rsplit("_i", 1)[1].split(".")[0])
+            docs.append(
+                Document(
+                    page_content=cap,
+                    metadata={
+                        "source": str(Path(config.DATA_DIR) / "教材" / f"{r['book']}.pdf"),
+                        "start_index": -(page_i * 1000 + gi),
+                        "type": "image",
+                        "image_path": r["png_path"],
+                        "page": page_i,
+                    },
+                )
+            )
+    print(f"Loaded {len(docs)} image-caption chunks.")
+    return docs
 
 
 # ====================== 2. 嵌入 + 向量库（带缓存） ======================
@@ -1013,13 +1066,19 @@ def build_citations(docs):
             or d.metadata.get("hybrid_score")
             or d.metadata.get("vector_score")
         )
-        citations.append({
+        c = {
             "rank": rank,
             "source": Path(d.metadata.get("source", "unknown")).name,
             "content": d.page_content.strip(),
             "score": score,
             "start_index": d.metadata.get("start_index"),
-        })
+        }
+        # P2 多模态：图像块透出 type/image_path/page（UI 引用区渲染原图；文本块不加这些键）
+        if d.metadata.get("type") == "image":
+            c["type"] = "image"
+            c["image_path"] = d.metadata.get("image_path")
+            c["page"] = d.metadata.get("page")
+        citations.append(c)
     return citations
 
 
