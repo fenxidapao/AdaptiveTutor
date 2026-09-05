@@ -28,7 +28,7 @@
 - 🔌 **MCP 标准工具层（自实现协议子集）**：`mcp_server.py` 仅用 Python 标准库实现 MCP stdio 传输的最小协议子集（initialize 能力协商 / tools list / tools call，JSON-RPC 2.0），把混合检索暴露为标准 `course_retrieve` 工具（与 `/retrieve` 同一检索实现，fast/accurate 同语义）；经官方 MCP Inspector 互操作实测通过，任意 MCP 兼容 Agent Runtime 可直接挂载（证据见 `mcp_interop_evidence.md`）。零新依赖。
 - ➕ **增量索引 + 去重（P1-4）**：稳定 id（`md5(source::start_index)`）自动去重，上传仅增量 upsert 新文件；按 source 删除单文档，其余不受影响，不再全量重建
 - ✅ **核心算法单测（P2-1）**：零依赖 `test_core.py` 覆盖 BM25 排序 / RRF 融合去重 / 稳定 id 去重 / 接地判定 / 日志格式，脱离 chromadb/ollama/streamlit 亦可在任意干净 Python 环境实跑
-- ✅ **集成测试 + CI（T9）**：`test_api.py`（30 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护 + 统一闸门/流式聚合/鉴权/上传上限/引用图像字段单测）+ `test_retrieval.py`（11 用例，检索链路 + 教材过滤 + 图像块契约/真实索引 + 真实流式冒烟，无 Ollama 自动 skip）+ `test_mcp.py`（12 用例：11 个零依赖 MCP 协议/参数钳制用例 CI 直跑 + 1 个真实检索冒烟自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 四套测试）
+- ✅ **集成测试 + CI（T9）**：`test_api.py`（30 用例，fastapi TestClient + mock 外部依赖，无需 Ollama 覆盖全部 API 端点/参数校验/路径穿越防护 + 统一闸门/流式聚合/鉴权/上传上限/引用图像字段单测）+ `test_retrieval.py`（15 用例，检索链路 + 教材过滤 + 图像块契约/真实索引 + 真实流式冒烟，无 Ollama 自动 skip）+ `test_mcp.py`（12 用例：11 个零依赖 MCP 协议/参数钳制用例 CI 直跑 + 1 个真实检索冒烟自动 skip）+ GitHub Actions（`.github/workflows/ci.yml`，3.11 矩阵，py_compile + 四套测试）
 - 🔒 配置外置 `.env`，模型名/路径/调参不再写死代码
 
 ## 目录结构
@@ -481,7 +481,7 @@ python eval_local.py
 - [x] **P1a 教材级元数据过滤多路召回**：关键词规则路由 + 双路带 filter + 空结果降级；A 组 faith 0.895→0.946 / recall 0.819→0.980，B 组拒答 19/20→20/20（校准集 v1 口径实测）
 - [x] **P2 多模态（caption 路线）**：bbox 渲染剪裁提取 215 图 + qwen2.5-VL 批量中文描述 + 图文统一索引（1434 块）+ 引用区原图展示；图片命中率 top-8 8/8 全 rank=1；冻结测试集 recall 0.872→0.948（n=3 新基线）
 - [x] **P2-1 核心算法单测**：零依赖 `test_core.py`，脱离 LLM 栈亦可实跑（7 用例全绿）
-- [x] **T9 集成测试 + CI**：API 端点测试 29 用例（TestClient + mock，无需 Ollama）+ 检索冒烟 9 用例（无 Ollama 自动 skip）+ MCP 协议 12 用例 + GitHub Actions（3.11 矩阵，py_compile + 四套测试全绿）
+- [x] **T9 集成测试 + CI**：API 端点测试 30 用例（TestClient + mock，无需 Ollama）+ 检索冒烟 15 用例（无 Ollama 自动 skip）+ MCP 协议 12 用例 + GitHub Actions（3.11 矩阵，py_compile + 四套测试全绿）
 - [x] 最小可跑闭环 + 配置外置 + 引用溯源
 - [x] 接入 bge-reranker 重排并实测（混合检索；代码已验证可启用，难 query 靠 RETRIEVE_K=50 + reranker 纠正召回失败，现默认开）
 - [x] 引用溯源工程化（分数 + 偏移，可喂评估）
