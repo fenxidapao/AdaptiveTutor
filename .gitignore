@@ -65,3 +65,11 @@ _latency_bench.csv
 judge_*.csv
 judge_compare_*.json
 p2_rejudge_results.csv
+
+# 本地内部材料（不随公开仓库分发）
+# 说明：这些文件保留在本地，仅从版本库排除。
+_resume_dump.txt
+_read_docx_text.py
+local-draft-*.html
+local-notes-*.html
+_demo_*
