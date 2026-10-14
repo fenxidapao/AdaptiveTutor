@@ -8,7 +8,7 @@
   零侵入 CourseRAG（三项目独立原则），不依赖 source 文件名。
 
 对外接口：
-  retrieve_tutor_context(kp) -> {"context": str, "source": "rag"|"notes", "used_docs": [...]}
+  retrieve_tutor_context(kp) -> {"context": str, "source": "rag"|"notes", "used_sources": [...]}
 """
 
 import json
