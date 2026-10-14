@@ -33,7 +33,7 @@ import query_log
 
 # pytest 与 test_api 同进程连跑时 query_log 模块已被缓存（import 时 env 已被 test_api
 # 消费），上面的 env 设置不再生效 → 本文件的 log_query 用例读到空日志（组合污染，
-# HANDOVER 2026-09-04 事件 2）。显式把模块常量指回本文件的临时日志。
+# 组合污染）。显式把模块常量指回本文件的临时日志。
 if query_log.QUERY_LOG_PATH.name != _TMP.name.split(os.sep)[-1]:
     query_log.QUERY_LOG_PATH = _TMP.name
 
@@ -156,12 +156,13 @@ def test_log_query_format():
     rec1 = json.loads(lines[-2])
     rec2 = json.loads(lines[-1])
     for rec in (rec1, rec2):
-        # 字段集契约：2026-08-25 看板 #15 给 log_query 扩了 4 个可观测字段，
-        # 断言同步（此前漏更导致 CI 红，2026-08-29 补）
-        assert set(rec) == {"ts", "question", "mode", "top_sources",
+        # 字段集契约：2026-08-25 看板 #15 扩 4 个可观测字段；2026-09-18 多轮指代
+        # 消解改写加 rewritten（未改写时为 None），断言同步
+        assert set(rec) == {"ts", "question", "rewritten", "mode", "top_sources",
                              "has_citation", "grounded", "answer_len",
                              "latency_ms", "est_tokens", "rejected", "feedback"}
         assert rec["feedback"] is None  # 未点击 👍/👎 时为空
+        assert rec["rewritten"] is None  # log_query 未传 rewritten 时为 None
     # 正常可答：接地 + 有引用 + 长度 > 0 + 来源排名正确
     assert rec1["grounded"] is True
     assert rec1["has_citation"] is True
@@ -260,6 +261,36 @@ def test_bm25_rank_allowed_idx_filters_and_orders():
     ]
     # allowed_idx 为空列表 → 结果为空（不是退回全库）
     assert _bm25_rank("事务的ACID特性", docs, top_n=4, allowed_idx=[]) == []
+
+
+# ==================== 枚举/穷举类查询检测（2026-09-11） ====================
+def test_is_enum_query_detects_listing_questions():
+    """枚举意图：命中列举词即 True——这是触发锚点扩展召回的开关。
+
+    样本直接取自 held-out A 组的失分枚举题（「Streamlit 有哪些输入组件」是
+    全组唯一 recall 失分题，precision 0.276）。"""
+    from rag_search_utils import is_enum_query
+
+    assert is_enum_query("Streamlit 有哪些输入组件")
+    assert is_enum_query("请列举死锁的四个必要条件")
+    assert is_enum_query("进程调度算法有哪几种")
+    assert is_enum_query("chmod 的 4/5/6/7 分别代表什么")
+    assert is_enum_query("数据库的范式分为哪几类")
+
+
+def test_is_enum_query_ignores_regular_questions():
+    """普通问题不得误判：扩量对非枚举题只会灌噪声、白花延迟。
+
+    判定取向是「宁可漏判也不能误判」——漏判退回旧行为（安全），误判引入噪声（有害）。
+    """
+    from rag_search_utils import is_enum_query
+
+    assert not is_enum_query("什么是死锁")
+    assert not is_enum_query("解释一下 ACID 特性")
+    assert not is_enum_query("TCP 为什么需要三次握手")
+    assert not is_enum_query("虚拟内存和物理内存的区别")
+    assert not is_enum_query("")
+    assert not is_enum_query(None)
 
 
 def _run_all():

@@ -428,6 +428,10 @@ if prompt := st.chat_input("问任何专业课问题..."):
 
             if res["cached"]:
                 st.caption(f"⚡ 语义缓存命中（相似度 {res['cache_sim']:.2f}）")
+            # 多轮指代消解（2026-09-18）：历史里有指代时展示改写后的独立检索问题，
+            # 让「为什么检索到这份教材」可解释，也方便肉眼检查改写质量
+            if res.get("rewritten"):
+                st.caption(f"🔍 多轮问题已改写为独立检索问题：{res['rewritten']}")
 
             # 收尾渲染：真实流式下用完整答案（经 render_answer_html 处理 [n] 引用
             # 锚点）替换流式过程中的原始文本；非流式路径（精确/缓存命中）直接渲染
@@ -461,6 +465,7 @@ if prompt := st.chat_input("问任何专业课问题..."):
                 answer=full_response,
                 latency_ms=int((time.time() - t0) * 1000),
                 rejected=(res["rejected"] if accurate else None),
+                rewritten=res.get("rewritten"),  # 多轮指代消解观测
             )
 
             st.session_state.messages.append({

@@ -33,7 +33,8 @@ def _is_grounded(answer):
     return True
 
 
-def log_query(question, mode, citations, answer, latency_ms=None, rejected=None):
+def log_query(question, mode, citations, answer, latency_ms=None, rejected=None,
+              rewritten=None):
     """
     追加一行查询日志。
     question: 用户问题文本
@@ -42,6 +43,9 @@ def log_query(question, mode, citations, answer, latency_ms=None, rejected=None)
     answer: 模型最终回答文本
     latency_ms: 整轮问答耗时（毫秒，可选，看板 #15 用）
     rejected: 是否硬拒答 / 未接地（精确模式才有；快速模式传 None）
+    rewritten: Query 改写结果（2026-09-18 多轮指代消解）：改写发生且与原问不同时
+               为改写后问题，否则 None。question 字段始终存用户原话（用户意图归因），
+               rewritten 存实际送进检索的问题（检索行为归因），两者分开看。
     返回: 本条记录的 ts，供 👍/👎 反馈回写定位。
     """
     try:
@@ -68,6 +72,8 @@ def log_query(question, mode, citations, answer, latency_ms=None, rejected=None)
         record = {
             "ts": ts,
             "question": question,
+            # Query 改写观测（2026-09-18）：改写发生时存改写后问题，否则 None（旧记录无此键）
+            "rewritten": rewritten,
             "mode": mode,
             "top_sources": top_sources,
             # 额外信号：回答里是否出现 [n] 引用（含中文模型常用的全角【n】／［n］），

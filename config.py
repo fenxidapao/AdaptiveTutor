@@ -61,7 +61,7 @@ RERANK_CANDIDATE_K = int(os.getenv("RERANK_CANDIDATE_K", "16"))
 # ---------- 混合检索（向量 + 自实现 BM25，双通道 RRF 融合）----------
 # 课程资料大量精确术语（ACID / 2NF / 死锁 / 事务隔离级别），纯向量对词面匹配不如 BM25。
 # hybrid = 向量全库召回 top-K ‖ BM25 全库独立召回 top-K（两个通道互不依赖）→ RRF 倒数排名融合。
-# BM25 自实现（零新依赖，更贴「自实现核心组件」的工程取舍说明）；融合分数落 metadata['hybrid_score']。
+# BM25 自实现（零新依赖，更贴「自实现核心组件」的取舍）；融合分数落 metadata['hybrid_score']。
 HYBRID_ENABLED = os.getenv("HYBRID_ENABLED", "true").lower() == "true"
 BM25_TOP_K = int(os.getenv("BM25_TOP_K", "50"))  # BM25 通道独立召回数（对全库打分，不再复用向量候选池）
 
@@ -70,6 +70,36 @@ BM25_TOP_K = int(os.getenv("BM25_TOP_K", "50"))  # BM25 通道独立召回数（
 # 限定到对应教材再 RRF 融合；未命中关键词 = 全库检索（行为与旧版一致）。
 # 关闭后自动路由失效，但显式 source 参数（API/UI 指定教材）仍可用。
 SOURCE_FILTER_ROUTING_ENABLED = os.getenv("SOURCE_FILTER_ROUTING_ENABLED", "true").lower() == "true"
+
+# ---------- 枚举/穷举类查询的锚点扩展召回（2026-09-11）----------
+# 背景（held-out A 组 30 题逐题核算）：5 道枚举/清单类题只占 16.7% 题量，却吃掉
+# 49.2% 的 context_precision 损失；「Streamlit 有哪些输入组件」更是全组唯一
+# recall 失分题（0.4）。根因不是排序错，是**供给不足**——枚举题的答案天然散落在
+# 同一份文档的多个段落里，而全库 top-50 向量召回在多文档竞争下对单一文档覆盖不均：
+# 一份 120 块的文档可能只有 10 块挤得进全库 50 强，再经 RRF 截 16、精排留 8，
+# 一份十几项的清单必然被截断。
+#
+# 做法：检测到枚举意图时，先用元数据（source）把召回范围钉到锚点文档上，再在该
+# 范围内做一次密集召回（ENUM_ANCHOR_TOP_K），与基础候选合并后进 reranker；
+# 同时把进 LLM 的供给量放宽到 ENUM_RERANK_TOP_N。
+#
+# 默认关闭：按评估纪律（§0.4），检索层改动必须先跑 held-out A 组 A/B 拿到数字，
+# 再决定是否翻转默认值——不能"觉得应该更好"就打开。
+#
+# 【2026-09-11 实测结论：否决，默认保持 false，勿再翻转】
+#   held-out A 组 30 题 on/off 两轮：枚举题 prec 0.815→0.558（−0.257）、faith 0.901→0.840；
+#   对照组 18 题 prec/recall 逐题逐位零变化（隔离干净，Δ 是真信号）。
+#   且前置排查发现原实现是死代码——合并上限 max(pool_k, ENUM_CANDIDATE_K) 与 RRF 池同值，
+#   扩展块被 merged[:candidate_k] 整段截掉（净新增 17 块 → 标记 0）。修好后扩展块能进来，
+#   但落点是 rank 10/13/14、rerank 分仅 0.005~0.010，top-8 与基线逐块相同 → 零贡献。
+#   最根本：12 道枚举题里 11 道基线 recall 已是 1.000 → 短板在 precision（排序）不在 recall，
+#   扩召回用错了杠杆。
+#   保留代码 + 加回归守卫（test_api.py），作"用数据否决自己方案"的留痕。
+ENUM_EXPAND_ENABLED = os.getenv("ENUM_EXPAND_ENABLED", "false").lower() == "true"
+ENUM_ANCHOR_SOURCES = int(os.getenv("ENUM_ANCHOR_SOURCES", "3"))   # 无教材过滤时，取基础候选前 N 块的 source 作锚点
+ENUM_ANCHOR_TOP_K = int(os.getenv("ENUM_ANCHOR_TOP_K", "24"))      # 锚点文档内的密集召回数
+ENUM_CANDIDATE_K = int(os.getenv("ENUM_CANDIDATE_K", "40"))        # 枚举题的候选池上限（含锚点扩展块）
+ENUM_RERANK_TOP_N = int(os.getenv("ENUM_RERANK_TOP_N", "14"))      # 枚举题最终进 LLM 的块数（常规为 RERANKER_TOP_N=8）
 
 # ---------- 路径 ----------
 DATA_DIR = os.getenv("DATA_DIR", "./data")
@@ -136,6 +166,15 @@ MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 SEMANTIC_CACHE_ENABLED = os.getenv("SEMANTIC_CACHE_ENABLED", "true").lower() == "true"
 SEMANTIC_CACHE_SIM = float(os.getenv("SEMANTIC_CACHE_SIM", "0.93"))
 SEMANTIC_CACHE_MAX = int(os.getenv("SEMANTIC_CACHE_MAX", "128"))
+
+# ---------- Query 改写（多轮指代消解，2026-09-18 落地） ----------
+# 背景：多轮对话里「第三章那个定理怎么用」脱离历史无法检索——向量与 BM25 都看不到
+# 「第三章」指什么。改写 = 用 LLM 把「历史 + 当前问题」改写为独立完整的检索问题，
+# 再进 缓存 key / 教材自动路由（SOURCE_RULES）/ 检索 / 生成 管线。
+# 触发条件：history 非空才改写——单轮行为零变化（冻结评估集均为单轮，评估口径不受影响）。
+# 失败/超时/输出异常 → 回退原问题，改写永不阻塞问答（增强项，不是新故障点）。
+# 模型复用 LLM_MODEL、temperature=0（改写要确定性）。评估侧需强制旁路时传 use_rewrite=False。
+QUERY_REWRITE_ENABLED = os.getenv("QUERY_REWRITE_ENABLED", "true").lower() == "true"
 
 # ---------- 乱码清洗（2026-08-22：微信小程序 PDF CID 字体乱码） ----------
 # 块级乱码字符占比 > 此阈值 → 整块丢弃（内容已不可读，纯噪声）；

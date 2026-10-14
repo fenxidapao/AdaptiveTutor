@@ -14,6 +14,7 @@ config.DATA_DIR / PERSIST_DIRECTORY 也重定向到临时目录，杜绝测试�
 
 运行：pytest test_api.py -v   （无需 Ollama / chroma 持久化 / 网络）
 """
+import json
 import os
 import sys
 import tempfile
@@ -284,6 +285,190 @@ def test_answer_question_accurate_stream_ignored(monkeypatch):
     assert res["answer"] == "缓冲路径的完整答案[1]。"
 
 
+def test_answer_question_on_retrieved_fires_once_before_generate(monkeypatch):
+    """on_retrieved（SSE 出口）：检索完成、硬拒答判定出炉后回调一次，
+    携带 citations 与 rejected——前端因此能在首 token 之前渲染来源列表。"""
+    import rag_core
+
+    events = []
+    _patch_answer_pipeline(monkeypatch, [_mk_doc(0.90)], grounded=(True, 0.98))
+    res = rag_core.answer_question(
+        "什么是ACID", mode="accurate", use_cache=False,
+        on_retrieved=lambda citations, rejected: events.append((len(citations), rejected)),
+    )
+    assert events == [(1, False)]  # 恰好一次、1 条引用、非拒答
+    assert res["answer"] == "好的回答[1]。"
+
+
+def test_answer_question_on_retrieved_reports_hard_reject(monkeypatch):
+    """拒答场景：rejected=True 随 metadata 一并给出，前端可立刻提示「未覆盖」，
+    不必等生成（候选文档分低于硬拒阈值）。"""
+    import rag_core
+
+    events = []
+    _patch_answer_pipeline(monkeypatch, [_mk_doc(0.10)])
+    res = rag_core.answer_question(
+        "怎么追女生", mode="accurate", use_cache=False,
+        on_retrieved=lambda citations, rejected: events.append(rejected),
+    )
+    assert res["rejected"] is True
+    assert events == [True]
+
+
+def test_answer_question_on_retrieved_fires_on_cache_hit(monkeypatch):
+    """缓存命中同样触发——否则走缓存的 SSE 请求会拿不到任何引用列表。"""
+    import rag_core
+
+    cached_citations = [{"rank": 1, "source": "db.txt", "content": "ACID 包括原子性。",
+                         "score": 0.9, "start_index": 0}]
+    monkeypatch.setattr(
+        rag_core.semantic_cache, "lookup",
+        lambda q, m: {"answer": "缓存的答案[1]。", "citations": cached_citations, "sim": 0.99},
+    )
+    events = []
+    res = rag_core.answer_question(
+        "什么是ACID", mode="fast", use_cache=True,
+        on_retrieved=lambda citations, rejected: events.append((citations, rejected)),
+    )
+    assert res["cached"] is True
+    assert events == [(cached_citations, False)]  # 缓存路径的回调不吞掉
+
+
+# ==================== /query/stream（SSE 流式问答） ====================
+def _parse_sse(body: str):
+    """SSE 响应体 → [(event, data), ...]；注释帧（保活，以 : 开头）按规范丢弃。"""
+    out = []
+    for block in body.split("\n\n"):
+        block = block.strip()
+        if not block or block.startswith(":"):
+            continue
+        ev = data = None
+        for line in block.split("\n"):
+            if line.startswith("event: "):
+                ev = line[len("event: "):]
+            elif line.startswith("data: "):
+                data = json.loads(line[len("data: "):])
+        out.append((ev, data))
+    return out
+
+
+def _patch_stream_answer(monkeypatch, pieces=("ACID ", "包括原子性", "[1]。"),
+                         rejected=False, cached=False):
+    """替换 answer_question 为「会触发两个回调」的假实现，用于验证 SSE 事件序。
+    真实管线的回调时机已由上面 on_token / on_retrieved 的单测覆盖，
+    这里只关心 API 层是否把回调正确转译成了事件。"""
+    citations = [
+        {"rank": 1, "source": "db.txt", "content": "ACID 包括原子性。",
+         "score": 0.9, "start_index": 0},
+    ]
+
+    def _fake(question, mode="accurate", on_token=None, on_retrieved=None, **kwargs):
+        if on_retrieved:
+            on_retrieved(citations, rejected)
+        if on_token and mode == "fast":  # 与真实语义一致：accurate 缓冲、不回调
+            for p in pieces:
+                on_token(p)
+        return {
+            "answer": "".join(pieces), "citations": citations, "docs": None,
+            "cached": cached, "cache_sim": None, "rejected": rejected,
+            "reject_signal": 0.1 if rejected else None,
+            "grounding_ran": mode == "accurate", "grounded": not rejected,
+            "not_grounded": False, "grounded_score": 1.0, "low_confidence": False,
+        }
+
+    monkeypatch.setattr(main, "answer_question", _fake)
+    monkeypatch.setattr(main, "log_query", lambda **kw: None)
+
+
+def test_query_stream_fast_event_sequence(client, monkeypatch):
+    """fast 模式事件序：start → metadata → token* → done，done 含完整答案。"""
+    _patch_stream_answer(monkeypatch)
+    r = client.post("/query/stream", json={"question": "什么是ACID", "mode": "fast"})
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/event-stream")
+
+    events = _parse_sse(r.text)
+    kinds = [e for e, _ in events]
+    assert kinds[0] == "start"
+    assert kinds[1] == "metadata"
+    assert kinds.count("token") == 3
+    assert kinds[-1] == "done"
+
+    meta = events[1][1]
+    assert meta["rejected"] is False
+    assert len(meta["citations"]) == 1 and meta["citations"][0]["source"] == "db.txt"
+
+    # token 拼接应等于 done 的答案：前端无需自行聚合也能校验一致性
+    tokens = "".join(d["text"] for e, d in events if e == "token")
+    assert tokens == "ACID 包括原子性[1]。"
+    assert events[-1][1]["answer"] == tokens
+    assert "latency_ms" in events[-1][1]
+
+
+def test_query_stream_accurate_has_metadata_but_no_token(client, monkeypatch):
+    """accurate 模式：引用照发，正文不逐 token（接地自检需完整答案）。
+    这是既定语义而非缺陷——测试钉住它，避免日后被无声改成「假流式」。"""
+    _patch_stream_answer(monkeypatch)
+    r = client.post("/query/stream", json={"question": "什么是ACID", "mode": "accurate"})
+    events = _parse_sse(r.text)
+    kinds = [e for e, _ in events]
+    assert kinds[0] == "start" and kinds[-1] == "done"
+    assert "metadata" in kinds
+    assert "token" not in kinds
+    assert events[-1][1]["answer"] == "ACID 包括原子性[1]。"
+
+
+def test_query_stream_carries_reject_in_metadata(client, monkeypatch):
+    """拒答：rejected 在 metadata 里就给出，前端不必等生成完才知道未覆盖。"""
+    _patch_stream_answer(monkeypatch, rejected=True)
+    r = client.post("/query/stream", json={"question": "怎么追女生", "mode": "accurate"})
+    events = _parse_sse(r.text)
+    meta = next(d for e, d in events if e == "metadata")
+    assert meta["rejected"] is True
+    assert events[-1][1]["rejected"] is True
+
+
+def test_query_stream_error_event_when_pipeline_raises(client, monkeypatch):
+    """管线异常：HTTP 已是 200（响应头早发出），失败只能落在 error 事件里。"""
+    def _boom(*a, **kw):
+        raise RuntimeError("ollama down")
+
+    monkeypatch.setattr(main, "answer_question", _boom)
+    monkeypatch.setattr(main, "log_query", lambda **kw: None)
+    r = client.post("/query/stream", json={"question": "什么是ACID", "mode": "fast"})
+    assert r.status_code == 200
+    events = _parse_sse(r.text)
+    assert events[-1][0] == "error"
+    assert "ollama down" in events[-1][1]["detail"]
+
+
+def test_query_stream_newlines_do_not_break_frames(client, monkeypatch):
+    """答案含空行与代码块也不能破帧——这就是 data 用 JSON 单行编码的核心理由。"""
+    _patch_stream_answer(monkeypatch, pieces=("第一段\n\n第二段```python\nx=1\n```",))
+    r = client.post("/query/stream", json={"question": "什么是ACID", "mode": "fast"})
+    events = _parse_sse(r.text)
+    kinds = [e for e, _ in events]
+    # 帧数必须与事件数一致：换行若破坏边界，会多出无法解析的碎片
+    assert kinds == ["start", "metadata", "token", "done"]
+    body = next(d for e, d in events if e == "token")
+    assert body["text"] == "第一段\n\n第二段```python\nx=1\n```"
+    assert events[-1][1]["answer"] == body["text"]
+
+
+def test_query_stream_rejects_unknown_source_before_streaming(client, monkeypatch):
+    """source 预校验：解析不到教材时与 /query 一致返回 400，
+    而不是先回 200 再把错误塞进事件流（那样调用方只能从帧里才发现参数错了）。"""
+    def _boom(q, sources=None):
+        raise ValueError(f"没有语料源匹配 {q!r}；可用源：a.pdf、b.pdf")
+
+    monkeypatch.setattr(main, "resolve_source_query", _boom)
+    _patch_stream_answer(monkeypatch)
+    r = client.post("/query/stream",
+                    json={"question": "什么是ACID", "mode": "fast", "source": "不存在的教材"})
+    assert r.status_code == 400
+    assert "不存在的教材" in r.json()["detail"]
+
+
 # ==================== /retrieve ====================
 def test_retrieve(client, monkeypatch):
     monkeypatch.setattr(
@@ -451,6 +636,136 @@ def test_documents_upload_too_large(client, monkeypatch):
     assert not (Path(config.DATA_DIR) / "big.txt").exists()
 
 
+# ==================== 枚举题锚点扩展召回（2026-09-11） ====================
+def _mk_src_doc(source, start, text="内容"):
+    import rag_core
+
+    return rag_core.Document(text, {"source": source, "start_index": start})
+
+
+def test_enum_expand_merges_anchor_recall_and_dedups(monkeypatch):
+    """锚点扩展：从基础候选推导锚点 source → 锚点内密集召回 → 合并去重。"""
+    import rag_core
+
+    base = [_mk_src_doc("s1.md", 0), _mk_src_doc("s1.md", 10), _mk_src_doc("s2.md", 0)]
+    extra = [_mk_src_doc("s1.md", 10), _mk_src_doc("s1.md", 20)]  # start=10 与 base 重复
+    seen = {}
+
+    def _fake_retrieve(q, k=None, where=None):
+        seen["k"], seen["where"] = k, where
+        return extra
+
+    monkeypatch.setattr(rag_core, "retrieve_vector", _fake_retrieve)
+    out = rag_core._enum_expand("Streamlit 有哪些输入组件", base, None, 40)
+
+    # 锚点 = 基础候选前 ENUM_ANCHOR_SOURCES 块的 source 去重
+    assert set(seen["where"]["source"]["$in"]) == {"s1.md", "s2.md"}
+    assert seen["k"] == config.ENUM_ANCHOR_TOP_K
+    keys = [(d.metadata["source"], d.metadata["start_index"]) for d in out]
+    assert keys == [("s1.md", 0), ("s1.md", 10), ("s2.md", 0), ("s1.md", 20)]
+    # 只有扩展进来的块带标记，事后可追溯「它是常规召回还是锚点捞回的」
+    assert [bool(d.metadata.get("enum_expanded")) for d in out] == [False, False, False, True]
+
+
+def test_enum_expand_respects_existing_filter(monkeypatch):
+    """已有教材过滤时锚点就是过滤集——绝不越出范围（安全性的关键）。"""
+    import rag_core
+
+    seen = {}
+
+    def _fake_retrieve(q, k=None, where=None):
+        seen["where"] = where
+        return []
+
+    monkeypatch.setattr(rag_core, "retrieve_vector", _fake_retrieve)
+    rag_core._enum_expand("有哪些", [_mk_src_doc("s1.md", 0)], ["s1.md"], 40)
+    assert seen["where"]["source"]["$in"] == ["s1.md"]
+
+
+def test_enum_expand_noop_without_candidates(monkeypatch):
+    """基础候选为空时直接返回，不发多余召回（省一次 embedding 调用）。"""
+    import rag_core
+
+    called = []
+    monkeypatch.setattr(rag_core, "retrieve_vector",
+                        lambda q, k=None, where=None: called.append(1) or [])
+    assert rag_core._enum_expand("有哪些", [], None, 40) == []
+    assert called == []
+
+
+def test_retrieve_and_rerank_widens_budget_only_for_enum(monkeypatch):
+    """开关开启时：枚举题只放宽「最终进 LLM 的块数」，**不放宽 RRF 候选池**。
+
+    2026-09-11 实测修正：曾把 candidate_k 也设成 ENUM_CANDIDATE_K，结果
+    _enum_expand 的合并上限 max(pool_k, ENUM_CANDIDATE_K) 恒等于 base 大小，
+    锚点扩展块被整段截掉（净新增 17 块 → 标记 0，功能静默失效）。
+    故这里钉死 candidate_k 必须为 None，扩展余量由合并上限留出。
+    """
+    import rag_core
+
+    captured = {}
+    monkeypatch.setattr(config, "ENUM_EXPAND_ENABLED", True)
+    monkeypatch.setattr(rag_core, "_resolve_source_filter", lambda q, sf: None)
+
+    def _fake_once(question, force_no_rerank, sources, candidate_k=None, top_n=None):
+        captured["candidate_k"], captured["top_n"] = candidate_k, top_n
+        return []
+
+    monkeypatch.setattr(rag_core, "_retrieve_once", _fake_once)
+
+    rag_core.retrieve_and_rerank("Streamlit 有哪些输入组件")
+    assert captured == {"candidate_k": None, "top_n": config.ENUM_RERANK_TOP_N}
+
+    captured.clear()
+    rag_core.retrieve_and_rerank("什么是死锁")
+    assert captured == {"candidate_k": None, "top_n": None}
+
+
+def test_enum_expand_disabled_by_default(monkeypatch):
+    """默认关：即便问题是枚举题也不放宽预算——按评估纪律，未跑 A/B 前不翻默认值。"""
+    import rag_core
+
+    captured = {}
+    monkeypatch.setattr(config, "ENUM_EXPAND_ENABLED", False)
+    monkeypatch.setattr(rag_core, "_resolve_source_filter", lambda q, sf: None)
+    monkeypatch.setattr(
+        rag_core, "_retrieve_once",
+        lambda q, f, s, candidate_k=None, top_n=None:
+            captured.update(candidate_k=candidate_k, top_n=top_n) or [])
+    rag_core.retrieve_and_rerank("Streamlit 有哪些输入组件")
+    assert captured == {"candidate_k": None, "top_n": None}
+
+
+def test_enum_expand_actually_contributes_chunks(monkeypatch):
+    """回归守卫（2026-09-11）：锚点扩展块必须真的进得了合并结果。
+
+    背景：合并上限写成 max(pool_k, ENUM_CANDIDATE_K)，而 pool_k 又等于
+    candidate_k=ENUM_CANDIDATE_K，两者同值 → base 先吃满上限 → 扩展块被
+    merged[:candidate_k] 整段截掉。实测表现为「净新增 17 块、enum_expanded 标记 0」，
+    功能静默失效但没有任何报错。这条用例把「合并上限 > base 池」钉死。
+    """
+    import rag_core
+
+    def _mk(source, start):
+        from langchain_core.documents import Document
+        return Document(page_content=f"块{start}", metadata={"source": source, "start_index": start})
+
+    base = [_mk("教材A.md", i) for i in range(config.RERANK_CANDIDATE_K)]
+    extra = [_mk("教材A.md", 1000 + i) for i in range(10)]
+
+    monkeypatch.setattr(rag_core, "retrieve_vector", lambda q, k=None, where=None: extra)
+
+    merged = rag_core._enum_expand(
+        "有哪些组件", base, None, max(config.RERANK_CANDIDATE_K, config.ENUM_CANDIDATE_K)
+    )
+    n_exp = sum(1 for d in merged if d.metadata.get("enum_expanded"))
+    assert n_exp == len(extra), (
+        f"锚点扩展块被全部截掉（净新增 {len(extra)} 块，实际进入 {n_exp} 块）——"
+        f"检查 _enum_expand 的合并上限是否小于等于 base 池大小"
+    )
+    assert len(merged) > len(base)
+
+
 # ==================== 评审 P2 回归 ====================
 def test_split_structured_offset_remap():
     """评审 P2-1 回归：含代码块的文档，切分产出的 start_index 必须是「原文偏移」。
@@ -550,3 +865,151 @@ def test_build_citations_image_fields():
     assert cits[0]["image_path"] == "data/images/微信小程序开发实战/p029_i00.png"
     assert cits[0]["page"] == 29
     assert "type" not in cits[1] and "image_path" not in cits[1]
+
+
+# ==================== Query 改写：多轮指代消解（2026-09-18） ====================
+def _patch_rewrite_llm(monkeypatch, output=None, calls=None, error=None):
+    """打桩 rag_core.ollama_chat：改写走它（temperature=0），不碰真 Ollama。"""
+    import rag_core
+
+    def fake_chat(messages, temperature=None):
+        if calls is not None:
+            calls.append({"temperature": temperature, "messages": messages})
+        if error:
+            raise error
+        return output
+
+    monkeypatch.setattr(rag_core, "ollama_chat", fake_chat)
+
+
+def test_rewrite_question_resolves_coreference(monkeypatch):
+    """有 history：LLM 把「那一章讲的编辑器」改写为独立问题，剥掉包裹引号。"""
+    import rag_core
+
+    calls = []
+    _patch_rewrite_llm(monkeypatch, output='"Linux 第 3 章 Vi 编辑器有哪些常用操作？"', calls=calls)
+    history = "User: Linux 第三章讲了什么\nAssistant: 讲了 Vi 编辑器的基本用法"
+    rewritten, ok = rag_core.rewrite_question("那一章讲的编辑器怎么用？", history)
+    assert ok is True
+    assert rewritten == "Linux 第 3 章 Vi 编辑器有哪些常用操作？"
+    # 改写要确定性：temperature 必须压到 0
+    assert calls and calls[0]["temperature"] == 0.0
+
+
+def test_rewrite_question_noop_without_history(monkeypatch):
+    """单轮（history 空）零改写、零 LLM 调用——单轮行为与旧版完全一致（评估口径保护）。"""
+    import rag_core
+
+    calls = []
+    _patch_rewrite_llm(monkeypatch, output="不该被调用", calls=calls)
+    rewritten, ok = rag_core.rewrite_question("什么是ACID", "")
+    assert ok is False and rewritten == "什么是ACID"
+    rewritten, ok = rag_core.rewrite_question("什么是ACID", "   ")
+    assert ok is False and rewritten == "什么是ACID"
+    assert calls == []
+
+
+def test_rewrite_question_disabled_by_switch(monkeypatch):
+    """QUERY_REWRITE_ENABLED=false：即使有 history 也不改写（kill-switch）。"""
+    import rag_core
+
+    monkeypatch.setattr(config, "QUERY_REWRITE_ENABLED", False)
+    calls = []
+    _patch_rewrite_llm(monkeypatch, output="不该被调用", calls=calls)
+    rewritten, ok = rag_core.rewrite_question("那个定理", "User: 讲讲第三章")
+    assert ok is False and rewritten == "那个定理"
+    assert calls == []
+
+
+def test_rewrite_question_falls_back_on_llm_failure(monkeypatch):
+    """Ollama 宕机/超时：吞异常回退原问题——改写是增强项，不是新故障点。"""
+    import rag_core
+
+    _patch_rewrite_llm(monkeypatch, error=RuntimeError("connection refused"))
+    rewritten, ok = rag_core.rewrite_question("那个定理", "User: 讲讲第三章")
+    assert ok is False and rewritten == "那个定理"
+
+
+def test_rewrite_question_rejects_garbage_output(monkeypatch):
+    """模型不听指令输出口水话（超长解释）：判废回退，不污染下游检索。"""
+    import rag_core
+
+    _patch_rewrite_llm(monkeypatch, output="好的，根据对话历史，用户想了解的内容可以归纳为以下几点：第一……" * 10)
+    rewritten, ok = rag_core.rewrite_question("那个定理", "User: 讲讲第三章")
+    assert ok is False and rewritten == "那个定理"
+    # 空输出同样判废
+    _patch_rewrite_llm(monkeypatch, output="   ")
+    rewritten, ok = rag_core.rewrite_question("那个定理", "User: 讲讲第三章")
+    assert ok is False and rewritten == "那个定理"
+
+
+def test_answer_question_rewritten_question_flows_through_pipeline(monkeypatch):
+    """改写后的问题必须贯穿缓存 key / 检索 / 缓存写入，且 res.rewritten 可观测。"""
+    import rag_core
+
+    _patch_answer_pipeline(monkeypatch, [_mk_doc(0.90)])
+    seen = {}
+
+    def fake_lookup(q, m):
+        seen["lookup"] = q
+        return None
+
+    def fake_retrieve(q, force_no_rerank=False, **kwargs):
+        seen["retrieve"] = q
+        return [_mk_doc(0.90)]
+
+    monkeypatch.setattr(rag_core.semantic_cache, "lookup", fake_lookup)
+    monkeypatch.setattr(rag_core, "retrieve_and_rerank", fake_retrieve)
+    monkeypatch.setattr(rag_core, "ollama_chat",
+                        lambda messages, temperature=None: "Linux 第 3 章 Vi 编辑器有哪些常用操作？")
+
+    res = rag_core.answer_question(
+        "那一章讲的编辑器怎么用？", mode="fast", use_cache=True,
+        history="User: Linux 第三章讲了什么\nAssistant: 讲了 Vi 编辑器",
+    )
+    expected = "Linux 第 3 章 Vi 编辑器有哪些常用操作？"
+    assert seen["lookup"] == expected   # 缓存 key 用改写后问题
+    assert seen["retrieve"] == expected  # 检索用改写后问题
+    assert res["rewritten"] == expected  # 日志/UI 可观测
+
+
+def test_answer_question_use_rewrite_false_bypass(monkeypatch):
+    """use_rewrite=False 强制旁路：即使有 history 也不改写——评估口径的显式逃生门。"""
+    import rag_core
+
+    _patch_answer_pipeline(monkeypatch, [_mk_doc(0.90)])
+    seen = {}
+
+    def fake_lookup(q, m):
+        seen["lookup"] = q
+        return None
+
+    monkeypatch.setattr(rag_core.semantic_cache, "lookup", fake_lookup)
+    monkeypatch.setattr(rag_core, "ollama_chat",
+                        lambda messages, temperature=None: "不该被调用")
+
+    res = rag_core.answer_question(
+        "那一章讲的编辑器怎么用？", mode="fast", use_cache=True,
+        history="User: Linux 第三章讲了什么", use_rewrite=False,
+    )
+    assert seen["lookup"] == "那一章讲的编辑器怎么用？"
+    assert res["rewritten"] is None
+
+
+def test_answer_question_single_turn_no_rewrite_no_llm_call(monkeypatch):
+    """单轮默认路径：不触发改写 LLM（不加额外延迟），rewritten 为 None。"""
+    import rag_core
+
+    _patch_answer_pipeline(monkeypatch, [_mk_doc(0.90)])
+    calls = []
+
+    def fake_lookup(q, m):
+        return None
+
+    monkeypatch.setattr(rag_core.semantic_cache, "lookup", fake_lookup)
+    monkeypatch.setattr(rag_core, "ollama_chat",
+                        lambda messages, temperature=None: calls.append(1) or "x")
+
+    res = rag_core.answer_question("什么是ACID", mode="fast", use_cache=True)
+    assert calls == []          # 零改写调用：单轮延迟与旧版完全一致
+    assert res["rewritten"] is None

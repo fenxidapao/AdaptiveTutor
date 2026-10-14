@@ -4,6 +4,7 @@ main.py — CourseRAG FastAPI 服务入口（部署层，2026-08-20 新增）。
 把 rag_core 的「索引构建 / 检索 / 重排 / 生成」能力封装为 RESTful 端点，
 与 Streamlit（app.py）共用同一套核心模块，无重复逻辑：
   - 问答        POST /query              检索 + 重排 + 生成（含引用溯源）
+  - 流式问答    POST /query/stream       同上，但以 SSE 逐事件推送（start/metadata/token/done/error）
   - 检索        POST /retrieve           仅检索 + 重排，不生成（供前端 / 调试）
   - 文档        GET/POST /documents      列出 / 上传（保存 + 增量索引）
   - 文档删除    DELETE /documents/{name} 删文件 + 从索引移除
@@ -27,12 +28,16 @@ _rerank_cache = os.path.expanduser(
 if os.path.isdir(_rerank_cache):
     os.environ["HF_HUB_OFFLINE"] = "1"
 
+import json
+import queue
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 import config
 from api_security import RateLimitMiddleware, require_auth
@@ -62,6 +67,7 @@ from rag_core import (
     delete_by_source,
     get_vector_store,
     load_and_chunk_documents,
+    resolve_source_query,
     retrieve_and_rerank,
 )
 
@@ -144,6 +150,7 @@ def service_info():
         "endpoints": [
             "GET  /health",
             "POST /query",
+            "POST /query/stream",
             "POST /retrieve",
             "GET  /documents",
             "POST /documents",
@@ -208,6 +215,7 @@ def query(req: QueryRequest):
             answer=answer,
             latency_ms=int((time.time() - t0) * 1000),  # #15 看板：整轮耗时
             rejected=(res["rejected"] if req.mode == "accurate" else None),
+            rewritten=res.get("rewritten"),  # 多轮指代消解观测（改写发生时非 None）
         )
         # grounded 判定与 query_log._is_grounded 的启发式保持一致：
         # 非空 且 未声称「无法回答」→ 视为接地（硬拒/未接地的替换文案均含
@@ -233,6 +241,143 @@ def query(req: QueryRequest):
         )
 
 
+# ==================== 流式问答（SSE） ====================
+# 单帧之间最多等这么久没动静就发一条 SSE 注释帧保活。反代（Nginx 默认
+# proxy_read_timeout 60s）与部分浏览器会把长时间无数据的连接判为死连接；
+# 精排与首 token 之间的间隔在 CPU 兜底时会超过 30s，故必须保活。
+_SSE_HEARTBEAT_SECONDS = 15
+
+
+def _sse(event: str, data: dict) -> str:
+    """构造一帧 SSE：`event:` 行 + `data:` 行 + 空行结束。
+
+    为什么 data 用 JSON 而不是裸文本：json.dumps 的输出恒为**单行**——字符串里
+    的换行会被转义成 \\n。代码块、多段回答因此不会破坏「空行 = 帧结束」的边界。
+    若直接拼裸文本，答案里的空行会让客户端把一帧切成多帧。
+    """
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _query_event_stream(req: QueryRequest, source):
+    """把 answer_question 的同步回调转成可逐步消费的 SSE 事件流。
+
+    为什么要开线程：answer_question 是同步阻塞函数，on_token 在它**内部**被同步
+    调用。若在生成器体内直接调用它，必须等整轮跑完才能 yield 第一个事件，
+    「流式」就只剩形式。这里让管线跑在后台线程、回调把数据塞进队列，生成器
+    从队列取——同步回调因此被转成了可增量消费的流。
+
+    事件序：start → metadata → token* → done（失败则 error 收尾）
+      start     已受理（mode / question）
+      metadata  检索+精排完成、硬拒答判定出炉，附 citations 与 rejected。
+                此刻生成尚未开始——引用先到、正文后到，前端可立刻渲染来源列表；
+                rejected=true 时前端能马上提示「知识库未覆盖」，不必干等生成。
+      token     生成片段（仅 fast 模式；accurate 需完整答案做接地自检，故缓冲）
+      done      终态：完整答案 + 耗时 + grounded/low_confidence/cached/rejected
+      error     HTTP 200 与响应头此时早已发出，无法再改用状态码表达失败，
+                故用事件承载——这是 SSE 的固有取舍，客户端按事件类型分支即可。
+    """
+    t0 = time.time()
+    q: "queue.Queue[tuple]" = queue.Queue()
+    box: dict = {}
+
+    def on_retrieved(citations, rejected):
+        q.put(("metadata", {"citations": citations, "rejected": bool(rejected)}))
+
+    def on_token(piece):
+        q.put(("token", {"text": piece}))
+
+    def worker():
+        try:
+            box["res"] = answer_question(
+                req.question,
+                mode=req.mode,
+                custom_prompt=req.custom_prompt,
+                history=req.history or "",
+                source=source,
+                on_retrieved=on_retrieved,
+                on_token=on_token,
+            )
+        except Exception as e:  # 线程内异常必须搬出到主流程，否则事件流会静默截断
+            box["err"] = e
+        finally:
+            q.put(("__end__", None))
+
+    threading.Thread(target=worker, daemon=True).start()
+    yield _sse("start", {"mode": req.mode, "question": req.question})
+
+    while True:
+        try:
+            kind, payload = q.get(timeout=_SSE_HEARTBEAT_SECONDS)
+        except queue.Empty:
+            yield ": keep-alive\n\n"  # SSE 注释帧，客户端按规范忽略
+            continue
+        if kind == "__end__":
+            break
+        yield _sse(kind, payload)
+
+    if "err" in box:
+        yield _sse("error", {"detail": f"生成失败：{box['err']}"})
+        return
+
+    res = box["res"]
+    latency_ms = int((time.time() - t0) * 1000)
+    answer = res["answer"]
+    log_query(
+        question=req.question,
+        mode="精确" if req.mode == "accurate" else "快速",
+        citations=res["citations"],
+        answer=answer,
+        latency_ms=latency_ms,
+        rejected=(res["rejected"] if req.mode == "accurate" else None),
+        rewritten=res.get("rewritten"),  # 多轮指代消解观测（改写发生时非 None）
+    )
+    # grounded 判定与 /query 及 query_log._is_grounded 保持同一启发式
+    yield _sse("done", {
+        "answer": answer,
+        "mode": req.mode,
+        "citations": res["citations"],
+        "latency_ms": latency_ms,
+        "grounded": bool(answer.strip()) and "无法回答" not in answer,
+        "low_confidence": res["low_confidence"],
+        "cached": res["cached"],
+        "rejected": res["rejected"],
+    })
+
+
+@app.post("/query/stream", tags=["rag"])
+def query_stream(req: QueryRequest):
+    """流式问答（Server-Sent Events）：与 /query 同一套管线，改为一帧帧推送。
+
+    与 /query 的差异仅在传输方式——缓存、检索、硬拒答、接地自检、日志口径完全一致，
+    因为两者最终都调用 rag_core.answer_question（统一入口，不存在第二套逻辑）。
+
+    为什么是 POST + SSE 而不是 EventSource：浏览器原生 EventSource 只支持 GET，
+    问题文本塞进 query string 既受长度限制又会进访问日志。业界做法（OpenAI /
+    Anthropic 的流式接口同理）是用 POST + SSE，客户端以 fetch + ReadableStream
+    消费。curl 直接验证：
+        curl -N -X POST http://127.0.0.1:8000/query/stream \\
+             -H 'Content-Type: application/json' \\
+             -d '{"question":"什么是ACID","mode":"fast"}'
+    """
+    # source 预校验：与 /query 的 400 语义对齐。若把解析留到流内，HTTP 200 与响应头
+    # 早已发出、无法再退回 400，调用方只能从 error 事件里才得知参数错了。
+    source = req.source
+    if isinstance(source, str):
+        try:
+            source = resolve_source_query(source)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    return StreamingResponse(
+        _query_event_stream(req, source),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # 关闭 Nginx 响应缓冲，否则帧会被攒批后才下发
+        },
+    )
+
+
 @app.post("/retrieve", response_model=RetrieveResponse, tags=["rag"])
 def retrieve(req: RetrieveRequest):
     """仅检索 + 重排（不调用 LLM），返回来源列表——供前端预检索 / 调试 / 评估。
@@ -253,9 +398,25 @@ def retrieve(req: RetrieveRequest):
 
 
 # ==================== 文档管理 ====================
+def _base_source(s: str) -> str:
+    """取 source 的文件名部分并统一分隔符，用于跨 OS / 跨挂载路径比对。
+
+    背景（2026-09-07 修复）：索引在 Windows 宿主构建，metadata.source 形如
+    `data\\教材\\xx.pdf`（反斜杠、相对路径）；而容器内 DATA_DIR=/app/data，
+    `str(Path(...))` 拼出 `/app/data/xx.pdf`。全路径比对必然全 0，
+    因此统一按**文件名**匹配（data/ 及其子目录下文件名唯一）。
+    """
+    return (s or "").replace("\\", "/").rsplit("/", 1)[-1]
+
+
 @app.get("/documents", response_model=DocumentsResponse, tags=["documents"])
 def list_documents():
-    """列出 data/ 下所有文档，并给出各自在向量库中的块数（0=尚未索引）。"""
+    """列出 data/ **及其子目录**下所有文档，并给出各自在向量库中的块数（0=尚未索引）。
+
+    两处修复（2026-09-07）：
+    1. 块数按文件名匹配而非全路径——否则 Windows 建索引 + Linux 容器读取时全失配；
+    2. 递归 rglob 取代 iterdir——原实现只扫一级，data/教材/ 下的 PDF/PPTX 全部漏列。
+    """
     data_dir = Path(config.DATA_DIR)
     data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -263,24 +424,20 @@ def list_documents():
     try:
         # 评审 P2-3：只读端点零副作用（未建索引时各文件如实显示 chunks=0）
         col = get_vector_store(auto_rebuild=False)
-        # 按 source 统计每个文档的块数（metadata.source 为绝对/相对路径）
         all_meta = col.get(include=["metadatas"])["metadatas"]
         from collections import Counter
 
-        chunk_counter = Counter(m.get("source") for m in all_meta if m)
+        chunk_counter = Counter(_base_source(m.get("source")) for m in all_meta if m)
     except Exception:
         chunk_counter = {}
 
-    for p in sorted(data_dir.iterdir()):
+    for p in sorted(data_dir.rglob("*")):
         if p.is_file() and p.suffix.lower() in ALLOWED_SUFFIXES:
+            n = chunk_counter.get(p.name, 0)
             files.append(
-                DocInfo(
-                    name=p.name,
-                    size_bytes=p.stat().st_size,
-                    chunks=chunk_counter.get(str(p), 0),
-                )
+                DocInfo(name=p.name, size_bytes=p.stat().st_size, chunks=n)
             )
-            total += chunk_counter.get(str(p), 0)
+            total += n
     return DocumentsResponse(files=files, total_chunks=total)
 
 

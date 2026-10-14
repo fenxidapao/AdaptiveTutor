@@ -47,3 +47,26 @@ jobs:
 
       - name: 检索冒烟测试（需 Ollama，CI 环境自动 skip）
         run: python -m pytest test_retrieval.py -v
+
+  # 镜像构建门禁：确保 Dockerfile 始终可构建（只 build 不 push，不消耗 registry 配额）。
+  # 与 test 并行跑；slim 模式不含 torch，构建通常在 2 分钟内完成。
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 构建 slim 镜像（默认模式，无 reranker）
+        run: docker build -t courserag-api:ci .
+
+      - name: 冒烟：容器能启动并响应 /health
+        run: |
+          docker run -d --name smoke -p 8000:8000 \
+            -e OLLAMA_BASE_URL=http://127.0.0.1:11434 courserag-api:ci
+          # 容器内无 Ollama，/health 应返回 200 且明确报告 Ollama 不可达（服务不崩）
+          for i in $(seq 1 20); do
+            curl -fs http://127.0.0.1:8000/health && break || sleep 2
+          done
+          curl -fs http://127.0.0.1:8000/health | grep -q '"vector_store_count"'
+          docker logs smoke
+          docker rm -f smoke

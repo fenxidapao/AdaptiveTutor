@@ -38,6 +38,7 @@ from rag_search_utils import (
     _stable_ids,
     SOURCE_RULES,
     route_sources,
+    is_enum_query,
 )
 
 import ollama
@@ -801,12 +802,58 @@ def _get_bm25_cache():
     return _bm25_cache[1], _bm25_cache[2]
 
 
-def hybrid_retrieve(question, k=config.RETRIEVE_K, source_filter=None):
+def _enum_expand(question, base_docs, anchor_sources, candidate_k):
+    """枚举/穷举类查询的锚点扩展召回（2026-09-11）。
+
+    做法：用元数据（source）把召回范围钉到「锚点文档」上，在该范围内再做一次
+    密集向量召回，与基础候选合并去重。
+
+    为什么有效：全库 top-K 召回在多文档竞争下对单一文档的覆盖是不均匀的——
+    一份 120 块的文档可能只有 10 块挤得进全库 50 强，而枚举题的答案恰恰集中
+    在这一份文档里。锚定之后再召回，等于把该文档的配额从「全库竞争后剩下的 10 块」
+    变成「该文档内语义最相关的 24 块」。
+
+    参数：
+      base_docs      基础融合候选（RRF 后）——用于①推导锚点 ②与之合并
+      anchor_sources 已生效的教材过滤集（None=未过滤，此时从 base_docs 推导锚点）
+      candidate_k    合并后候选池上限
+    返回合并去重后的候选列表。扩展进来的块打 metadata['enum_expanded']=True，
+    便于评估/调试追溯「这个块是锚点扩展捞回来的还是常规召回的」。
+    """
+    if not base_docs:
+        return base_docs
+    anchors = list(anchor_sources) if anchor_sources else []
+    if not anchors:
+        for d in base_docs[: config.ENUM_ANCHOR_SOURCES]:
+            s = d.metadata.get("source")
+            if s and s not in anchors:
+                anchors.append(s)
+    if not anchors:
+        return base_docs
+    # 锚点内密集召回：where 限制保证绝不越出既有教材过滤范围——这是安全性的关键
+    extra = retrieve_vector(
+        question, k=config.ENUM_ANCHOR_TOP_K, where={"source": {"$in": anchors}}
+    )
+    if not extra:
+        return base_docs
+    for d in extra:
+        d.metadata["enum_expanded"] = True
+    merged, seen = [], set()
+    for d in list(base_docs) + list(extra):
+        key = (d.metadata.get("source"), d.metadata.get("start_index"))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(d)
+    return merged[:candidate_k]
+
+
+def hybrid_retrieve(question, k=config.RETRIEVE_K, source_filter=None, candidate_k=None):
     """真混合检索：两个独立召回通道，各自在允许范围内召回 top-K，RRF 融合取 top-N。
 
     - 通道 A：向量召回（双塔粗排，语义匹配）—— Chroma（P1a：可带 source where 过滤）
     - 通道 B：BM25 词面召回（精确术语匹配，如 ACID / 2NF / 死锁）—— 对允许子集打分
-    两路结果用倒数排名融合（RRF）互补，返回 top-N（RERANK_CANDIDATE_K）。
+    两路结果用倒数排名融合（RRF）互补，返回 top-N（默认 RERANK_CANDIDATE_K）。
 
     相比 v1「向量 top-50 池内 BM25 重排」的根本区别：
     旧版 BM25 只对已召回的 50 块重排，正确块若不在向量 top-50 就永远捞不到；
@@ -816,6 +863,10 @@ def hybrid_retrieve(question, k=config.RETRIEVE_K, source_filter=None):
     P1a（2026-09-04）：source_filter 为允许的 source 路径列表（None=全库）。
     注意本函数只做执行、不做路由决策——自动路由/显式解析统一在
     retrieve_and_rerank 完成（直调本函数的旧调用方保持旧行为）。
+
+    candidate_k（2026-09-11）：RRF 融合候选池上限，None=config.RERANK_CANDIDATE_K。
+    枚举题由 retrieve_and_rerank 传入更大值；同时若 ENUM_EXPAND_ENABLED 开启，
+    再叠一层锚点扩展召回（见 _enum_expand）。
     """
     where = {"source": {"$in": list(source_filter)}} if source_filter else None
     vector_docs = retrieve_vector(question, k=k, where=where)  # 通道 A：允许范围内 top-K
@@ -836,33 +887,44 @@ def hybrid_retrieve(question, k=config.RETRIEVE_K, source_filter=None):
         return []  # 过滤子集内两路皆空 → 交由上层「空结果降级」去 filter 重检索
     # B 专项：融合候选池扩到 RERANK_CANDIDATE_K（>RERANKER_TOP_N），
     # 让「仅 BM25 命中、向量缺席」的正确块先进池，再由 reranker 精排回 top-N（见 retrieve_and_rerank）。
-    return _rrf_fuse([vector_docs, bm25_docs], top_n=config.RERANK_CANDIDATE_K)
+    pool_k = candidate_k or config.RERANK_CANDIDATE_K
+    base = _rrf_fuse([vector_docs, bm25_docs], top_n=pool_k)
+    # 枚举题锚点扩展：把「点召回」补成「同类集合召回」（默认关，见 config.ENUM_*）
+    if config.ENUM_EXPAND_ENABLED and is_enum_query(question):
+        base = _enum_expand(question, base, source_filter,
+                            max(pool_k, config.ENUM_CANDIDATE_K))
+    return base
 
 
-def _retrieve_once(question, force_no_rerank, sources):
+def _retrieve_once(question, force_no_rerank, sources, candidate_k=None, top_n=None):
     """P1a：按给定 source 允许集执行一次检索（不含路由/降级决策）。
-    sources 非空时给命中块打 metadata['source_filter'] 标记（UI/调试可见实际生效范围）。"""
+    sources 非空时给命中块打 metadata['source_filter'] 标记（UI/调试可见实际生效范围）。
+
+    2026-09-11：candidate_k / top_n 可选——枚举题扩展时由 retrieve_and_rerank 传入
+    放大值；均为 None 时用 config 默认，行为与引入该参数前完全一致。
+    """
+    out_n = top_n or config.RERANKER_TOP_N
     if force_no_rerank:
         docs = retrieve_vector(
-            question, k=config.RERANKER_TOP_N,
+            question, k=out_n,
             where={"source": {"$in": sources}} if sources else None,
         )
     elif config.HYBRID_ENABLED:
-        docs = hybrid_retrieve(question, source_filter=sources)
+        docs = hybrid_retrieve(question, source_filter=sources, candidate_k=candidate_k)
         if config.RERANKER_ENABLED:
-            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
+            docs = rerank_documents(question, docs, top_n=out_n)
         else:
-            # 不开 reranker：候选池截回 RERANKER_TOP_N，保证进 LLM 的条数与旧版一致
-            docs = docs[: config.RERANKER_TOP_N]
+            # 不开 reranker：候选池截回 out_n，保证进 LLM 的条数与旧版一致
+            docs = docs[:out_n]
     else:
         docs = retrieve_vector(
             question, k=config.RETRIEVE_K,
             where={"source": {"$in": sources}} if sources else None,
         )
         if config.RERANKER_ENABLED:
-            docs = rerank_documents(question, docs, top_n=config.RERANKER_TOP_N)
+            docs = rerank_documents(question, docs, top_n=out_n)
         else:
-            docs = docs[: config.RERANKER_TOP_N]
+            docs = docs[:out_n]
     if sources and docs:
         tag = "|".join(Path(s).name for s in sources)
         for d in docs:
@@ -887,13 +949,26 @@ def retrieve_and_rerank(question, force_no_rerank=False, source_filter=None):
       - source_filter=list[str] → 显式 source 路径列表。
       - 空结果降级：过滤后两路候选为空 → 自动去掉过滤重检索一次（防过度过滤召回为空）；
         降级结果不带 source_filter 标记，调用方可据此区分。
+
+    2026-09-11 枚举题扩展召回（config.ENUM_EXPAND_ENABLED，默认关）：
+      检测到枚举/穷举意图（rag_search_utils.is_enum_query）时，候选池放宽到
+      ENUM_CANDIDATE_K、进 LLM 的块数放宽到 ENUM_RERANK_TOP_N，并在锚点文档内
+      做一次密集召回（_enum_expand）。非枚举问题走原路径，行为零变化。
     """
     sources = _resolve_source_filter(question, source_filter)
-    docs = _retrieve_once(question, force_no_rerank, sources)
+    enum_on = config.ENUM_EXPAND_ENABLED and is_enum_query(question)
+    # ⚠️ 不要把 RRF 池放宽到 ENUM_CANDIDATE_K（2026-09-11 实测修正）：
+    # _enum_expand 的合并上限是 max(pool_k, ENUM_CANDIDATE_K)，而 pool_k 又等于
+    # candidate_k。两者取同一数值时，base 会先吃满这个上限，锚点扩展块被
+    # merged[:candidate_k] 整段截掉——实测净新增 17 块，标记数 0（功能静默失效）。
+    # 正确做法：RRF 池保持常规规模，把 ENUM_CANDIDATE_K 留给「基础池 + 锚点块」之和。
+    candidate_k = None
+    top_n = config.ENUM_RERANK_TOP_N if enum_on else None
+    docs = _retrieve_once(question, force_no_rerank, sources, candidate_k, top_n)
     if not docs and sources:
         # 空结果降级（方案 §2.2-4）：过滤把召回滤空时退回全库，宁可宽不可空
         print(f"[warn] 教材过滤后候选为空（{len(sources)} 个源），降级为全库检索")
-        docs = _retrieve_once(question, force_no_rerank, None)
+        docs = _retrieve_once(question, force_no_rerank, None, candidate_k, top_n)
     return docs
 
 
@@ -1052,6 +1127,57 @@ def build_rag_chain(custom_prompt=None, history=""):
             "retrieve_and_rerank": retrieve_and_rerank}
 
 
+# ====================== 4.5 Query 改写（多轮指代消解，2026-09-18） ======================
+REWRITE_SYSTEM_PROMPT = (
+    "你是检索查询改写器。请根据对话历史，把用户的最新问题改写为一个独立、完整、"
+    "无指代的检索问题（它将被送进一个看不到对话历史的检索系统）。规则：\n"
+    "1. 只输出改写后的问题本身——不要解释、不要引号、不要任何前后缀；\n"
+    "2. 与原问题保持同一语言（中文问句改写后仍是中文）；\n"
+    "3. 只补全对话历史中已明确出现的指代对象（如「第三章那个定理」→ 补全为具体章节"
+    "与定理名），严禁编造历史中没有的信息；\n"
+    "4. 若最新问题本身已独立完整，原样输出它。"
+)
+
+
+def rewrite_question(question, history):
+    """多轮指代消解改写：history + 当前问题 → 独立完整的检索问题。
+
+    为什么需要：多轮里的「第三章那个定理怎么用」脱离历史无法检索——向量与 BM25
+    都看不到「第三章」指什么。改写后的问题（search_question）统一用于语义缓存 key、
+    教材自动路由（SOURCE_RULES）、检索与生成，让整条管线基于完整语义工作。
+
+    触发条件（answer_question 已把守开关与 history 判空，此处只做最后一道自守）：
+      - config.QUERY_REWRITE_ENABLED 开启 且 history 非空。
+    返回 (rewritten, ok)：
+      - ok=True   rewritten 为改写后问题（可能与原问题相同——模型判定本就独立完整）
+      - ok=False  rewritten 为原问题（未触发 / Ollama 失败 / 输出异常），调用方回退
+    任何异常都吞掉回退——改写是增强项，绝不能成为问答链路的新故障点。
+    """
+    fallback = (question, False)
+    if not config.QUERY_REWRITE_ENABLED:
+        return fallback
+    if not history or not str(history).strip():
+        return fallback
+    try:
+        messages = [
+            {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": "对话历史：\n%s\n\n最新问题：%s\n\n改写后的独立问题："
+                % (history, question),
+            },
+        ]
+        out = ollama_chat(messages, temperature=0.0)  # 改写要确定性，压温度
+        rewritten = str(out or "").strip().strip('"“”‘’').strip()
+        # 合理性守卫：非空；长度不超原问题 3 倍——指代补全只会小幅加长，
+        # 模型不听指令输出口水话/整段解释时直接判废回退，不污染下游
+        if not rewritten or len(rewritten) > max(len(question) * 3, 60):
+            return fallback
+        return rewritten, True
+    except Exception:
+        return fallback
+
+
 # ====================== 5. 统一问答入口（评审 P1，2026-08-30） ======================
 def build_citations(docs):
     """检索结果 → 引用结构（UI / API / answer_question 三处共用，杜绝各写一份漂移）。
@@ -1083,7 +1209,8 @@ def build_citations(docs):
 
 
 def answer_question(question, mode="accurate", custom_prompt=None, history="",
-                    use_cache=True, on_stage=None, on_token=None, source=None):
+                    use_cache=True, on_stage=None, on_token=None, source=None,
+                    on_retrieved=None, use_rewrite=None):
     """统一问答入口：Streamlit / FastAPI / 评估三个出口共用同一套
     「缓存 → 检索 → 硬拒答 → 生成 → 接地自检 → 缓存写入」管线。
 
@@ -1115,6 +1242,9 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
                 显式指定时绕开语义缓存读写（缓存 key 不含 source 维度）
       list[str] 显式 source 路径列表
     use_cache   语义缓存开关（评估侧必须传 False，避免吃到线上缓存污染结果）
+    use_rewrite Query 改写开关（2026-09-18）：None（默认）=按 config.QUERY_REWRITE_ENABLED
+                且 history 非空自动判定；False=强制旁路（评估口径保护，与 use_cache=False
+                同款显式旁路）；True=强制尝试（history 为空时仍是 no-op）
     on_stage    可选回调 fn(stage)，stage ∈ {"retrieve","rerank","generate"}，
                 供 UI 展示分阶段进度；缓存命中不触发。
     on_token    可选回调 fn(piece)，真实流式（评审 P3）：生成中每到达一个文本片段
@@ -1122,12 +1252,20 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
                 才能判定/替换（未接地的答案替换为拒答文案），边生成边展示会让
                 已展示的未验证内容无法撤回，故精确模式一律缓冲。回调后仍把完整
                 答案聚合进返回值，缓存/日志语义不变；缓存命中不触发。
+    on_retrieved 可选回调 fn(citations, rejected)：检索（+精排）完成、且硬拒答判定已
+                出结果的那一瞬回调一次，此时生成尚未开始。供 SSE 等流式出口先把
+                「引用列表 + 是否拒答」推给客户端，不必等生成结束才拿到来源（引用
+                先到、正文后到，是流式问答的标准事件顺序）。缓存命中时同样触发
+                （回放缓存的 citations，rejected 恒为 False——拒答结果不写缓存）。
+                不传则行为与引入本参数前完全一致（None 分支零副作用）。
 
     返回 dict：
       answer            最终答案（硬拒/未接地时已被替换为 HARD_REJECT_ANSWER）
       citations         [{rank,source,content,score,start_index}]（缓存命中来自缓存）
       docs              检索结果 List[Document]（缓存命中时 None）
       cached/cache_sim  是否命中语义缓存及相似度
+      rewritten         Query 改写结果（2026-09-18）：改写成功且与原问不同时为改写后
+                        问题，否则 None——供日志/UI 观测改写是否发生及质量
       rejected/reject_signal                 检索阶段硬拒答及信号分
       grounding_ran/grounded/not_grounded    接地自检：是否执行/是否通过/是否未通过
       grounded_score    接地自检得分（未执行或检索拒时为 None）
@@ -1144,23 +1282,42 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
     if _explicit_source and isinstance(source, str):
         source = resolve_source_query(source)  # 解析失败 ValueError 上抛（API 400 / UI 报错）
 
-    # 1) 语义缓存：命中跳过检索/重排/生成；写入策略（拒答/未接地不缓存）统一在下方 store
+    # 0) Query 改写（多轮指代消解，2026-09-18）：history 非空且开关开启时，把
+    #    「历史 + 当前问题」改写为独立检索问题；此后缓存 key / SOURCE_RULES 自动路由 /
+    #    检索 / 生成统一使用 search_question。失败回退原问题（rewrite_question 内兜底），
+    #    改写永不阻塞问答。评估口径保护：冻结评估集均为单轮（无 history）天然不触发，
+    #    确需强制旁路时传 use_rewrite=False。
+    _rewrite_on = config.QUERY_REWRITE_ENABLED if use_rewrite is None else bool(use_rewrite)
+    if _rewrite_on:
+        rewritten, rewrite_ok = rewrite_question(question, history)
+    else:
+        rewritten, rewrite_ok = question, False
+    search_question = rewritten if rewrite_ok else question
+
+    # 1) 语义缓存：命中跳过检索/重排/生成；写入策略（拒答/未接地不缓存）统一在下方 store。
+    #    key 用 search_question：多轮改写后同义问法收敛到同一条缓存（改写正是为此）；
+    #    单轮（无 history）search_question == question，缓存行为与旧版完全一致。
     if use_cache and not _explicit_source:
-        cached = semantic_cache.lookup(question, mode_label)
+        cached = semantic_cache.lookup(search_question, mode_label)
         if cached:
+            if on_retrieved is not None:
+                # SSE 出口：缓存命中同样要先给引用，否则前端拿不到来源列表
+                on_retrieved(cached["citations"], False)
             return {
                 "answer": cached["answer"], "citations": cached["citations"],
                 "docs": None, "cached": True, "cache_sim": cached["sim"],
+                "rewritten": (rewritten if rewrite_ok and rewritten != question else None),
                 "rejected": False, "reject_signal": None,
                 "grounding_ran": False, "grounded": True,
                 "not_grounded": False, "grounded_score": None,
                 "low_confidence": False,
             }
 
-    # 2) 检索（accurate=混合+可选精排；fast=纯向量；P1a：source 教材过滤/自动路由）
+    # 2) 检索（accurate=混合+可选精排；fast=纯向量；P1a：source 教材过滤/自动路由；
+    #    检索用 search_question——改写的全部意义就在这：让检索看到完整语义）
     stage("retrieve")
     docs = retrieve_and_rerank(
-        question, force_no_rerank=(mode != "accurate"), source_filter=source
+        search_question, force_no_rerank=(mode != "accurate"), source_filter=source
     )
     if mode == "accurate" and config.RERANKER_ENABLED:
         stage("rerank")
@@ -1171,6 +1328,12 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
     if mode == "accurate":
         rejected, reject_signal = is_hard_reject(docs)
 
+    # 3.5) 检索阶段回调（SSE 流式出口用）：此刻 citations 与硬拒答判定均已就绪，
+    #      调用方可在生成开始前就把「引用 + 是否拒答」推给客户端——拒答时前端
+    #      立刻能给出结论，不必干等生成。不传则完全无副作用。
+    if on_retrieved is not None:
+        on_retrieved(citations, rejected)
+
     # 4) 生成 + 接地自检（仅精确模式）
     grounded, grounded_score, grounding_ran, not_grounded = True, None, False, False
     if rejected:
@@ -1179,31 +1342,35 @@ def answer_question(question, mode="accurate", custom_prompt=None, history="",
     else:
         stage("generate")
         rag = build_rag_chain(custom_prompt=custom_prompt, history=history)
+        # 生成同样用 search_question：检索基于它召回，生成与检索基于同一语义；
+        # 原问题已包含在 history 文本里（chain 的 prompt 含 history），信息不丢
         if mode == "accurate":
             # 精确模式：缓冲生成（接地自检需要完整答案，见 on_token docstring）
-            answer, grounded, grounded_score = grounded_generate(question, docs, rag["chain"])
+            answer, grounded, grounded_score = grounded_generate(search_question, docs, rag["chain"])
             grounding_ran = config.GROUNDED_VERIFY_ENABLED
             not_grounded = grounding_ran and not grounded
         elif on_token is not None:
             # 快速模式 + on_token：真实流式——边生成边回调，聚合回完整答案
             parts = []
-            for piece in rag["chain"].invoke_stream(question, docs=docs):
+            for piece in rag["chain"].invoke_stream(search_question, docs=docs):
                 parts.append(piece)
                 on_token(piece)
             answer = "".join(parts)
         else:
-            answer = rag["chain"].invoke(question, docs=docs)
+            answer = rag["chain"].invoke(search_question, docs=docs)
 
     # 5) 缓存写入：拒答（检索拒/未接地）不入缓存，与 UI 既有口径一致；
-    #    显式指定教材的请求不写缓存（key 无 source 维度，见上方说明）
+    #    显式指定教材的请求不写缓存（key 无 source 维度，见上方说明）；
+    #    key 同 lookup 用 search_question（读写同 key，口径一致）
     if use_cache and not _explicit_source:
-        semantic_cache.store(question, mode_label, answer, citations,
+        semantic_cache.store(search_question, mode_label, answer, citations,
                              reject=(rejected or not_grounded))
 
     conf = get_confidence(docs)
     return {
         "answer": answer, "citations": citations, "docs": docs,
         "cached": False, "cache_sim": None,
+        "rewritten": (rewritten if rewrite_ok and rewritten != question else None),
         "rejected": rejected, "reject_signal": reject_signal,
         "grounding_ran": grounding_ran, "grounded": grounded,
         "not_grounded": not_grounded, "grounded_score": grounded_score,

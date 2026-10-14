@@ -43,6 +43,12 @@ COPY . .
 # 运行时数据目录（data/ 与 chroma_db/ 由 docker-compose 卷挂载覆盖）
 RUN mkdir -p data chroma_db
 
+# 非 root 运行（安全基线）：镜像内进程以 uid 10001 的 app 用户启动，
+# 避免容器逃逸时直接拿到 root。Linux 宿主若挂载目录属主不匹配导致不可写，
+# 请在宿主执行：sudo chown -R 10001:10001 ./data ./chroma_db
+RUN useradd -m -u 10001 app && chown -R app:app /app
+USER app
+
 EXPOSE 8000
 
 # 容器内健康检查：探活 /health，Ollama 未就绪时服务照常启动、由 /health 报告状态

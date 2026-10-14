@@ -207,3 +207,31 @@ def route_sources(question, sources):
     if not allowed or len(allowed) == len(set(sources)):
         return None
     return allowed
+
+
+# ====================== 枚举/穷举类查询检测（2026-09-11） ======================
+# 用途：触发「锚点扩展召回」（rag_core._enum_expand），治枚举题的供给不足。
+#
+# 为什么需要单独判定：held-out A 组 30 题里 5 道枚举/清单类题只占 16.7% 题量，
+# 却吃掉 49.2% 的 context_precision 损失，其中「Streamlit 有哪些输入组件」是
+# 全组唯一 recall 失分题（0.4）。这类问题需要的是**更多块**，而常规题多给块
+# 只会灌噪声——所以必须区分对待，不能一刀切调大 RERANKER_TOP_N。
+#
+# 判定取向：宁可漏判（退回旧行为，安全）也不误判（多花延迟且可能引入噪声）。
+# 故只用明确的**列举词**，不用「什么/为什么」等泛词。
+ENUM_MARKERS = (
+    "哪些", "列举", "罗列", "列出", "分别", "各自",
+    "几种", "几类", "分类", "种类", "包括什么", "包含哪些",
+)
+
+
+def is_enum_query(question: str) -> bool:
+    """是否为枚举/穷举类查询（命中任一列举词即视为是）。
+
+    扩展召回的**安全性**来自「只改变候选规模、不改变召回范围与打分」：
+    - 不改检索范围（锚点仍受既有教材过滤约束，不会越出 source_filter）
+    - 不改 reranker 打分（bge-reranker 对 (query, doc) 独立打分，与候选池大小无关）
+    因此硬拒答阈值（基于 rerank_score 绝对值）与 B 组拒答行为在数学上不受影响。
+    """
+    q = (question or "").lower()
+    return any(m in q for m in ENUM_MARKERS)
