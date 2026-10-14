@@ -15,8 +15,8 @@ followup_challenges（追问反附和启发式）/ diagnostic_schema（诊断 JS
 no_fabrication（工具失败反幻觉）。启发式只抓灾难性失败，不追求行为等价证明。
 
 用法：
-  /d/anacoda3/python.exe scripts/eval_llm.py --mode check
-  /d/anacoda3/python.exe scripts/eval_llm.py --mode live [--out reports/eval_llm.md]
+  python scripts/eval_llm.py --mode check
+  python scripts/eval_llm.py --mode live [--out reports/eval_llm.md]
 """
 
 import argparse

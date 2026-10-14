@@ -1,6 +1,6 @@
 """E2E 冒烟测试服务器：真实 Web 代码 + 打桩 LLM（快、免费、可重复）。
 
-用法：/d/anacoda3/python.exe scripts/e2e_server.py   # 起 8002 端口
+用法：python scripts/e2e_server.py   # 起 8002 端口
 配套：scripts/e2e_flow.py（Playwright 6 步闭环冒烟，PLAN 18.5 D2）
 原理：真实跑 web.app 全部路由与判题链路，仅替换 model.chat 为固定返回，
       按 caller 返回对应格式（诊断 JSON 画像/追问一句话/盲点 JSON/推荐 JSON…）。

@@ -16,14 +16,13 @@
 - 本项目为非商用个人学习项目，符合 CC BY-NC 类许可使用范围
 
 ## 检索策略（2026-08-22 定稿，改动说明）
-原计划（PLAN 4.6）为"调用侧 source 白名单过滤"，实测 CourseRAG `/retrieve`
-接口**不支持 sources 参数**（api_schemas.py 仅 question/mode 两个字段，传参被静默忽略）。
+原方案为"调用侧 source 白名单过滤"，实测 CourseRAG `/retrieve`
+接口**不支持 sources 参数**（`api_schemas.py` 仅 question/mode 两个字段，传参被静默忽略）。
 改为：**检索 top-N 全量返回 → LLM 按内容相关性过滤 → notes 兜底**。
-- 优点：零侵入 CourseRAG（三项目独立原则），不依赖 source 文件名（文件名可变）
+- 优点：零侵入 CourseRAG（服务边界清晰），不依赖 source 文件名（文件名可变）
 - 成本：多一次 LLM 过滤调用，P0 规模下可忽略
-- 该改动已同步至 docs/REFERENCE.md 第 3 节
 
-## 对照实验说明（PLAN 8）
-- ch1（变量/数据类型）：对照组，mode=lecture（纯讲解）
-- ch2（列表/字典）：实验组，mode=feynman（费曼式，先答后讲）
-- 两章难度接近（同等级基础知识点），前后测对比提升差 = 教学法增量价值
+## 对照实验说明
+- ch1（变量/数据类型）与 ch2（列表/字典）：两章难度接近（同等级基础知识点），前后测提升差即教学法增量价值
+- 教学法分组自 C2 起改为**注册时按 `group_name` 随机均衡分配**（不再按章节固定 lecture/feynman），
+  以保证组间可比；章节与教学法不再绑定。设计见 `docs/EXPERIMENT.md`

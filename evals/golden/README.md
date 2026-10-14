@@ -35,7 +35,7 @@
 - **check 进 CI**：`tests/test_llm_eval_deterministic.py` 每次 push 免费跑；
 - **live 手动强制**：`--mode live` 非确定性 + 花钱，不进 CI，但**每次改动 prompts/
   或 agents/ 或切换模型后、热修部署前必须手动跑一次**：
-  `/d/anacoda3/python.exe scripts/eval_llm.py --mode live`（10 场景，约 12 次 LLM 调用，
+  `python scripts/eval_llm.py --mode live`（10 场景，约 12 次 LLM 调用，
   成本 <0.1 元），报告落 `reports/eval_llm.md`；
 - live 10 场景覆盖三条最新代码路径：诱导型用户输入 / ②Context 压缩后追问（transcript
   超 8 条）/ E5 画像注入追问；追问与诊断场景已换强 rubric（followup_challenges /

@@ -14,7 +14,7 @@ QPS 下，把记忆放到 5ms / 50ms 外的网络存储，在途请求会膨胀�
 纯本地、零网络、零 LLM 调用，可进 CI（快，~几秒）。
 
 用法：
-  /d/anacoda3/python.exe scripts/memory_bench.py [--out reports/memory_bench.md]
+  python scripts/memory_bench.py [--out reports/memory_bench.md]
 """
 
 import argparse

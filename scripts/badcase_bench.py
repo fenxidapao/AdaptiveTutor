@@ -19,9 +19,9 @@ demo 思维是"跑两个 case 看起来不错就发出去"；生产思维是"同
 不发真实教学 LLM 请求（security 套件全程 mock model.chat）。
 
 用法：
-  /d/anacoda3/python.exe scripts/badcase_bench.py --label v1.0 [--suite all]
+  python scripts/badcase_bench.py --label v1.0 [--suite all]
       [--skip-judge] [--out reports/badcase_bench_v1.0.json]
-  /d/anacoda3/python.exe scripts/badcase_bench.py --compare a.json b.json --out reports/badcase_report.md
+  python scripts/badcase_bench.py --compare a.json b.json --out reports/badcase_report.md
 """
 
 import argparse

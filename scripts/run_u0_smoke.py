@@ -4,7 +4,7 @@
 费曼讲解喂固定文本模拟用户作答——本脚本是【系统链路验证】，非人类真实作答。
 
 产出：assessments 表新增 ch1/ch2 的前后测记录（u0）；旧数据先备份到 state.db.bak_pre_v1
-用法：/d/anacoda3/python.exe scripts/run_u0_smoke.py
+用法：python scripts/run_u0_smoke.py
 """
 import builtins
 import shutil

@@ -1,7 +1,7 @@
 """C 阶段实验分析（PLAN 18.3 / EXPERIMENT.md §6）。
 
 读实验库 → 组间对比（feynman vs lecture 前后测提升）→ markdown 报告。
-用法：/d/anacoda3/python.exe scripts/analyze_experiment.py [--db data/state.db] [--out reports/experiment.md]
+用法：python scripts/analyze_experiment.py [--db data/state.db] [--out reports/experiment.md]
 默认读 data/state.db（容器卷挂载的实验库；2026-08-29 踩坑：曾默认读到根目录
 pytest 残渣库 state.db，443 个假用户）。
 """

@@ -44,6 +44,9 @@ def run_python(code: str, timeout: int | None = None,
                 timeout=timeout,
                 cwd=tmpdir,
                 creationflags=creationflags,
+                # 子进程 stdout 编码随平台/区域变化（Windows 中文环境为 cp936），
+                # 而下方固定按 UTF-8 解码 → 不强制会让含中文的合法代码被误判为输出乱码
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             )
             stdout = proc.stdout.decode("utf-8", errors="replace")
             stderr = proc.stderr.decode("utf-8", errors="replace")

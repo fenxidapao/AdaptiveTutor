@@ -29,3 +29,16 @@ data/
 
 # 评估运行时产物（低分人工复核队列，非源码）
 evals/review_queue.jsonl
+
+# 计划书与历史交接文档（内部决策记录，不随公开仓库分发）
+PLAN.md
+docs/HANDOVER-*.md
+docs/REFERENCE.md
+multi-agent架构.jpg
+
+# 实验运行日志与含参与者明细的报告（含真实参与者标识，绝不入库）
+# 说明：只发布聚合口径的结论（见 README「多人对照实验」小节），逐人明细留本地。
+docs/EXPERIMENT_LOG.md
+reports/experiment.md
+reports/experiment_batch1.md
+reports/experiment_final.md

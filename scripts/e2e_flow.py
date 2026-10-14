@@ -4,7 +4,7 @@
 浏览器：优先驱动系统已装的 Edge/Chrome（channel，免下载内核），
         最后才回退 Playwright 自带 chromium（需 playwright install 过）。
 
-用法：/d/anacoda3/python.exe scripts/e2e_flow.py
+用法：python scripts/e2e_flow.py
 """
 
 import subprocess
