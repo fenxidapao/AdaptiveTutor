@@ -11,20 +11,20 @@ __pycache__/
 # 教材 / 课件源文件（版权受限 PDF/PPTX，不入库；本地放 data/教材/，见 EVALUATION.md 语料说明）
 data/教材/
 
-# 本地 venv（42MB 空壳，勿提交；统一用 evalverify）
+# 本地 venv（空壳，勿提交）
 rag_env/
 venv/
 
 # 运行 / 诊断日志（勿提交）
 *.log
 
-# 工具链数据（WorkBuddy 内部，勿提交）
-.workbuddy/
-resume-output/
-
 # 内部复盘 / 交接文档（公开仓库不需要，保留在本地即可）
+# 注：以下规则原先只写在 .git/info/exclude（不随 clone 传播），2026-10-14 迁入本文件，保证新 clone 同样干净。
 CourseRAG-交接文档-*.md
 CourseRAG-对话总结-*.md
+CourseRAG-工程化点评-*.md
+RAG增强方案-*.md
+HANDOVER.md
 eval_compare.md
 
 # 本地对话历史（运行时生成，勿提交）
@@ -34,28 +34,20 @@ eval_compare.md
 .query_log.jsonl
 .query_log.json
 
-# 旧版 / 中间态评估 CSV（仅保留 *_new.csv 两份真实证据）
-eval_results_off_multi*.csv
-eval_results_on_multi*.csv
-eval_results_v1_baseline.csv
-eval_results_v3_baseline_stored.csv
-eval_results_off_2doc.csv
-eval_results.csv
-eval_results_*_v1_backup.csv
-# A/B 重测中间态 CSV（100 题新数据不入库；数字已固化在 README/EVALUATION）
-eval_results_vector.csv
-eval_results_hybrid.csv
+# 旧版 / 中间态评估 CSV（统一由下方 eval_results_*.csv 覆盖，此处不再逐条列举）
 
 # 评估重测备份（旧 59 题 CSV/日志归档，2026-08-22）
 _eval_prev_59/
+
+# 归档目录与显存测试临时产物（本地留档，不入库；原写在 .git/info/exclude）
+_archive/
+NVIDIA Corporation/
 
 # pytest 缓存
 .pytest_cache/
 
 # 评估文档 / 评估数据（2026-09-01 起仅存本地；公开仓库只留代码 + README）
 EVALUATION.md
-private-notes.md
-BUSINESS_SCENARIO.md
 G2_*.md
 P2_*.md
 eval_compare*.md
@@ -66,10 +58,5 @@ judge_*.csv
 judge_compare_*.json
 p2_rejudge_results.csv
 
-# 本地内部材料（不随公开仓库分发）
-# 说明：这些文件保留在本地，仅从版本库排除。
-_resume_dump.txt
-_read_docx_text.py
-local-draft-*.html
-local-notes-*.html
+# 本地临时脚本产物（仅本地保留）
 _demo_*

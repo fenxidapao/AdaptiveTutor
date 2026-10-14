@@ -1,7 +1,6 @@
 # ===== 不进镜像的本地数据 / 密钥 / 产物 =====
 .git
 .gitignore
-.workbuddy/
 __pycache__/
 *.pyc
 *.log
@@ -18,5 +17,4 @@ chroma_db/
 # 本地虚拟环境 / 诊断 / 评估产物
 venv/
 rag_env/
-resume-output/
 *.csv

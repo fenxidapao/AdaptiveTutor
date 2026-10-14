@@ -11,11 +11,12 @@
   150-reg-exp 正则 / 160-built-in-modules 常用内置模块 / 170-third-party 常用第三方模块
 """
 
+import os
 import re
 from pathlib import Path
 
-SRC = Path(r"C:\Users\user\lxf-repo\source\books\python")
-OUT = Path(r"E:\WorkBuddy工作空间\2026-08-16-17-06-49\CourseRAG\data\教材\Python-廖雪峰教程-核心章节.md")
+SRC = Path(os.environ.get("PY_CORPUS_SRC", "data/教材/python-source"))  # 上游教程源码目录
+OUT = Path(os.environ.get("PY_CORPUS_OUT", "data/教材/Python-廖雪峰教程-核心章节.md"))
 
 SECTIONS = [
     ("50-basic", "Python 基础语法"),

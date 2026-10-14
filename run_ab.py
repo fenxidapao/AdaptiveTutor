@@ -25,7 +25,7 @@ import csv
 import sys
 import subprocess
 
-PY = r"C:\Users\user\.workbuddy\binaries\python\envs\evalverify\Scripts\python.exe"
+PY = os.environ.get("COURSERAG_PYTHON", sys.executable)  # 子进程解释器，可用环境变量覆盖
 ROOT = os.path.dirname(os.path.abspath(__file__))
 N_SAMPLES = 100  # eval_data.py 当前样本数；改样本后同步改这里
 

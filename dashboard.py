@@ -10,7 +10,7 @@ dashboard.py — CourseRAG 最小可观测看板（P1 / #15，2026-08-25）
   - 低质量清单：拒答 / 未接地 的查询
   - 反馈流：👍/👎 统计与明细
 
-运行（PowerShell，PY=evalverify 绝对路径）：
+运行（PowerShell）：
   & $PY -m streamlit run dashboard.py
 """
 import json

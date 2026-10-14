@@ -1,7 +1,7 @@
 """
 eval_data_heldout.py — held-out 评估集（工程化落地 P0：把"同源自评"升级成"可防御"）
 
-为什么需要它（见 2026-08-24 工程化点评文档）：
+为什么需要它：
   eval_data.EVAL_SAMPLES 的 100 题与语料同源，四项全正向是预期内结果，绝对值偏乐观。
   生产要的是 held-out——语料外与对抗样本能暴露 recall 上限与拒答能力。
 
@@ -92,7 +92,7 @@ HELDOUT_A_V2 = HELDOUT_A + [
 # 这些问题在 data/ 课程语料（数据库/数据结构/OS/计网/组成原理/Linux/小程序/Streamlit/
 # 算法引论/Python）中均无答案，正确行为是被硬拒或低置信提示，而非编造。
 HELDOUT_B = [
-    {"question": "某高校今年什么时候放寒假？", "expect_reject": True},
+    {"question": "我们学校今年什么时候放寒假？", "expect_reject": True},
     {"question": "今天广州的天气怎么样？", "expect_reject": True},
     {"question": "怎么追喜欢的女生？", "expect_reject": True},
     {"question": "Transformer 的注意力机制原理是什么？", "expect_reject": True},

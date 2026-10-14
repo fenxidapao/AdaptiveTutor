@@ -10,7 +10,8 @@
 **数据全程不出本机，不依赖任何云端 API。**
 
 RAG 核心（切分 / 加载 / 嵌入 / 向量检索 / 词面检索 / 融合 / 精排 / 接地自检）与评估体系均为自实现，
-依赖仅 `ollama` + `chromadb` + `sentence-transformers` 三项，已彻底移除 LangChain 全家桶。
+RAG 核心链路直接依赖仅 `ollama` + `chromadb` + `sentence-transformers` 三项，已彻底移除 LangChain 全家桶
+（完整运行依赖见 `requirements.txt`，共 9 项直接依赖）。
 
 ## 这是什么问题
 
@@ -32,7 +33,7 @@ CourseRAG 的做法是：把课程资料**全部放在本机**建索引，用本
 - 📚 **多格式课程资料接入**：PDF / PPTX / TXT / MD / DOCX；扫描版 PDF 建库时告警跳过，不静默产生空索引
 - ✂️ **递归语义切分**：800 字符 + 150 重叠，含中文分隔符感知，避免切断上下文
 - 🔍 **真混合检索**：向量与自实现 BM25 **各自对全库独立召回** top-50 → RRF 倒数排名融合（候选池 16）→ bge-reranker 精排 top-8
-- 🏷️ **教材级元数据过滤**：问题命中教材关键词时自动路由，向量路与 BM25 路各自带 `where` 过滤后再融合；过滤后候选为空自动降级全库（防过度过滤）；API / UI / MCP 三出口均可显式指定教材
+- 🏷️ **教材级元数据过滤**：问题命中教材关键词时自动路由，向量路与 BM25 路各自带 `where` 过滤后再融合；过滤后候选为空自动降级全库（防过度过滤）；API 与 UI 两个出口可显式指定教材，**MCP 出口不支持教材过滤**（`course_retrieve` 只有 `query` / `top_k` / `mode` 三个入参，见「MCP 工具层」）
 - 🖼️ **多模态语料（caption 路线）**：PyMuPDF bbox 渲染剪裁提取教材内嵌图像（自动合成矢量层、内容哈希去重）+ 本地 qwen2.5-VL 生成中文描述，图像描述作为 image 类型 chunk 与文本**统一索引**
 - 📌 **引用溯源**：来源带相关性分数与原文偏移；回答正文内联 `[n]` 上标（半角／全角均可）可点击跳转；命中图像块时引用区展示教材原图
 - 💬 **双出口流式问答**：Streamlit 打字机界面 + FastAPI `POST /query/stream`（SSE）；底层是 ollama `stream=True` 的真实逐 token 回调，**引用列表在生成开始前就送达**
@@ -125,9 +126,81 @@ ollama pull llama3.1:8b
 streamlit run app.py
 ```
 
-依赖已精简为 `ollama` + `chromadb` + `sentence-transformers`（已彻底去除 langchain 全家桶），
-`requirements.txt` 显式锁定 `ollama==0.6.2` 与 `chromadb==1.5.9`，降低换机器安装失败的机率。
+依赖已精简：RAG 核心链路只剩 `ollama` + `chromadb` + `sentence-transformers` 三项（已彻底去除 langchain 全家桶）；
+`requirements.txt` 共 9 项直接依赖（API 服务另用 `requirements-api.txt`，同为 9 项、不含 streamlit 与 torch），
+显式锁定 `ollama==0.6.2` 与 `chromadb==1.5.9`，降低换机器安装失败的机率。
 注意：别人使用时仍需**自备 Ollama 与模型权重**（无法打包进仓库），这是本地 RAG 的固有前提。
+
+## 配置
+
+全部参数从 `.env` 读取（`config.py` 集中定义），`.env.example` 是可直接复制使用的模板。
+**下表「默认」列逐个取自 `config.py` 的 `os.getenv(变量名, 默认值)`**——即 `.env` 里缺这一项时的实际取值，
+照表填不会与代码行为脱节。留空（`VAR=`）不等于取默认值：数值型变量留空会让 `int("")` / `float("")` 抛错。
+
+**模型 / 服务**
+
+| 环境变量 | 默认 | 作用 |
+|---|---|---|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama 服务地址 |
+| `EMBEDDING_MODEL` | `nomic-embed-text` | 嵌入模型（走 Ollama） |
+| `LLM_MODEL` | `llama3.1:8b` | 生成模型（走 Ollama） |
+| `LLM_TEMPERATURE` | `0.2` | 生成温度（低温度压制幻觉） |
+| `HF_ENDPOINT` | `https://hf-mirror.com` | HuggingFace 镜像（reranker 权重下载用） |
+
+**切分 / 路径**
+
+| 环境变量 | 默认 | 作用 |
+|---|---|---|
+| `CHUNK_SIZE` | `800` | 每块字符数（教材正文段落约 200-800 字符） |
+| `CHUNK_OVERLAP` | `150` | 块间重叠，避免切断句子 / 上下文 |
+| `DATA_DIR` | `./data` | 课程资料目录 |
+| `PERSIST_DIRECTORY` | `./chroma_db` | 向量库持久化目录 |
+| `PDF_MIN_CHARS_PER_PAGE` | `30` | 均字符/页低于此值视为无文字层（扫描版），建库时告警跳过 |
+| `GARBLED_DROP_THRESHOLD` | `0.3` | 块级乱码字符占比超此值 → 整块丢弃，否则剥离乱码保留正文 |
+
+**检索 / 重排**
+
+| 环境变量 | 默认 | 作用 |
+|---|---|---|
+| `HYBRID_ENABLED` | `true` | 向量 + BM25 混合检索开关 |
+| `RETRIEVE_K` | `50` | 向量通道独立召回数（难 query 正确块常排 30+，池不够捞不到） |
+| `BM25_TOP_K` | `50` | BM25 通道独立召回数（对全库打分，不复用向量候选池） |
+| `RERANK_CANDIDATE_K` | `16` | RRF 融合后的候选池大小，供精排消费 |
+| `RERANKER_ENABLED` | `true` | bge-reranker 精排开关（关掉也仍是混合检索，非纯向量） |
+| `RERANKER_MODEL` | `BAAI/bge-reranker-v2-m3` | 精排模型（多语言，中文友好） |
+| `RERANKER_TOP_N` | `8` | 精排后进 LLM 的块数（官方评估基线即 top-8 口径） |
+| `RERANKER_DEVICE` | `auto` | 精排推理设备 |
+| `SOURCE_FILTER_ROUTING_ENABLED` | `true` | 问题命中教材关键词时自动路由 |
+| `ENUM_EXPAND_ENABLED` | `false` | 枚举类问题的候选池扩展（默认关） |
+| `ENUM_RERANK_TOP_N` | `14` | 枚举类问题进 LLM 的块数（常规走 `RERANKER_TOP_N`） |
+
+**拒答 / 接地自检**
+
+| 环境变量 | 默认 | 作用 |
+|---|---|---|
+| `HARD_REJECT_VECTOR_THRESHOLD` | `0.55` | 向量分低于此值判为语料外 → 硬拒答 |
+| `HARD_REJECT_RERANK_THRESHOLD` | `0.30` | 精排分低于此值判为语料外 → 硬拒答 |
+| `GROUNDED_VERIFY_ENABLED` | `true` | 接地自检开关 |
+| `GROUNDED_SCORE_THRESHOLD` | `0.60` | 接地自检阈值，未达标记 `low_confidence` |
+| `LOW_CONFIDENCE_THRESHOLD` | `0.69` | fast 模式低置信标记阈值 |
+
+**缓存 / 改写**
+
+| 环境变量 | 默认 | 作用 |
+|---|---|---|
+| `QUERY_REWRITE_ENABLED` | `true` | 多轮指代消解（history 非空时生效，单轮零开销） |
+| `SEMANTIC_CACHE_ENABLED` | `true` | 语义缓存开关 |
+| `SEMANTIC_CACHE_SIM` | `0.93` | 语义缓存命中阈值（embedding 余弦） |
+| `SEMANTIC_CACHE_MAX` | `128` | 语义缓存 LRU 容量（多副本部署需换 Redis） |
+
+**评估裁判**
+
+| 环境变量 | 默认 | 作用 |
+|---|---|---|
+| `JUDGE_PROVIDER` | `local` | 裁判来源：`local` = 本机 Ollama（数据不出本机）/ `deepseek` = 云端 API |
+| `JUDGE_MODEL` | `qwen2.5:7b` | 裁判模型（需先 `ollama pull`） |
+
+> 鉴权 / 限流 / 上传上限 / 跨域四类变量见下方「多用户预留扩展点（Gate 2）」表；完整清单以 `.env.example` 与 `config.py` 为准。
 
 ## API 服务（FastAPI + Docker 部署）
 
@@ -173,7 +246,7 @@ curl -N -X POST http://localhost:8000/query/stream -H "Content-Type: application
 > 否则已展示的未验证内容无法撤回。此时 `metadata`（引用 + 拒答）与 `done` 照常推送，
 > 前端可据此展示「正在生成…」。
 
-**实测时序**（`python _sse_bench.py --runs 3`，本机 RTX 4060 Laptop / 1434 块语料 / n=3）：
+**实测时序**（本机 RTX 4060 Laptop / 1434 块语料 / n=3；复现脚本 `_sse_bench.py` 是**本地未跟踪文件，不随仓库分发**，克隆本仓库后无法直接复跑该脚本）：
 
 | 模式 | metadata（引用送达） | 首 token | 端到端 |
 |---|---|---|---|
@@ -204,7 +277,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 |---|---|---|
 | `AUTH_ENABLED` | `false` | 开启后所有端点需 `X-API-Key` 头（值 = `API_KEY`） |
 | `API_KEY` | 空 | 开启鉴权时设置的密钥 |
-| `RATE_LIMIT` | 空 | 每 IP 每分钟请求上限（如 `60`），空 = 不限 |
+| `RATE_LIMIT` | `0` | 每 IP 每分钟请求上限（如 `60`），`0` = 不限；**必须填整数**——留空会让 `config.py` 的 `int("")` 抛 `ValueError`，服务直接起不来 |
 | `CORS_ORIGINS` | `*` | 收紧跨域（生产填具体域名，如 `https://qa.example.com`） |
 | `MAX_UPLOAD_MB` | `100` | `/documents` 上传大小上限（MB），超限返回 413；超大扫描版 PDF 走本地 `ingest_ocr.py` |
 
@@ -267,7 +340,7 @@ curl -X POST http://localhost:8000/retrieve -H "Content-Type: application/json" 
   -d '{"question":"死锁的四个必要条件","mode":"accurate"}'
 
 # 上传课程资料（增量索引）
-curl -X POST http://localhost:8000/documents -F "file=@./data/我的笔记.md"
+curl -X POST http://localhost:8000/documents -F "file=@./data/数据库系统-事务与ACID.md"
 
 # 列出文档 / 查看索引统计
 curl http://localhost:8000/documents
@@ -281,7 +354,7 @@ curl http://localhost:8000/index/stats
   "answer": "ACID 是事务的四个特性……[1][2]",
   "mode": "fast",
   "citations": [
-    {"rank": 1, "source": "数据库系统笔记.md", "content": "……", "score": 0.31, "start_index": 1024}
+    {"rank": 1, "source": "数据库系统-事务与ACID.md", "content": "……", "score": 0.31, "start_index": 1024}
   ],
   "latency_ms": 1523,
   "grounded": true
@@ -431,9 +504,9 @@ flowchart TB
 | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | **冻结测试集**（24 题，从未参与调参；语料 1434 块 = 1219 文本 + 215 图像 caption） | faithfulness **0.901 ± 0.022** / answer_relevancy **0.975** / context_precision **0.869** / context_recall **0.948**（3 轮独立回归） | **对外引用的绝对值口径**；`python eval_test.py` 可复现       |
 | **held-out A 组 v2**（38 题 = 30 文本 + 8 图片题；门控 faith ≥0.85 且 recall ≥0.80） | faith **0.915** / relevancy 0.958 / precision 0.824 / recall **0.975** → **PASS** | 只准用它调参                                                 |
-| **图片命中率 top-8**（8 题图片问答）                         | **8/8 = 100%，全部 rank=1 命中**                             | 期望块按 `image_path` 锚定；题面为自然用户问法               |
+| **图片命中率 top-8**（8 题图片问答）                         | **8/8 = 100%，全部 rank=1 命中**                             | 期望块按 `image_path` 锚定（`eval_heldout.py` 用 `expected_image` 子串匹配 `image_path`）；题面为自然用户问法。逐题明细由 `python eval_heldout.py` 本地生成（`eval_heldout.py:89` 输出 `eval_results_heldout_A_images.csv`），**产物未随仓库分发，需本地重跑** |
 | **held-out B 组**（20 题语料外；门控拒答率 ≥90%）            | **20/20 = 100% → PASS**                                      | 硬拒答 + 接地自检 + 教材路由共同生效                         |
-| **混合检索 vs 纯向量**（隔离 reranker 的 A/B 差值）          | precision **+0.18** / recall **+0.16** / faith +0.09 / relevancy +0.05，四项全正向 | 100 题 × 697 块历史语料；**只看差值**                        |
+| **混合检索 vs 纯向量**（隔离 reranker 的 A/B 差值）          | precision **+0.18** / recall **+0.16** / faith +0.09 / relevancy +0.05，四项全正向 | 100 题（`python run_ab.py` 的 A/B 两轮，产物 `eval_results_vector.csv` / `eval_results_hybrid.csv` 各 100 行；**产物未随仓库分发，需本地重跑**）× 697 块历史语料（A/B 当时的块数，见 `config.py` 乱码清洗注释与 `test_retrieval.py` 的块数断言）；**只看差值** |
 | **reranker OFF vs ON**（59 题全量语料）                      | precision +0.120 / relevancy +0.133 / recall +0.096 / faith +0.032，四项全正向 | reranker 救「正确块排 30+」的难 query                        |
 | **性能**（本地推理，数字硬件绑定，跨机不可比）               | fast 全链路 P50 **5.9s** / P95 13.4s；accurate 检索 + 精排段 GPU 稳态 P50 **1.16s**（CPU 基线 21.1s ≈ **18×** 提速）；语义缓存命中 6.4s → **40ms** | 明细与完整演化时间线见本地 `EVALUATION.md`（**不随仓库分发**） |
 

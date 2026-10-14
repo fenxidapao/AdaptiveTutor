@@ -14,7 +14,7 @@ eval_local.py — 本地自实现 RAG 评估（W3 兜底方案）
   - 零额外依赖（不装 ragas / datasets / nest_asyncio）；裁判默认独立模型 qwen2.5:3b
     （T2：与生成模型 llama3.1:8b 不同源，破除「同模型既生成又打分」的自评偏差；
     可切 JUDGE_PROVIDER=deepseek 走 API，见 config.py）
-  - 四个指标 = 你自己的代码，自实现评估
+  - 四个指标 = 你自己的代码，对应『自己实现评估而非套用框架』的取舍
   - 复用 rag_core.retrieve_and_rerank 与 build_rag_chain，保证『评估用的来源』=『线上用的来源』
   - 输出 eval_results.csv + 控制台汇总
 
