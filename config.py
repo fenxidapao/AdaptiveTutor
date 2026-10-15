@@ -19,6 +19,34 @@ LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 # Ollama 默认本地端口；换机器/远程只需改这里
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
+# ---------- 生成模型提供方（C3 去本地化，2026-10-15）----------
+# 背景：本地 llama3.1:8b（约 4.9 GB 显存）+ 裁判 qwen2.5:7b（约 4.7 GB）
+# 在 8 GB 卡上装不下；Windows WDDM 不报 OOM，而是让 CUDA 调用挂住（见 04 纪律 28）。
+# 生成先切云端，裁判另批处理。默认 ollama：不设该变量时行为与旧版完全一致，可随时回滚。
+#   LLM_PROVIDER=ollama → 本地 Ollama（LLM_MODEL 必须是 Ollama 模型名）
+#   LLM_PROVIDER=openai → OpenAI 兼容云端（LLM_MODEL 为云端模型名，走 LLM_API_BASE）
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
+# 云端 OpenAI 兼容接口地址（仅 LLM_PROVIDER=openai 时使用）
+LLM_API_BASE = os.getenv("LLM_API_BASE", "https://kuaipao.pro/v1")
+# 云端 key：留空时由 llm_provider.resolve_api_key() 依次尝试环境变量与
+# ~/.dsh/.credentials.yaml 的 KUAIPAO_API_KEY；key 绝不写入仓库/日志/响应。
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+# 单次请求超时（秒）；推理模型首响可能较慢，默认留足
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "180"))
+# 初始 max_tokens 与自动扩容上限。推理模型（deepseek-v4.1-flash）实测
+# max_tokens=256 时 256 个 token 全耗在 reasoning、content 为空；
+# 故默认预算不低于 1024，空 content+reasoning 占满时自动翻倍到 cap。
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+# 是否要求云端模型关闭思维链（默认 true）。
+# 实测（2026-10-15，真实 RAG 提示、8 块上下文、max_tokens=4096）：
+#   deepseek-v4.1-flash 默认开启思考，3/3 次把预算全烧在 reasoning 上，
+#   content 为空、finish=length，单次耗时 20~23s；失败是概率性的，不是必现。
+#   显式传 reasoning_effort=none / thinking.type=disabled 后 0 reasoning，
+#   正常产出 content（5.9~33s）。因此默认关闭思考；模型不支持该字段时
+#   由如下的自动降级路径处理（见 llm_provider._cloud_post 的字段裁剪重试）。
+LLM_DISABLE_THINKING = os.getenv("LLM_DISABLE_THINKING", "true").strip().lower() == "true"
+LLM_MAX_TOKENS_CAP = int(os.getenv("LLM_MAX_TOKENS_CAP", "8192"))
+
 # ---------- RAG 调参（这些数为什么这么定）----------
 # 注意：实际评估基线为 800/150（.env 与 README 一致；2026-08-22 统一口径，
 # v2 A/B 等全部数字均在 CHUNK_SIZE=800 下测得）。勿再改回 500/80 以免与证据脱节。

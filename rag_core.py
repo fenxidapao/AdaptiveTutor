@@ -45,6 +45,7 @@ import ollama
 import chromadb
 
 import config
+import llm_provider
 from reranker import rerank_documents
 import grounding  # P1 接地自检（grounding 仅依赖 config/ollama，无循环依赖）
 import semantic_cache  # 统一问答入口的缓存查询/写入（仅依赖 config/ollama，无循环依赖）
@@ -66,26 +67,23 @@ class Document:
 
 
 def ollama_chat(messages, temperature=None):
-    """统一封装 ollama 对话调用，返回模型输出的文本字符串。"""
-    opts = {"temperature": temperature} if temperature is not None else None
-    resp = _client.chat(model=config.LLM_MODEL, messages=messages, options=opts)
-    return resp["message"]["content"]
+    """统一生成入口，返回模型输出的文本字符串。
+
+    函数名保留为 ollama_chat：test_api.py 四处 monkeypatch 钉的是这个名字，
+    改名会连带动测试；默认 provider=ollama 时行为与旧版一致。
+    C3（2026-10-15）起按 config.LLM_PROVIDER 分发：ollama=本地，openai=云端。
+    """
+    return llm_provider.chat(messages, temperature=temperature)
 
 
 def ollama_chat_stream(messages, temperature=None):
-    """ollama_chat 的流式版（评审 P3，2026-08-30）：逐片段 yield 生成的文本。
+    """ollama_chat 的流式版：逐片段 yield 生成的文本。
 
-    ollama stream=True，片段内容与非流式完全一致，只是分块到达。
-    供 UI 真实流式渲染；调用方负责把片段聚合回完整答案（缓存/日志用）。
+    默认 provider=ollama 时仍是 ollama stream=True，片段内容与非流式一致，
+    只是分块到达；provider=openai 时解析 OpenAI 兼容 SSE 的 delta.content。
+    调用方负责把片段聚合回完整答案（缓存/日志用）。
     """
-    opts = {"temperature": temperature} if temperature is not None else None
-    stream = _client.chat(
-        model=config.LLM_MODEL, messages=messages, options=opts, stream=True
-    )
-    for chunk in stream:
-        piece = chunk["message"]["content"]
-        if piece:
-            yield piece
+    yield from llm_provider.chat_stream(messages, temperature=temperature)
 
 
 # ====================== 1. 加载 + 切分 ======================

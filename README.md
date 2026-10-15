@@ -143,7 +143,12 @@ streamlit run app.py
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama 服务地址 |
 | `EMBEDDING_MODEL` | `nomic-embed-text` | 嵌入模型（走 Ollama） |
-| `LLM_MODEL` | `llama3.1:8b` | 生成模型（走 Ollama） |
+| `LLM_PROVIDER` | `ollama` | 生成提供方：`ollama`=本地 / `openai`=OpenAI 兼容云端 |
+| `LLM_MODEL` | `llama3.1:8b` | 生成模型名（随 provider 变化；云端推荐 `deepseek-v4.1-flash`） |
+| `LLM_API_BASE` | `https://kuaipao.pro/v1` | 云端 OpenAI 兼容接口（仅 provider=openai） |
+| `LLM_API_KEY` | 空 | 云端 key；留空时自动读 `~/.dsh/.credentials.yaml` 的 `KUAIPAO_API_KEY`，**不写入仓库** |
+| `LLM_DISABLE_THINKING` | `true` | 云端关闭思维链；实测推理模型会把预算烧在 reasoning 上导致空回答 |
+| `LLM_MAX_TOKENS` / `LLM_MAX_TOKENS_CAP` | `2048` / `8192` | 生成预算下限与自动扩容上限 |
 | `LLM_TEMPERATURE` | `0.2` | 生成温度（低温度压制幻觉） |
 | `HF_ENDPOINT` | `https://hf-mirror.com` | HuggingFace 镜像（reranker 权重下载用） |
 

@@ -160,6 +160,8 @@ def service_info():
             "GET  /index/stats",
         ],
         "models": {"embedding": config.EMBEDDING_MODEL, "llm": config.LLM_MODEL},
+        # C3：如实上报生成 provider，避免「配置了云端却以为还走本地」的误判
+        "llm_provider": config.LLM_PROVIDER,
         "ollama": config.OLLAMA_BASE_URL,
     }
 
@@ -238,7 +240,7 @@ def query(req: QueryRequest):
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"生成失败：{e}。请确认 Ollama 已启动（ollama serve）且模型已拉取（ollama pull {config.LLM_MODEL}）。",
+            detail=f"生成失败：{e}（provider={config.LLM_PROVIDER}，model={config.LLM_MODEL}）。本地 provider 需确认 Ollama 已启动；云端 provider 需确认 key 与网络。",
         )
 
 
