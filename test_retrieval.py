@@ -207,14 +207,19 @@ def test_load_image_chunks_contract(tmp_path):
 
 def test_image_chunks_in_real_index():
     """真实索引含图像块：captions CSV 存在时，库内 type=image 的块应与 caption 数一致（重建后）。"""
+    import csv as _csv
     from pathlib import Path
     caps = Path(config.DATA_DIR) / "images" / "_image_captions.csv"
     if not caps.exists():
         pytest.skip("无图像资产（data/images/_image_captions.csv 不存在）")
     col = rag_core.get_vector_store(auto_rebuild=False)
     got = col.get(where={"type": "image"}, include=["metadatas"])
-    n_caps = sum(1 for line in caps.read_text(encoding="utf-8-sig").splitlines()[1:] if line.strip())
-    assert len(got["metadatas"]) == n_caps, f"库内图像块 {len(got['metadatas'])} != caption 行数 {n_caps}"
+    # 按 CSV **记录**数（不是行数）——B3 换描述器后 caption 内含换行
+    # （`…描述\n\n图中文字： \n文件A \n文件B`），一行记录会跨多行文本，
+    # 用 `read_text().splitlines()` 数会得到 4008 而不是 215（CSV 允许带引号的字段内换行）。
+    with open(caps, encoding="utf-8-sig", newline="") as f:
+        n_caps = sum(1 for r in _csv.DictReader(f) if (r.get("caption") or "").strip())
+    assert len(got["metadatas"]) == n_caps, f"库内图像块 {len(got['metadatas'])} != caption 记录数 {n_caps}"
     for m in got["metadatas"]:
         assert m.get("type") == "image" and m.get("image_path") and m.get("page", 0) > 0
         assert m.get("start_index", 0) < 0, "图像块 start_index 必须为负（与文本块不冲突）"

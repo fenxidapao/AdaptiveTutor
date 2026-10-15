@@ -184,3 +184,70 @@ QUERY_REWRITE_ENABLED = os.getenv("QUERY_REWRITE_ENABLED", "true").lower() == "t
 # pypdf 对 CID 乱码的另一种映射是产出 æ/ç/è 等拉丁字符，原白名单误放行导致
 # 698 块中 54 块残留；剔除后块数 698→697（1 块此前侥幸保留的乱码块被正确丢弃）。
 GARBLED_DROP_THRESHOLD = float(os.getenv("GARBLED_DROP_THRESHOLD", "0.3"))
+
+# ---------- B1 视觉重排（2026-10-14） ----------
+# 洞 R：caption 路线让图像以「文本代理」身份进索引，**像素从未参与检索**。两张 caption
+# 几乎相同的截图（实测 3-gram Jaccard 最高 0.833），文本召回 / BM25 / bge-reranker 只能
+# 看到几乎一样的文字，原理上分不出谁是谁。
+# B1 在检索候选出来后，把候选中的图像块**原图**送 VLM 复核，按视觉相关性重排图像块顺序。
+# 检索链路本身完全不动（廉价文本路径照常召回），只加一次视觉复核。
+#
+# 【为什么默认关闭】按本文件 ENUM_EXPAND_ENABLED 留下的教训，检索层改动必须先跑
+# held-out A/B 拿到数字，再决定是否翻转默认值——不能"觉得应该更好"就打开。
+#
+# 【实测读数（2026-10-14，详见 B1_VISUAL_RERANK.md）】
+#   - 文本管线原理上无法区分：判别性 token（个人信息 / 比较数字大小 / avatar.png /
+#     tab1.wxml）在全部 215 条 caption 中出现 **0 次**。
+#   - qwen3-vl-plus 做 4 选 1 + 位置置换：**15/16 命中（随机基线 25%）**，唯一未命中是
+#     dt=0.0s 的空响应（网络瞬时故障），成功调用 15/15 全对。
+#
+# 【模型选择实测（kuaipao.pro 中转，同一把 key）】
+#   - deepseek-flash      → 403「This token has no access to model」→ 不可用
+#   - deepseek-v4.1-flash → 能看图，但单次 64s 且 finish=length 被截断 → 不可靠
+#   - qwen3-vl-plus       → 1.3s / 4 张图、345 image tokens、答案稳定 → **选用**
+VISUAL_RERANK_ENABLED = os.getenv("VISUAL_RERANK_ENABLED", "false").lower() == "true"
+VISUAL_RERANK_MODEL = os.getenv("VISUAL_RERANK_MODEL", "qwen3-vl-plus")
+VISUAL_RERANK_API_BASE = os.getenv("VISUAL_RERANK_API_BASE", "https://kuaipao.pro/v1")
+VISUAL_RERANK_API_KEY = os.getenv("VISUAL_RERANK_API_KEY", "")
+# 一次请求最多送几张图（候选图像块多于此时只取前 N 个；每张图约 86 image token）
+VISUAL_RERANK_MAX_IMAGES = int(os.getenv("VISUAL_RERANK_MAX_IMAGES", "8"))
+# 单次 VLM 调用超时（秒）；超时即 fail-open 回退原顺序，绝不阻塞问答
+VISUAL_RERANK_TIMEOUT = float(os.getenv("VISUAL_RERANK_TIMEOUT", "60"))
+# 重排模式（决定给 VLM 的问法）：
+#   "verify"（默认）— 逐张问「这张图里**真的出现了**能回答问题的内容吗」，返回 hits 数组。
+#                     **校准过**：没有任何一张命中时会给空数组 → 保持文本链路原顺序。
+#   "promote"       — 问「哪张最相关」，把选中的图提到 rank 1。
+#   "slot"          — 只让候选里的图像块互相换位，不越过文本块。
+# ⚠️ 实测（b1_bench.py，6 道像素题）：
+#   "promote" 在 5/6 道「目标图根本不在候选里」的题上**从不弃权**，硬把无关图
+#   （p141/p276/p026）顶到 rank 1 —— 净负收益。相对选择式问法没有校准，问不出「都不对」。
+#   "slot" 在现网 top-8 下基本无效：reranker 截断后池内常只剩 0~1 张图，
+#   而本模块要求 ≥2 张才发问 → 静默跳过。两种旧模式均保留仅为对照。
+VISUAL_RERANK_MODE = os.getenv("VISUAL_RERANK_MODE", "verify")
+# 专用图像通道召回条数（0=关闭该通道，退化为「只用文本链路候选里的图」）。
+# ⚠️ 为什么必须有这个通道（b1_probe_recall.py 实测）：把 RRF 池宽从 16 拉到 200，
+# 池内图像块从 5 涨到 26，但 6 道题里仍有 5 道的目标图**不进池**——瓶颈不是池宽。
+# 而独立的 where={"type":"image"} 通道能把 p267（rank 6/215）、p045（rank 24/215）
+# 捞出来；纯 RRF 池漏掉了后者。没有它，视觉重排经常「无图可排」。
+VISUAL_RECALL_K = int(os.getenv("VISUAL_RECALL_K", "8"))
+
+# ---------- B3 描述器（2026-10-14） ----------
+# 洞 S：图像块在索引里的**全部可检索内容**就是 caption（rag_core.load_image_chunks：
+# page_content = caption）。所以描述器写不出什么，检索就永远搜不到什么。
+#
+# 【旧链路实测缺陷】`_caption_images.py` 用本地 qwen2.5vl:7b + prompt「用 2~3 句中文
+# 描述这张教材插图」。该 prompt 在**结构上**只输出叙述，不逐字抄录图中文字，于是
+# `微信小程序开发实战` 四张项目结构截图的判别性 token（tab1.wxml / avatar.png /
+# 用户登录 / 比较数字大小）在全部 215 条 caption 中出现 **0 次**——图像通道里它们排到
+# 56/66/67/69 名（分母 98）。B1 的视觉重排因此拿不到候选（b1_probe_ceiling.py）。
+#
+# 【换描述器实测（_b3_probe_prompt.py，4 张 ground-truth 图）】
+#   - 旧 prompt 原文 × qwen3-vl-plus          3/4 命中 ← **主杠杆是模型，不是 prompt**
+#   - 纯抄录 prompt × qwen3-vl-plus           3/4
+#   - 描述+抄录（HYBRID）× qwen3-vl-plus      4/4  ← 采用
+#   旧 prompt 配本地 qwen2.5vl:7b 是 0/4。HYBRID 保留描述句，故不牺牲语义检索面。
+#
+# 【全量重跑读数（215 张，_caption_images_v2.py）】
+#   平均长度 110.9 → 349.0 字（3.1×）；含文件名类 token 的 caption 34(15.8%) → 49(22.8%)；
+#   215/215 都带「图中文字：」抄录段（旧为 3）；四张目标图的判别性 token **0/6 → 6/6**。
+IMAGE_CAPTIONS_CSV = os.getenv("IMAGE_CAPTIONS_CSV", "_image_captions.csv")

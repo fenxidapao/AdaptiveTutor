@@ -48,6 +48,7 @@ import config
 from reranker import rerank_documents
 import grounding  # P1 接地自检（grounding 仅依赖 config/ollama，无循环依赖）
 import semantic_cache  # 统一问答入口的缓存查询/写入（仅依赖 config/ollama，无循环依赖）
+import visual_rerank as _visual_rerank  # B1 视觉重排（仅依赖 config，无循环依赖）
 
 
 # ====================== 0. 轻量客户端 / Document ======================
@@ -444,8 +445,13 @@ def load_and_chunk_documents(directory=config.DATA_DIR):
 def load_image_chunks(images_dir=None):
     """P2 多模态：读 data/images/_manifest.csv + _image_captions.csv，图像描述转 Document。
 
-    - page_content = caption 文本（qwen2.5vl 生成的 2~3 句中文描述，检索/BM25/精排全链路
-      与文本块同构——caption 路线的核心：图像以文本代理身份进统一索引）
+    - page_content = caption 文本（检索/BM25/精排全链路与文本块同构——caption 路线的核心：
+      图像以文本代理身份进统一索引）。caption 由哪个描述器生成取决于
+      `_caption_images_v2.py` 那一版的产物，**不是本函数决定的**：
+      换描述器（B3）之前是本地 qwen2.5vl:7b 的 2~3 句泛描述；
+      之后是视觉模型逐字转写 + 一句概括。两者用 `config.IMAGE_CAPTIONS_CSV` 切换。
+      实测提醒：逐字转写让 caption 从 ~110 字涨到 ~350 字，长文本会稀释向量相似度
+      （见 B3 报告），所以「内容更全」不等于「召回更好」。
     - metadata 与文本块同规律：
       source = 教材 PDF 相对路径（与文本块完全一致 → P1a 教材过滤 / 按源删除天然覆盖图像块）
       start_index = -(页码*1000+图序)（稳定 id 永不与文本块冲突，文本块 start_index ≥ 0）
@@ -454,7 +460,9 @@ def load_image_chunks(images_dir=None):
     import csv as _csv
     images_dir = Path(images_dir) if images_dir else Path(config.DATA_DIR) / "images"
     manifest = images_dir / "_manifest.csv"
-    captions = images_dir / "_image_captions.csv"
+    # B3：caption 文件名可配（IMAGE_CAPTIONS_CSV）。默认用换描述器后的生产文件；
+    # 指向 _image_captions_v1_qwen25vl.csv 即可复跑换描述器之前的基线。
+    captions = images_dir / config.IMAGE_CAPTIONS_CSV
     if not manifest.exists() or not captions.exists():
         return []
     cap_map = {}
@@ -969,6 +977,15 @@ def retrieve_and_rerank(question, force_no_rerank=False, source_filter=None):
         # 空结果降级（方案 §2.2-4）：过滤把召回滤空时退回全库，宁可宽不可空
         print(f"[warn] 教材过滤后候选为空（{len(sources)} 个源），降级为全库检索")
         docs = _retrieve_once(question, force_no_rerank, None, candidate_k, top_n)
+    # B1 视觉重排（2026-10-14）：落点在 bge-reranker 之后、build_citations 之前。
+    # 放这里而非 answer_question，是因为本函数是 UI / API / RAG 链共用的统一检索入口——
+    # 三处出口自动一致，eval_heldout.py 也能直接量到效果。
+    # 传 sources：视觉模块要用它把专用图像通道也限定在同一教材范围内（否则会把别的书的图顶上来）。
+    # 传 top_n：开启视觉重排时候选会被并宽（并入图像通道结果），截断必须由视觉模块统一做。
+    # 默认关闭（config.VISUAL_RERANK_ENABLED）；fail-open，任何失败返回原顺序。
+    docs = _visual_rerank.visual_rerank(
+        question, docs, top_n=top_n or config.RERANKER_TOP_N, sources=sources
+    )
     return docs
 
 

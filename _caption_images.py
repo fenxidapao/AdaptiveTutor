@@ -1,6 +1,14 @@
 # -*- coding: utf-8 -*-
 """P2 步2：批量 caption（qwen2.5vl:7b @ Ollama HTTP API）。
 
+⚠️ 本脚本是**旧版描述器**，已被 `_caption_images_v2.py` 取代（2026-10-15）。
+   旧版产出 2~3 句泛描述，实测会把图类型都判错（把牛头线条画写成「带羊角的人物头像」、
+   把人物肖像照片写成「软件界面截图」），且判别性文字（文件名、项目名）从不进 caption。
+   保留本脚本是为了**复现换描述器之前的基线**：
+       先跑本脚本（或直接用留档的 `data/images/_image_captions_v1_qwen25vl.csv`），
+       再设 `IMAGE_CAPTIONS_CSV=_image_captions_v1_qwen25vl.csv` 重建索引。
+   要生成生产 caption，请用 `_caption_images_v2.py`。
+
 - 输入：data/images/_manifest.csv（_extract_images.py 产物）
 - 输出：data/images/_image_captions.csv（png_path, caption, elapsed_s）
 - 断点续跑：已出现在输出 CSV 的 png_path 跳过；逐行 append 落盘

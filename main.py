@@ -10,6 +10,7 @@ main.py — CourseRAG FastAPI 服务入口（部署层，2026-08-20 新增）。
   - 文档删除    DELETE /documents/{name} 删文件 + 从索引移除
   - 索引        POST /index/rebuild      全量重建（data/ 全部）
   - 统计        GET /index/stats         向量库块数 / 源文档数
+  - 原图        GET /images/{path}       按 image_path 返回图像字节（供多模态消费者取像素，B2）
   - 健康检查    GET /health              依赖 / Ollama / 索引自检
 
 启动：uvicorn main:app --host 0.0.0.0 --port 8000（交互文档 http://localhost:8000/docs）
@@ -37,7 +38,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 import config
 from api_security import RateLimitMiddleware, require_auth
@@ -549,3 +550,40 @@ def index_stats():
         source_files=source_files,
         persist_directory=str(Path(config.PERSIST_DIRECTORY).resolve()),
     )
+
+
+# ==================== 多模态：原图字节（B2 视觉作答） ====================
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+@app.get("/images/{rel_path:path}", tags=["multimodal"])
+def get_image(rel_path: str):
+    """按向量库里存的 `image_path` 返回原始图像字节。
+
+    为什么需要这个端点（B2）：消费者（FeynmanTutor）从 /retrieve 拿到的
+    `Citation.image_path` 是**索引构建机上的相对路径**（形如
+    `data/images/微信小程序开发实战/p267_i00.png`）。消费者与服务不在同一文件系统时
+    打不开它；而把宿主机绝对路径写进返回体又是错的（换机器即失效，交接文档已警告
+    「不要写死宿主机绝对路径」）。所以由 CourseRAG 自己把像素读出来经 HTTP 返回，
+    调用方不需要知道磁盘布局。
+
+    路径规则：接受两种等价写法——① 相对 `data/images/` 的路径；② 索引里原样存的
+    整段路径（自动剥掉开头的 `data/images/`）。
+
+    防穿越：解析后必须仍落在 `data/images/` 之内，且后缀在白名单内。
+    """
+    images_root = (Path(config.DATA_DIR) / "images").resolve()
+    raw = rel_path.replace("\\", "/").lstrip("/")
+    prefix = "data/images/"
+    if raw.startswith(prefix):
+        raw = raw[len(prefix):]
+    if not raw:
+        raise HTTPException(status_code=400, detail="缺少图片路径")
+    target = (images_root / raw).resolve()
+    if images_root != target and images_root not in target.parents:
+        raise HTTPException(status_code=400, detail=f"非法图片路径: {rel_path!r}")
+    if target.suffix.lower() not in IMAGE_SUFFIXES:
+        raise HTTPException(status_code=400, detail=f"不是允许的图像类型: {target.suffix!r}")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail=f"图片不存在: {rel_path!r}")
+    return FileResponse(target)
