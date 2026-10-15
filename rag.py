@@ -8,7 +8,8 @@
   零侵入 CourseRAG（三项目独立原则），不依赖 source 文件名。
 
 对外接口：
-  retrieve_tutor_context(kp) -> {"context": str, "source": "rag"|"notes", "used_sources": [...]}
+  retrieve_tutor_context(kp) -> {"context": str, "source": "rag"|"notes"|"none",
+                                 "used_sources": [...], "image_paths": [...]}
 """
 
 import json
@@ -86,10 +87,34 @@ def _llm_filter(kp: dict, docs: list[dict]) -> tuple[list[int], str]:
         return [], ""
 
 
+def image_doc_paths(docs: list[dict], limit: int | None = None) -> list[str]:
+    """挑出图像块的原图路径（B2：透传 CourseRAG 的 type / image_path）。
+
+    CourseRAG 的 `build_citations`（rag_core.py:1194）对图像块会带 `type="image"` 与
+    `image_path`；文本块没有这两个键。而本文件此前只读 score/content/source
+    （见 `_llm_filter`），这两个字段被**静默丢掉**，于是 FT 侧根本无从知道
+    「这一条其实是一张图」——这是 B2 之前像素进不了模型的直接原因之一。
+
+    返回去重后的路径列表（顺序即相关度顺序）；limit 截断给上层按预算用。
+    """
+    out: list[str] = []
+    for d in docs:
+        if d.get("type") != "image":
+            continue
+        p = d.get("image_path")
+        if p and p not in out:
+            out.append(p)
+    return out[:limit] if limit is not None else out
+
+
 def retrieve_tutor_context(kp_id: str, course: str = "python") -> dict:
     """讲解材料：RAG 检索 → LLM 过滤 → notes 兜底。
 
-    返回 {"context": 讲解材料文本, "source": "rag"|"notes", "used_sources": [...]}
+    返回 {"context": 讲解材料文本, "source": "rag"|"notes", "used_sources": [...],
+          "image_paths": [...]}
+
+    image_paths（B2 新增，向后兼容的附加键）：本次采用的引用里**图像块**的原图路径，
+    交给调用方决定是否用 vision.py 把像素喂给视觉模型。为空表示这次讲解没有图。
     """
     graph = learning_pack.load_graph(course)
     kp = graph["_by_id"].get(kp_id)
@@ -111,11 +136,13 @@ def retrieve_tutor_context(kp_id: str, course: str = "python") -> dict:
                 "context": explanation,
                 "source": "rag",
                 "used_sources": used_sources,
+                "image_paths": image_doc_paths([docs[i] for i in used]),
             }
 
     # 2) notes 兜底
     notes = learning_pack.notes_for(course, kp_id)
     if notes:
-        return {"context": notes, "source": "notes", "used_sources": ["notes/"]}
+        return {"context": notes, "source": "notes", "used_sources": ["notes/"],
+                "image_paths": []}
 
-    return {"context": "", "source": "none", "used_sources": []}
+    return {"context": "", "source": "none", "used_sources": [], "image_paths": []}

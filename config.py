@@ -10,6 +10,34 @@ from pathlib import Path
 # 项目根目录（config.py 所在目录）
 ROOT = Path(__file__).resolve().parent
 
+
+def load_dotenv(path: str | None = None) -> None:
+    """极简 .env 加载：只读 KEY=VALUE 行，不覆盖已存在的环境变量。"""
+    p = Path(path) if path else ROOT / ".env"
+    if not p.exists():
+        return
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+# ⚠️ 必须在下面所有 os.environ.get 之前调用（2026-10-15 修复）
+# 原实现把 load_dotenv() 放在文件末尾，而全部常量在文件上半部就已读走 os.environ ——
+# 于是 .env 里的值**永远进不了 config**。实测（本机 `python -c "import config"`，.env 存在）：
+#   config.DEEPSEEK_API_KEY 长度 = 0      （.env 里实际是 35 字符）
+#   config.DEEPSEEK_BASE_URL    = https://api.deepseek.com   （.env 里是 .../v1）
+# 后者还会连带拼出错误端点 https://api.deepseek.com/chat/completions（缺 /v1）。
+# Docker 部署没暴露此问题：compose.yaml 用 env_file 把 .env 注入成了**进程环境变量**，
+# 只有本机直跑（README 的启动方式）才静默拿到空 key。
+# load_dotenv 不覆盖已存在的环境变量，所以上移不改变「显式 export 优先」的语义。
+load_dotenv()
+
 # ---------- LLM（DeepSeek API 主力） ----------
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
@@ -29,6 +57,18 @@ RAG_MODE = os.environ.get("RAG_MODE", "accurate")
 RAG_RETRIEVE_TOP_N = int(os.environ.get("RAG_RETRIEVE_TOP_N", "8"))
 # 喂给 LLM 相关性过滤的单条文档内容截断预算（字符）
 RAG_DOC_CHAR_LIMIT = int(os.environ.get("RAG_DOC_CHAR_LIMIT", "1200"))
+
+# ---------- B2 视觉作答（把原图像素喂给模型） ----------
+# 默认关：开启后讲解会把原图 base64 一起发出去，延迟与 token 都涨，属显式选择。
+VISION_ENABLED = os.environ.get("VISION_ENABLED", "0") == "1"
+# 一次请求最多附带几张原图（检索 top-8 里通常只有 1~2 张图）
+VISION_MAX_IMAGES = int(os.environ.get("VISION_MAX_IMAGES", "2"))
+# 单张图字节上限：超过就跳过（别把几 MB 的整屏截图塞进请求）
+VISION_MAX_IMAGE_BYTES = int(os.environ.get("VISION_MAX_IMAGE_BYTES", "4000000"))
+# 视觉模型：留空 = 复用 DEEPSEEK_MODEL（实测中转的 deepseek-v4.1-flash 能看图）
+VISION_MODEL = os.environ.get("VISION_MODEL", "") or DEEPSEEK_MODEL
+# 取图超时（秒）
+VISION_IMAGE_TIMEOUT = float(os.environ.get("VISION_IMAGE_TIMEOUT", "15"))
 
 # ---------- 状态库 ----------
 DB_PATH = os.environ.get("DB_PATH", str(ROOT / "state.db"))
@@ -72,23 +112,3 @@ IDEMPOTENCY_TTL_SECONDS = int(os.environ.get("IDEMPOTENCY_TTL_SECONDS", "3600"))
 # L1 Prompt 边界：客户端 transcript 的条数上限与单条字符上限（LLM 边界硬截断）
 TRANSCRIPT_MAX_MSGS = int(os.environ.get("TRANSCRIPT_MAX_MSGS", "40"))
 TRANSCRIPT_MSG_CHARS = int(os.environ.get("TRANSCRIPT_MSG_CHARS", "2000"))
-
-
-def load_dotenv(path: str | None = None) -> None:
-    """极简 .env 加载：只读 KEY=VALUE 行，不覆盖已存在的环境变量。"""
-    p = Path(path) if path else ROOT / ".env"
-    if not p.exists():
-        return
-    for line in p.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        key = key.strip()
-        val = val.strip().strip('"').strip("'")
-        if key and key not in os.environ:
-            os.environ[key] = val
-
-
-# 模块加载时自动读 .env（保证 import config 即可用）
-load_dotenv()

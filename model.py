@@ -121,9 +121,11 @@ def _warn_balance(http_code: int, body_text: str) -> None:
         print(f"[!] LLM 请求失败：HTTP {http_code} -> {body_text[:200]}")
 
 
-def _request_once(messages, temperature, max_tokens, *, allow_local: bool):
+def _request_once(messages, temperature, max_tokens, *, allow_local: bool,
+                  model_name: str | None = None):
     """先试 API；allow_local 时失败降级 Ollama。单次尝试（不做重试）。
 
+    model_name：覆盖默认模型（B2 视觉作答用，见 vision.py）；None = config.DEEPSEEK_MODEL。
     返回 (text, usage, latency_ms, source)。usage 可能为空 dict（mock/异常路径）。
     """
     # 1) 主力：DeepSeek API
@@ -132,7 +134,7 @@ def _request_once(messages, temperature, max_tokens, *, allow_local: bool):
             messages, temperature, max_tokens,
             base_url=config.DEEPSEEK_BASE_URL,
             api_key=config.DEEPSEEK_API_KEY,
-            model=config.DEEPSEEK_MODEL,
+            model=model_name or config.DEEPSEEK_MODEL,
         )
         return text, usage, latency, "api"
     except urllib.error.HTTPError as e:
@@ -161,7 +163,8 @@ def _request_once(messages, temperature, max_tokens, *, allow_local: bool):
     return "", {}, 0, "api"
 
 
-def _budget_retry_once(messages, temperature, max_tokens, *, allow_local):
+def _budget_retry_once(messages, temperature, max_tokens, *, allow_local,
+                       model_name: str | None = None):
     """带推理预算扩容的单次尝试：预算不足时 max_tokens 翻倍重试（最多扩到 MAX_BUDGET）。
 
     返回 (text, expanded, usage, latency_ms, source)。非预算错误不在这里处理（交给上层重试）。
@@ -170,7 +173,8 @@ def _budget_retry_once(messages, temperature, max_tokens, *, allow_local):
     while True:
         try:
             text, usage, latency, source = _request_once(
-                messages, temperature, current, allow_local=allow_local)
+                messages, temperature, current, allow_local=allow_local,
+                model_name=model_name)
             return text, (current != max_tokens), usage, latency, source
         except ReasoningBudgetError as e:
             if current >= MAX_BUDGET:
@@ -181,23 +185,27 @@ def _budget_retry_once(messages, temperature, max_tokens, *, allow_local):
 
 
 def chat(messages: list[dict], temperature: float = 0.3, max_tokens: int = 2000,
-         caller: str = "") -> str:
+         caller: str = "", model_name: str | None = None) -> str:
     """DeepSeek API：重试 3 次 + 推理预算自动扩容 + 空输出兜底 + 402 预警。
 
     失败（重试耗尽或空输出）抛 ModelError，调用方决定降级或中止。
     用于诊断/讲解/测评等允许降级的环节。caller 标记调用环节（可观测性）。
+    model_name：覆盖默认模型（B2 视觉作答传视觉模型）；None = config.DEEPSEEK_MODEL。
+    messages 原样透传，因此 content 可以是 OpenAI 兼容的**块数组**
+    （[{"type":"text",...},{"type":"image_url",...}]）——像素就是这么进去的。
     """
     last_err = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             text, expanded, usage, latency, source = _budget_retry_once(
-                messages, temperature, max_tokens, allow_local=False)
+                messages, temperature, max_tokens, allow_local=False,
+                model_name=model_name)
         except Exception as e:
             last_err = e
             text = ""
             expanded, usage, latency, source = False, {}, 0, "api"
         if text:
-            _fire_hook(caller, usage, latency, attempt, expanded, source)
+            _fire_hook(caller, usage, latency, attempt, expanded, source, model_name)
             return text
         if attempt < MAX_RETRIES:
             time.sleep(1.5 * attempt)
@@ -206,37 +214,45 @@ def chat(messages: list[dict], temperature: float = 0.3, max_tokens: int = 2000,
 
 def chat_with_fallback(messages: list[dict], temperature: float = 0.3,
                        max_tokens: int = 2000, allow_local: bool = False,
-                       caller: str = "") -> str:
+                       caller: str = "", model_name: str | None = None) -> str:
     """默认全走 API；allow_local=True 且 API 失败时降级 Ollama 7B。
 
     费曼追问环节必须传 allow_local=False（7B 会盲目附和，降智不可接受），
     API 挂时 feynman.py 应明确提示"离线模式不支持追问"而不是降级。
+    ⚠️ 带图的 messages 不要开 allow_local：本地降级模型是纯文本模型，会直接报错或瞎答。
     """
     text, expanded, usage, latency, source = _budget_retry_once(
-        messages, temperature, max_tokens, allow_local=allow_local)
+        messages, temperature, max_tokens, allow_local=allow_local,
+        model_name=model_name)
     if text:
-        _fire_hook(caller, usage, latency, 1, expanded, source)
+        _fire_hook(caller, usage, latency, 1, expanded, source, model_name)
         return text
     # 重试（API 失败但降级成功也算成功；两者都失败才抛错）
     for attempt in range(2, MAX_RETRIES + 1):
         time.sleep(1.5 * (attempt - 1))
         text, expanded, usage, latency, source = _budget_retry_once(
-            messages, temperature, max_tokens, allow_local=allow_local)
+            messages, temperature, max_tokens, allow_local=allow_local,
+            model_name=model_name)
         if text:
-            _fire_hook(caller, usage, latency, attempt, expanded, source)
+            _fire_hook(caller, usage, latency, attempt, expanded, source, model_name)
             return text
     raise ModelError("LLM 调用失败（API 与本地降级均无有效输出）")
 
 
 def _fire_hook(caller: str, usage: dict, latency_ms: int,
-               attempts: int, expanded: bool, source: str) -> None:
-    """触发日志 hook（若已注册）。usage 缺失时补 0。"""
+               attempts: int, expanded: bool, source: str,
+               model_name: str | None = None) -> None:
+    """触发日志 hook（若已注册）。usage 缺失时补 0。
+
+    model_name 必须如实落库：视觉作答走的是另一个模型，日志里写成默认模型会让
+    「这次调用到底用了哪个模型」变得不可信。
+    """
     if not LOG_HOOK:
         return
     try:
         LOG_HOOK(
             caller=caller or "unknown",
-            model=config.DEEPSEEK_MODEL,
+            model=model_name or config.DEEPSEEK_MODEL,
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
             completion_tokens=int(usage.get("completion_tokens") or 0),
             total_tokens=int(usage.get("total_tokens") or 0),
