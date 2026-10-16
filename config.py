@@ -12,7 +12,13 @@ ROOT = Path(__file__).resolve().parent
 
 
 def load_dotenv(path: str | None = None) -> None:
-    """极简 .env 加载：只读 KEY=VALUE 行，不覆盖已存在的环境变量。"""
+    """极简 .env 加载：只读 KEY=VALUE 行，**项目 .env 优先**。
+
+    为什么改成覆盖（2026-10-16 实测踩坑）：本机 User/Machine 级存在残留的
+    DEEPSEEK_API_KEY（35 位旧 key）。原实现「不覆盖已存在的环境变量」导致项目
+    .env 里正确的 key 被静默压制，所有云端调用稳定 401。
+    改为 override 后，项目目录内的 .env 是该项目的配置真相源。
+    """
     p = Path(path) if path else ROOT / ".env"
     if not p.exists():
         return
@@ -23,7 +29,7 @@ def load_dotenv(path: str | None = None) -> None:
         key, _, val = line.partition("=")
         key = key.strip()
         val = val.strip().strip('"').strip("'")
-        if key and key not in os.environ:
+        if key:
             os.environ[key] = val
 
 
@@ -42,6 +48,10 @@ load_dotenv()
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
+# 关闭思维链（2026-10-16 实测）：deepseek-v4.1-flash 默认开启思考，真实 RAG 长提示下
+# 会把 max_tokens 全烧在 reasoning 上、content 为空。实测关闭后 4/4 成功、约 2s。
+# 不认该字段的模型会回 400，model.py 会自动去掉该字段重试一次。
+DEEPSEEK_DISABLE_THINKING = os.environ.get("DEEPSEEK_DISABLE_THINKING", "1") == "1"
 
 # ---------- Ollama 降级（仅断网/欠费兜底，费曼追问环节强制禁用） ----------
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")

@@ -19,7 +19,7 @@ def test_budget_expansion_retries(monkeypatch):
     """首次调用预算不足抛 ReasoningBudgetError，扩容后成功返回。"""
     calls = []
 
-    def fake_post(messages, temperature, max_tokens, base_url, api_key, model):
+    def fake_post(messages, temperature, max_tokens, base_url, api_key, model, **kwargs):
         calls.append(max_tokens)
         if len(calls) == 1:  # 第一次：预算不足
             raise ReasoningBudgetError("预算不足", max_tokens=max_tokens)
@@ -35,7 +35,7 @@ def test_budget_expansion_caps_at_max(monkeypatch):
     """预算不断不足时，扩容到 MAX_BUDGET 封顶，不无限翻倍。"""
     calls = []
 
-    def fake_post(messages, temperature, max_tokens, base_url, api_key, model):
+    def fake_post(messages, temperature, max_tokens, base_url, api_key, model, **kwargs):
         calls.append(max_tokens)
         raise ReasoningBudgetError("预算不足", max_tokens=max_tokens)
 
@@ -51,7 +51,7 @@ def test_network_error_no_expansion(monkeypatch):
     """非预算错误（网络/HTTP）不触发扩容，正常重试后抛错。"""
     calls = []
 
-    def fake_post(messages, temperature, max_tokens, base_url, api_key, model):
+    def fake_post(messages, temperature, max_tokens, base_url, api_key, model, **kwargs):
         calls.append(max_tokens)
         import urllib.error
         raise urllib.error.URLError("网络挂了")

@@ -72,26 +72,47 @@ class ReasoningBudgetError(ModelError):
 
 
 def _post_chat(messages: list[dict], temperature: float, max_tokens: int,
-               base_url: str, api_key: str, model: str) -> tuple[str, dict, int]:
-    """调用一次 /chat/completions，返回 (纯文本, usage, 耗时毫秒)。异常由上层处理。"""
+               base_url: str, api_key: str, model: str,
+               thinking_off: bool = False) -> tuple[str, dict, int]:
+    """调用一次 /chat/completions，返回 (纯文本, usage, 耗时毫秒)。异常由上层处理。
+
+    thinking_off：是否为该请求注入关闭思维链的参数。
+    实测（2026-10-16）deepseek-v4.1-flash 在真实 RAG 提示下会把预算烧在 reasoning 上、
+    content 为空；注入 reasoning_effort=none 后正常。不认该字段的模型回 400，
+    这里会自动去掉该字段重试一次，保证兼容性。
+    """
     payload = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    req = urllib.request.Request(
-        base_url + "/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
+    if thinking_off:
+        payload["reasoning_effort"] = "none"
+
+    def _send(pl: dict):
+        req = urllib.request.Request(
+            base_url + "/chat/completions",
+            data=json.dumps(pl).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
     t0 = time.monotonic()
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
+    try:
+        body = _send(payload)
+    except urllib.error.HTTPError as e:
+        if thinking_off and e.code in (400, 422):
+            retry = dict(payload)
+            retry.pop("reasoning_effort", None)
+            body = _send(retry)
+        else:
+            raise
     latency_ms = int((time.monotonic() - t0) * 1000)
     choice = body["choices"][0]["message"]
     content = choice.get("content", "")
@@ -135,6 +156,7 @@ def _request_once(messages, temperature, max_tokens, *, allow_local: bool,
             base_url=config.DEEPSEEK_BASE_URL,
             api_key=config.DEEPSEEK_API_KEY,
             model=model_name or config.DEEPSEEK_MODEL,
+            thinking_off=getattr(config, "DEEPSEEK_DISABLE_THINKING", True),
         )
         return text, usage, latency, "api"
     except urllib.error.HTTPError as e:
