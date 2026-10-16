@@ -14,7 +14,11 @@ load_dotenv()
 os.environ.setdefault("HF_ENDPOINT", os.getenv("HF_ENDPOINT", "https://hf-mirror.com"))
 
 # ---------- 模型与运行时（来自 .env，给默认值便于本地直接跑）----------
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+# C1（2026-10-16）：嵌入模型由 nomic-embed-text(768维) 换为 bge-m3(1024维)。
+# 为什么换：nomic 是英文中心模型，中文语料相似度基线偏高（config 下方阈值注释早有记录）；
+# bge-m3 是多语言/中文友好模型，维度 768→1024。
+# ⚠️ 换嵌入模型必须**全量重建索引**，不能复用旧 collection（维度不兼容）。
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "bge-m3")
 LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 # Ollama 默认本地端口；换机器/远程只需改这里
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
