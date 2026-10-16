@@ -1,0 +1,89 @@
+# ============================================================
+# AdaptiveTutor 一键编排（2026-10-16）
+#
+# 两个服务，保留进程边界：
+#   course-rag   多模态知识库检索（FastAPI，容器内 8000）
+#   tutor        费曼教学 Agent（FastAPI + Web，容器内 8001，前门）
+#
+# 关系：tutor 通过 HTTP 调 course-rag 的 /retrieve 与 /images，
+#       拿到带引用的上下文后由自己调用云端模型生成讲解。
+#
+# 前置条件：
+#   1) 宿主 Ollama 已启动并拉取模型（嵌入/精排仍在本机）
+#        ollama serve
+#        ollama pull nomic-embed-text
+#   2) 根目录 .env（不随仓库分发）提供云端 key：
+#        LLM_API_KEY=sk-xxxx        # course-rag 生成/裁判用
+#        DEEPSEEK_API_KEY=sk-xxxx   # tutor 生成用（可与上同一把）
+#   3) course-rag/data 与 course-rag/chroma_db 已存在（首次需按 CR README 建库）
+#
+# 启动：docker compose up -d --build
+#   tutor      -> http://127.0.0.1:8001
+#   course-rag -> http://127.0.0.1:8010/docs
+# ============================================================
+services:
+  course-rag:
+    build:
+      context: ./course-rag
+      args:
+        # 精确模式需要 bge-reranker：镜像含 CPU torch，体积约 +2GB，首次构建较慢
+        WITH_RERANKER: "true"
+    container_name: adaptive-tutor-course-rag
+    environment:
+      # 嵌入与精排仍走宿主 Ollama
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      EMBEDDING_MODEL: nomic-embed-text
+      RERANKER_ENABLED: "true"
+      HF_ENDPOINT: https://hf-mirror.com
+      DATA_DIR: /app/data
+      PERSIST_DIRECTORY: /app/chroma_db
+      QUERY_LOG_PATH: /app/.query_log.jsonl
+      # 生成与裁判走云端（C3+C2）
+      LLM_PROVIDER: openai
+      LLM_MODEL: deepseek-v4.1-flash
+      LLM_API_BASE: https://kuaipao.pro/v1
+      LLM_DISABLE_THINKING: "true"
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      JUDGE_PROVIDER: openai
+      JUDGE_MODEL: kimi-k2.6
+      JUDGE_API_BASE: https://kuaipao.pro/v1
+      JUDGE_DISABLE_THINKING: "true"
+      JUDGE_API_KEY: ${LLM_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./course-rag/data:/app/data
+      - ./course-rag/chroma_db:/app/chroma_db
+      - hf_cache:/root/.cache/huggingface
+    ports:
+      - "8010:8000"          # 宿主 8000 常被 Docker 占用，故映射 8010
+    restart: unless-stopped
+
+  tutor:
+    build:
+      context: ./feynman-tutor
+    container_name: adaptive-tutor-tutor
+    depends_on:
+      - course-rag
+    environment:
+      # 容器网络内直接用服务名，不再依赖 host.docker.internal
+      RAG_BASE_URL: http://course-rag:8000
+      DB_PATH: /app/data/state.db
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: https://kuaipao.pro/v1
+      DEEPSEEK_MODEL: deepseek-v4.1-flash
+      DEEPSEEK_DISABLE_THINKING: "1"
+    volumes:
+      - ./feynman-tutor/data:/app/data
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  hf_cache:
