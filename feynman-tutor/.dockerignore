@@ -1,0 +1,21 @@
+# Docker 构建上下文排除
+.env
+.env.*
+*.db
+*.db.bak*
+state.db*
+__pycache__/
+*.pyc
+.git
+.gitignore
+.github
+.pytest_cache/
+tests/
+docs/
+PLAN.md
+README.md
+data/
+*.png
+*.log
+.venv/
+venv/

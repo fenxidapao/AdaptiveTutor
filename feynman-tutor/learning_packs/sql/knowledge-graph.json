@@ -1,0 +1,108 @@
+{
+  "course": "sql",
+  "title": "SQL 基础：查询与数据操作",
+  "version": "1.0",
+  "description": "P2 SQL 学习包：2 章节 12 知识点。基于 sqlite3 内存预置库（students/classes 两表）判题。所有题目均可规则判（sql 题型比对结果集 / mcq 选择）。",
+  "chapters": {
+    "ch1": { "title": "SQL 查询基础", "mode_hint": "lecture（对照组）" },
+    "ch2": { "title": "SQL 聚合与数据操作", "mode_hint": "feynman（实验组）" }
+  },
+  "knowledge_points": [
+    {
+      "kp_id": "sql.select.basic",
+      "title": "SELECT 基础（选择列）",
+      "chapter": "ch1",
+      "prerequisites": [],
+      "sources": [],
+      "notes_file": "notes/sql.select.basic.md"
+    },
+    {
+      "kp_id": "sql.where",
+      "title": "WHERE 条件过滤",
+      "chapter": "ch1",
+      "prerequisites": ["sql.select.basic"],
+      "sources": [],
+      "notes_file": "notes/sql.where.md"
+    },
+    {
+      "kp_id": "sql.order",
+      "title": "ORDER BY 排序",
+      "chapter": "ch1",
+      "prerequisites": ["sql.select.basic"],
+      "sources": [],
+      "notes_file": "notes/sql.order.md"
+    },
+    {
+      "kp_id": "sql.distinct",
+      "title": "DISTINCT 去重",
+      "chapter": "ch1",
+      "prerequisites": ["sql.select.basic"],
+      "sources": [],
+      "notes_file": "notes/sql.distinct.md"
+    },
+    {
+      "kp_id": "sql.limit",
+      "title": "LIMIT 限制行数",
+      "chapter": "ch1",
+      "prerequisites": ["sql.select.basic"],
+      "sources": [],
+      "notes_file": "notes/sql.limit.md"
+    },
+    {
+      "kp_id": "sql.aggregate",
+      "title": "聚合函数（COUNT/SUM/AVG/MIN/MAX）",
+      "chapter": "ch2",
+      "prerequisites": ["sql.select.basic", "sql.where"],
+      "sources": [],
+      "notes_file": "notes/sql.aggregate.md"
+    },
+    {
+      "kp_id": "sql.group",
+      "title": "GROUP BY 分组",
+      "chapter": "ch2",
+      "prerequisites": ["sql.aggregate"],
+      "sources": [],
+      "notes_file": "notes/sql.group.md"
+    },
+    {
+      "kp_id": "sql.having",
+      "title": "HAVING 过滤分组",
+      "chapter": "ch2",
+      "prerequisites": ["sql.group"],
+      "sources": [],
+      "notes_file": "notes/sql.having.md"
+    },
+    {
+      "kp_id": "sql.join",
+      "title": "JOIN 表连接",
+      "chapter": "ch2",
+      "prerequisites": ["sql.select.basic", "sql.where"],
+      "sources": [],
+      "notes_file": "notes/sql.join.md"
+    },
+    {
+      "kp_id": "sql.insert",
+      "title": "INSERT 插入数据",
+      "chapter": "ch2",
+      "prerequisites": ["sql.select.basic"],
+      "sources": [],
+      "notes_file": "notes/sql.insert.md"
+    },
+    {
+      "kp_id": "sql.update",
+      "title": "UPDATE 更新数据",
+      "chapter": "ch2",
+      "prerequisites": ["sql.select.basic", "sql.where"],
+      "sources": [],
+      "notes_file": "notes/sql.update.md"
+    },
+    {
+      "kp_id": "sql.delete",
+      "title": "DELETE 删除数据",
+      "chapter": "ch2",
+      "prerequisites": ["sql.select.basic", "sql.where"],
+      "sources": [],
+      "notes_file": "notes/sql.delete.md"
+    }
+  ]
+}
