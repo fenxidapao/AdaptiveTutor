@@ -837,7 +837,15 @@ def _get_bm25_cache():
     cnt = get_vector_store().count()
     if _bm25_cache is None or _bm25_cache[0] != cnt:
         chunks = _get_all_chunks()
-        _bm25_cache = (cnt, _BM25(chunks), chunks)
+        # B3 修复（2026-10-16）：BM25 也用短描述打分（与 v1 基线一致）。
+        # 实测：新 caption 的逐字转写（本机路径、重复表头等噪声）会拉低图像块的 BM25 排名，
+        # 使 p020 类图像在 RRF 融合阶段被挤出精排池。返回的仍是原 chunks（保持下标/身份一致）。
+        bm_chunks = [
+            Document(page_content=(c.metadata.get("embed_text") or c.page_content),
+                     metadata=c.metadata)
+            for c in chunks
+        ]
+        _bm25_cache = (cnt, _BM25(bm_chunks), chunks)
     return _bm25_cache[1], _bm25_cache[2]
 
 
