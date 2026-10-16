@@ -24,7 +24,7 @@ def test_default_provider_is_ollama(monkeypatch):
     monkeypatch.setattr(config, "LLM_PROVIDER", "ollama")
     called = {}
 
-    def fake_ollama(messages, temperature):
+    def fake_ollama(messages, temperature, model):
         called["hit"] = True
         called["temperature"] = temperature
         return "本地回答"
@@ -39,8 +39,8 @@ def test_openai_provider_uses_cloud(monkeypatch):
     monkeypatch.setattr(config, "LLM_PROVIDER", "openai")
     seen = {}
 
-    def fake_cloud(messages, temperature, max_tokens):
-        seen["model"] = config.LLM_MODEL
+    def fake_cloud(messages, temperature, max_tokens, **kw):
+        seen["model"] = kw.get("model")
         return "云端回答"
 
     monkeypatch.setattr(llm_provider, "_cloud_chat", fake_cloud)
@@ -51,7 +51,7 @@ def test_openai_provider_uses_cloud(monkeypatch):
 
 def test_unknown_provider_falls_back_to_ollama(monkeypatch):
     monkeypatch.setattr(config, "LLM_PROVIDER", "some-typo")
-    monkeypatch.setattr(llm_provider, "_ollama_chat", lambda m, t: "fallback")
+    monkeypatch.setattr(llm_provider, "_ollama_chat", lambda m, t, model: "fallback")
     assert llm_provider.chat([{"role": "user", "content": "x"}]) == "fallback"
 
 
@@ -151,8 +151,8 @@ def test_cloud_chat_disables_thinking_by_default(monkeypatch):
     monkeypatch.setattr(config, "LLM_DISABLE_THINKING", True)
     seen = []
 
-    def fake_post(messages, temperature, max_tokens, thinking_off=False, thinking_style=0):
-        seen.append((thinking_off, thinking_style))
+    def fake_post(messages, temperature, max_tokens, **kw):
+        seen.append((kw.get("thinking_off"), kw.get("thinking_style")))
         return _cloud_body(content="答案", reasoning="", finish="stop")
 
     monkeypatch.setattr(llm_provider, "_cloud_post", fake_post)
@@ -166,8 +166,8 @@ def test_cloud_chat_can_keep_thinking_when_disabled(monkeypatch):
     monkeypatch.setattr(config, "LLM_DISABLE_THINKING", False)
     seen = []
 
-    def fake_post(messages, temperature, max_tokens, thinking_off=False, thinking_style=0):
-        seen.append(thinking_off)
+    def fake_post(messages, temperature, max_tokens, **kw):
+        seen.append(kw.get("thinking_off"))
         return _cloud_body(content="答案", reasoning="", finish="stop")
 
     monkeypatch.setattr(llm_provider, "_cloud_post", fake_post)
@@ -298,6 +298,118 @@ def test_no_key_in_error_when_http_body_echoes_key(monkeypatch):
         llm_provider.chat([{"role": "user", "content": "x"}])
     assert "sk-SECRET-DO-NOT-LEAK" not in str(exc.value)
 
+
+
+# ====================== 7. 裁判（C2）：独立配置 + 统一入口 ======================
+def test_judge_provider_parsing(monkeypatch):
+    """兼容旧写法 deepseek；未知值回落 local。"""
+    for raw, expected in [("openai", "openai"), ("deepseek", "openai"),
+                          ("OPENAI", "openai"), ("local", "ollama"),
+                          ("", "ollama"), ("typo", "ollama")]:
+        monkeypatch.setattr(config, "JUDGE_PROVIDER", raw)
+        assert llm_provider.judge_provider_name() == expected
+
+
+def test_judge_chat_uses_independent_config(monkeypatch):
+    """裁判必须用 JUDGE_MODEL / JUDGE_API_BASE，而不是生成模型的配置。"""
+    monkeypatch.setattr(config, "JUDGE_PROVIDER", "openai")
+    monkeypatch.setattr(config, "JUDGE_MODEL", "judge-model-x")
+    monkeypatch.setattr(config, "JUDGE_API_BASE", "https://judge.example/v1")
+    monkeypatch.setattr(config, "LLM_MODEL", "gen-model-y")
+    monkeypatch.setattr(config, "LLM_API_BASE", "https://gen.example/v1")
+    monkeypatch.setattr(llm_provider, "judge_api_key", lambda: "judge-key")
+    seen = {}
+
+    def fake_cloud(messages, temperature, max_tokens, **kw):
+        seen.update(kw)
+        seen["temperature"] = temperature
+        return "{}"
+
+    monkeypatch.setattr(llm_provider, "_cloud_chat", fake_cloud)
+    llm_provider.judge_chat([{"role": "user", "content": "x"}])
+    assert seen["model"] == "judge-model-x"
+    assert seen["base_url"] == "https://judge.example/v1"
+    assert seen["api_key"] == "judge-key"
+    assert seen["temperature"] == 0.0        # 裁判温度必须 0
+
+
+def test_judge_chat_local_uses_jadge_model(monkeypatch):
+    monkeypatch.setattr(config, "JUDGE_PROVIDER", "local")
+    monkeypatch.setattr(config, "JUDGE_MODEL", "qwen2.5:7b")
+    seen = {}
+
+    def fake_ollama(messages, temperature, model):
+        seen["model"] = model
+        seen["temperature"] = temperature
+        return "本地裁判"
+
+    monkeypatch.setattr(llm_provider, "_ollama_chat", fake_ollama)
+    assert llm_provider.judge_chat([{"role": "user", "content": "x"}]) == "本地裁判"
+    assert seen["model"] == "qwen2.5:7b"
+    assert seen["temperature"] == 0.0
+
+
+def test_judge_api_key_prefers_explicit(monkeypatch):
+    monkeypatch.setattr(config, "JUDGE_API_KEY", "explicit-judge-key")
+    assert llm_provider.judge_api_key() == "explicit-judge-key"
+
+
+def test_judge_api_key_falls_back_to_relay_key(monkeypatch):
+    monkeypatch.setattr(config, "JUDGE_API_KEY", "")
+    monkeypatch.setenv("LLM_API_KEY", "relay-key")
+    assert llm_provider.judge_api_key() == "relay-key"
+
+
+def test_grounding_uses_provider_not_direct_ollama(monkeypatch):
+    """真 bug 回归：grounding.py 曾直连 Ollama、忽略 JUDGE_PROVIDER。"""
+    import grounding
+    monkeypatch.setattr(config, "JUDGE_PROVIDER", "openai")
+    calls = []
+
+    def fake_judge(messages, temperature=0.0):
+        calls.append(temperature)
+        return '{"statements": [{"statement": "A", "supported": true}], "score": 1.0}'
+
+    monkeypatch.setattr(llm_provider, "judge_chat", fake_judge)
+    out = grounding.verify_grounded("上下文 A", "回答 A")
+    assert calls, "grounding 必须调用 llm_provider.judge_chat"
+    assert out["grounded"] is True and out["score"] == 1.0
+
+
+def test_eval_local_judge_call_delegates(monkeypatch):
+    import eval_local
+    monkeypatch.setattr(llm_provider, "judge_chat", lambda messages, temperature=0.0: "{}")
+    assert eval_local._judge_call([{"role": "user", "content": "x"}]) == "{}"
+
+
+def test_no_hardcoded_deepseek_chat_remains():
+    """回归守卫：eval_local.py 不应再出现硬编码 deepseek-chat 的调用。"""
+    import pathlib
+    src = pathlib.Path(__file__).with_name("eval_local.py").read_text(encoding="utf-8")
+    assert '"model": "deepseek-chat"' not in src
+    assert "def _judge_deepseek" not in src
+
+
+def test_config_defines_judge_vars_once():
+    """回归守卫：config.py 曾重复定义 JUDGE_*，旧块覆盖新默认值导致 401。"""
+    import pathlib
+    import re
+    src = pathlib.Path(__file__).with_name("config.py").read_text(encoding="utf-8")
+    for name in ("JUDGE_PROVIDER", "JUDGE_MODEL", "JUDGE_API_BASE"):
+        assigns = re.findall(rf"(?m)^{name}\s*=", src)
+        assert len(assigns) == 1, f"{name} 在 config.py 中定义了 {len(assigns)} 次"
+
+
+def test_judge_api_base_default_is_relay(monkeypatch):
+    """JUDGE_API_BASE 默认必须是本项目中转，而不是 api.deepseek.com。"""
+    import importlib
+    monkeypatch.delenv("JUDGE_API_BASE", raising=False)
+    import config as cfg
+    importlib.reload(cfg)
+    try:
+        assert "kuaipao.pro" in cfg.JUDGE_API_BASE
+    finally:
+        importlib.reload(cfg)
 
 # ====================== 6. provider 名称解析 ======================
 @pytest.mark.parametrize("raw,expected", [

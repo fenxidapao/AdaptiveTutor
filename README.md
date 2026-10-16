@@ -202,8 +202,11 @@ streamlit run app.py
 
 | 环境变量 | 默认 | 作用 |
 |---|---|---|
-| `JUDGE_PROVIDER` | `local` | 裁判来源：`local` = 本机 Ollama（数据不出本机）/ `deepseek` = 云端 API |
-| `JUDGE_MODEL` | `qwen2.5:7b` | 裁判模型（需先 `ollama pull`） |
+| `JUDGE_PROVIDER` | `local` | 裁判来源：`local` = 本机 Ollama / `openai` = 云端（兼容旧写法 `deepseek`） |
+| `JUDGE_MODEL` | `kimi-k2.6` | 裁判模型。云端实测：kimi-k2.6 3/3、1.4~1.6s，优于 glm-5.2 / qwen3.8-flash |
+| `JUDGE_API_BASE` | `https://kuaipao.pro/v1` | 裁判云端接口（仅 provider=openai） |
+| `JUDGE_API_KEY` | 空 | 裁判 key；留空回退同一中转 key，**不写入仓库** |
+| `JUDGE_MAX_TOKENS` | `4096` | 裁判 JSON 输出预算（含自动扩容上限 `JUDGE_MAX_TOKENS_CAP`） |
 
 > 鉴权 / 限流 / 上传上限 / 跨域四类变量见下方「多用户预留扩展点（Gate 2）」表；完整清单以 `.env.example` 与 `config.py` 为准。
 

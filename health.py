@@ -20,12 +20,15 @@ def check_ollama(base_url=None, timeout=4):
     不再要求本地存在 LLM_MODEL，改为检查云端 key 是否可解析（只报有无，不回显）。
     """
     cloud = False
+    judge_cloud = False
     try:
         import llm_provider
 
         cloud = llm_provider.provider_name() == "openai"
+        judge_cloud = llm_provider.judge_provider_name() == "openai"
     except Exception:
         cloud = False
+        judge_cloud = False
 
     base = base_url or config.OLLAMA_BASE_URL
     url = base.rstrip("/") + "/api/tags"
@@ -41,16 +44,27 @@ def check_ollama(base_url=None, timeout=4):
         need = {config.EMBEDDING_MODEL}
         if not cloud:
             need.add(config.LLM_MODEL)
+        if not judge_cloud:
+            need.add(config.JUDGE_MODEL)
         lack = {x for x in need if not _has(x)}
         if lack:
             return False, "Ollama 已启动，但缺模型：%s（运行 ollama pull %s）" % (
                 ", ".join(sorted(lack)),
                 " ".join(sorted(lack)),
             )
-        if cloud:
+        if cloud or judge_cloud:
             if not llm_provider.key_available():
-                return False, "生成已切云端，但未找到 API key（LLM_API_KEY / KUAIPAO_API_KEY / ~/.dsh/.credentials.yaml）"
-            return True, "Ollama 运行中（嵌入本地），云端生成 key 已就绪：%s" % config.LLM_MODEL
+                return False, "生成/裁判已切云端，但未找到 API key（LLM_API_KEY / KUAIPAO_API_KEY / ~/.dsh/.credentials.yaml）"
+            parts = []
+            if cloud:
+                parts.append("生成=%s" % config.LLM_MODEL)
+            else:
+                parts.append("生成=本地 %s" % config.LLM_MODEL)
+            if judge_cloud:
+                parts.append("裁判=%s" % config.JUDGE_MODEL)
+            else:
+                parts.append("裁判=本地 %s" % config.JUDGE_MODEL)
+            return True, "Ollama 运行中（嵌入本地），" + "，".join(parts)
         return True, "Ollama 运行中，嵌入/生成模型齐全"
     except Exception:
         return False, "Ollama 未启动或不可达（%s）→ 终端运行 ollama serve" % url

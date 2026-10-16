@@ -9,15 +9,13 @@ grounding.py — 生成接地自检（grounded verifier，2026-08-24 工程化�
   - 指标口径一致（把回答拆陈述、逐条判 supported、score=被支撑/总数）。
   - 但 eval_local 与 rag_core 互相 import，此处自包含实现，避免循环依赖；
     后续可把两者统一抽到 judge_utils 复用（TODO）。
-  - 裁判复用 config.JUDGE_MODEL（qwen2.5:7b，与生成 llama3.1:8b 不同源），温度 0 逼稳定 JSON。
+  - 裁判走 llm_provider.judge_chat（按 config.JUDGE_PROVIDER 分流），温度 0 逼稳定 JSON。
 """
 import json
 import re
 
 import config
-import ollama
-
-_judge_client = ollama.Client(host=config.OLLAMA_BASE_URL)
+import llm_provider  # C2：裁判按 config.JUDGE_PROVIDER 分流（local/openai）
 
 
 def _extract_json(text: str):
@@ -66,16 +64,17 @@ def verify_grounded(context: str, answer: str) -> dict:
 {{"statements": [{{"statement": "陈述内容", "supported": true}}], "score": 0.0}}"""
 
     # 裁判最多重试 2 次；失败 → grounded=False（安全侧）。
+    # C2（2026-10-16）：此前这里直接 _judge_client.chat 调本地 Ollama，
+    # 完全忽略 config.JUDGE_PROVIDER —— config 注释与 README 都宣称可切云端，
+    # 但生产 /query 的 grounded 自检实际仍跑本地裁判。现统一走 llm_provider.judge_chat。
     parsed = {}
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
     for _ in range(3):
         try:
-            resp = _judge_client.chat(
-                model=config.JUDGE_MODEL, messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ], options={"temperature": 0.0},
-            )
-            parsed = _extract_json(resp["message"]["content"]) or {}
+            parsed = _extract_json(llm_provider.judge_chat(messages, temperature=0.0)) or {}
             if parsed:
                 break
         except Exception:
