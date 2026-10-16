@@ -469,6 +469,19 @@ def load_image_chunks(images_dir=None):
             cap = (r.get("caption") or "").strip()
             if cap and not cap.startswith("[CAPTION_FAILED]"):
                 cap_map[r["png_path"]] = cap
+
+    # B3 修复：嵌入/BM25 用的短文本另取一份 caption（判别力更强的 v1 描述）。
+    # 取不到就回退到本 caption 的摘要（'图中文字：' 之前），再回退全文。
+    embed_map = {}
+    embed_csv = getattr(config, "IMAGE_EMBED_CAPTIONS_CSV", "") or ""
+    if embed_csv and embed_csv != config.IMAGE_CAPTIONS_CSV:
+        embed_path = images_dir / embed_csv
+        if embed_path.exists():
+            with open(embed_path, encoding="utf-8-sig") as f:
+                for r in _csv.DictReader(f):
+                    t = (r.get("caption") or "").strip()
+                    if t and not t.startswith("[CAPTION_FAILED]"):
+                        embed_map[r["png_path"]] = t
     docs = []
     with open(manifest, encoding="utf-8-sig") as f:
         for r in _csv.DictReader(f):
@@ -477,8 +490,18 @@ def load_image_chunks(images_dir=None):
                 continue
             page_i = int(r["page"])
             gi = int(r["png_path"].rsplit("_i", 1)[1].split(".")[0])
+            # B3 修复（2026-10-16）：拆「嵌入文本」与「生成文本」。
+            # 背景：逐字转写让 caption 中位 264 字 / 最长 1971 字，向量被原始文字稀释，
+            # 图片命中率从 8/8 掉到 7/8（MISS = 微信小程序开发实战/p020）。
+            # 做法：'图中文字：' 之前的摘要（中位 82 字）作为嵌入/BM25 的短文本；
+            # 全量 caption 存 metadata["full_content"]，检索还原时再取回，供生成与引用使用。
+            # 全部 215 条 caption 都含该分隔符（实测），取不到时回退原文，保证不丢内容。
+            embed_text = (embed_map.get(r["png_path"])
+                          or cap.split("图中文字：", 1)[0].strip() or cap)
             docs.append(
                 Document(
+                    # page_content 保持全文：B1 词面通道依赖逐字转写里的判别 token
+                    # （tab1.wxml / p167 等），精排与生成也需要完整信息。
                     page_content=cap,
                     metadata={
                         "source": str(Path(config.DATA_DIR) / "教材" / f"{r['book']}.pdf"),
@@ -486,6 +509,8 @@ def load_image_chunks(images_dir=None):
                         "type": "image",
                         "image_path": r["png_path"],
                         "page": page_i,
+                        # 仅向量嵌入用短文本（v1 描述 / 摘要）；其余链路一律用 page_content
+                        "embed_text": embed_text,
                     },
                 )
             )
@@ -582,10 +607,15 @@ def get_vector_store(chunks=None, auto_rebuild=True):
                 ).hexdigest()
                 for d in chunks
             ]
+            # B3 修复（2026-10-16）：向量嵌入与正文分离。
+            # documents 存全文（BM25/精排/生成/B1 词面通道都用它），
+            # 但 embeddings 由 metadata["embed_text"]（短描述）算出——避免逐字转写稀释向量。
+            emb_texts = [d.metadata.get("embed_text") or d.page_content for d in chunks]
             col.upsert(
                 ids=ids,
                 documents=[d.page_content for d in chunks],
                 metadatas=[d.metadata for d in chunks],
+                embeddings=ef(emb_texts),
             )
         _vector_store = col
         _invalidate_all_chunks()  # 全量重建后 BM25 通道缓存强制刷新
@@ -651,10 +681,13 @@ def add_documents(new_chunks):
     client = _get_chroma_client()
     col = client.get_or_create_collection(_COLLECTION_NAME, embedding_function=ef)
     ids = _stable_ids(new_chunks)
+    # 与全量重建同口径：向量用 embed_text（若有），正文仍是 page_content
+    emb_texts = [d.metadata.get("embed_text") or d.page_content for d in new_chunks]
     col.upsert(
         ids=ids,
         documents=[d.page_content for d in new_chunks],
         metadatas=[d.metadata for d in new_chunks],
+        embeddings=ef(emb_texts),
     )
     global _vector_store
     _vector_store = col
@@ -804,7 +837,15 @@ def _get_bm25_cache():
     cnt = get_vector_store().count()
     if _bm25_cache is None or _bm25_cache[0] != cnt:
         chunks = _get_all_chunks()
-        _bm25_cache = (cnt, _BM25(chunks), chunks)
+        # B3 修复（2026-10-16）：BM25 也用短描述打分（与 v1 基线一致）。
+        # 实测：新 caption 的逐字转写（本机路径、重复表头等噪声）会拉低图像块的 BM25 排名，
+        # 使 p020 类图像在 RRF 融合阶段被挤出精排池。返回的仍是原 chunks（保持下标/身份一致）。
+        bm_chunks = [
+            Document(page_content=(c.metadata.get("embed_text") or c.page_content),
+                     metadata=c.metadata)
+            for c in chunks
+        ]
+        _bm25_cache = (cnt, _BM25(bm_chunks), chunks)
     return _bm25_cache[1], _bm25_cache[2]
 
 

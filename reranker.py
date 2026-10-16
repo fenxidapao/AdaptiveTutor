@@ -62,7 +62,11 @@ def rerank_documents(query, docs, top_n=None):
         return docs
 
     reranker = get_reranker()
-    pairs = [(query, doc.page_content) for doc in docs]
+    # B3 修复（2026-10-16）：图像块优先用 metadata['embed_text']（v1 短描述）打分。
+    # 实测：新描述器的逐字转写（中位 264 字、含本机路径等噪声）会让 cross-encoder
+    # 给图像块更低的分，被文本块挤出 top-8（v1 短描述库可复现 8/8 rank=1）。
+    # 文本块无 embed_text，仍用 page_content。
+    pairs = [(query, doc.metadata.get("embed_text") or doc.page_content) for doc in docs]
     scores = reranker.predict(pairs, batch_size=config.RERANKER_BATCH_SIZE)  # 一维数组，值越大越相关
 
     scored = list(zip(docs, scores))
