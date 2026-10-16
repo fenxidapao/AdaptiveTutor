@@ -295,3 +295,9 @@ VISUAL_RECALL_K = int(os.getenv("VISUAL_RECALL_K", "8"))
 #   平均长度 110.9 → 349.0 字（3.1×）；含文件名类 token 的 caption 34(15.8%) → 49(22.8%)；
 #   215/215 都带「图中文字：」抄录段（旧为 3）；四张目标图的判别性 token **0/6 → 6/6**。
 IMAGE_CAPTIONS_CSV = os.getenv("IMAGE_CAPTIONS_CSV", "_image_captions.csv")
+# B3 修复（2026-10-16）：嵌入用 caption 与生成用 caption 分离。
+# 实测：新描述器（逐字转写）的文本对「创建小程序需要填哪些设置项」这类问题判别力更差——
+# 在 215 张图内 p020 排名：旧 v1 caption 第 10 / 新摘要第 34 / 新全文第 28。
+# 故嵌入与 BM25 用 v1 短描述（判别力强），生成与引用用新 caption（信息全）。
+# 置空字符串 = 不分离，退回单 caption 行为。
+IMAGE_EMBED_CAPTIONS_CSV = os.getenv("IMAGE_EMBED_CAPTIONS_CSV", "_image_captions_v1_qwen25vl.csv")
