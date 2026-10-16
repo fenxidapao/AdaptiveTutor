@@ -5,9 +5,16 @@
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.61-FF4B4B?logo=streamlit&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 
-一个基于**本地 Ollama** 的垂直领域 RAG 问答应用，面向「计算机／数学专业课、课本知识问答」场景：
-把课程笔记与教材 PDF/PPTX 建成本地知识库，提问时给出**带来源引用**的回答，答案可回溯到具体段落与教材原图。
-**数据全程不出本机，不依赖任何云端 API。**
+一个垂直领域 RAG 问答应用，面向「计算机／数学专业课、课本知识问答」场景：
+把课程笔记与教材 PDF/PPTX 建成知识库，提问时给出**带来源引用**的回答，答案可回溯到具体段落与教材原图。
+
+**运行模式（2026-10 起）**：嵌入与精排留在本机（Ollama），**生成与裁判默认走云端 OpenAI 兼容 API**。
+原因是本机只有 8 GB 显存：本地生成 `llama3.1:8b`（约 4.9 GB）+ 本地裁判 `qwen2.5:7b`（约 4.7 GB）装不下，
+Windows WDDM 不报 OOM，而是把 CUDA 调用挂住（日志长时间无输出、CPU 仍上涨）。
+仍可用 `LLM_PROVIDER=ollama` + `JUDGE_PROVIDER=local` 切回全本地，代价是显存与延迟。
+
+> ⚠️ **数据边界**：切云端后，**用户问题与检索到的正文会发送给中转 API**；嵌入阶段不出本机。
+> 需要严格「数据不出本机」时，请把 `LLM_PROVIDER` 与 `JUDGE_PROVIDER` 都设为本地。
 
 RAG 核心（切分 / 加载 / 嵌入 / 向量检索 / 词面检索 / 融合 / 精排 / 接地自检）与评估体系均为自实现，
 RAG 核心链路直接依赖仅 `ollama` + `chromadb` + `sentence-transformers` 三项，已彻底移除 LangChain 全家桶
@@ -143,7 +150,12 @@ streamlit run app.py
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama 服务地址 |
 | `EMBEDDING_MODEL` | `nomic-embed-text` | 嵌入模型（走 Ollama） |
-| `LLM_MODEL` | `llama3.1:8b` | 生成模型（走 Ollama） |
+| `LLM_PROVIDER` | `ollama` | 生成提供方：`ollama`=本地 / `openai`=OpenAI 兼容云端 |
+| `LLM_MODEL` | `llama3.1:8b` | 生成模型名（随 provider 变化；云端推荐 `deepseek-v4.1-flash`） |
+| `LLM_API_BASE` | `https://kuaipao.pro/v1` | 云端 OpenAI 兼容接口（仅 provider=openai） |
+| `LLM_API_KEY` | 空 | 云端 key；留空时自动读 `~/.dsh/.credentials.yaml` 的 `KUAIPAO_API_KEY`，**不写入仓库** |
+| `LLM_DISABLE_THINKING` | `true` | 云端关闭思维链；实测推理模型会把预算烧在 reasoning 上导致空回答 |
+| `LLM_MAX_TOKENS` / `LLM_MAX_TOKENS_CAP` | `2048` / `8192` | 生成预算下限与自动扩容上限 |
 | `LLM_TEMPERATURE` | `0.2` | 生成温度（低温度压制幻觉） |
 | `HF_ENDPOINT` | `https://hf-mirror.com` | HuggingFace 镜像（reranker 权重下载用） |
 
@@ -197,8 +209,11 @@ streamlit run app.py
 
 | 环境变量 | 默认 | 作用 |
 |---|---|---|
-| `JUDGE_PROVIDER` | `local` | 裁判来源：`local` = 本机 Ollama（数据不出本机）/ `deepseek` = 云端 API |
-| `JUDGE_MODEL` | `qwen2.5:7b` | 裁判模型（需先 `ollama pull`） |
+| `JUDGE_PROVIDER` | `local` | 裁判来源：`local` = 本机 Ollama / `openai` = 云端（兼容旧写法 `deepseek`） |
+| `JUDGE_MODEL` | `kimi-k2.6` | 裁判模型。云端实测：kimi-k2.6 3/3、1.4~1.6s，优于 glm-5.2 / qwen3.8-flash |
+| `JUDGE_API_BASE` | `https://kuaipao.pro/v1` | 裁判云端接口（仅 provider=openai） |
+| `JUDGE_API_KEY` | 空 | 裁判 key；留空回退同一中转 key，**不写入仓库** |
+| `JUDGE_MAX_TOKENS` | `4096` | 裁判 JSON 输出预算（含自动扩容上限 `JUDGE_MAX_TOKENS_CAP`） |
 
 > 鉴权 / 限流 / 上传上限 / 跨域四类变量见下方「多用户预留扩展点（Gate 2）」表；完整清单以 `.env.example` 与 `config.py` 为准。
 
@@ -253,8 +268,10 @@ curl -N -X POST http://localhost:8000/query/stream -H "Content-Type: application
 | fast | **54ms** | **743ms**（占端到端 19%） | 3.96s |
 | accurate | 0.4 ~ 1.4s（冷启动首轮 37.3s，含 reranker 权重加载） | —（缓冲，见上） | **34.9s** |
 
-> **关于「模型 API 密钥」**：本项目走**本地 Ollama**（数据不出本机是核心卖点），
-> 没有云端 API 密钥。真正的运行时配置只有 `OLLAMA_BASE_URL`、模型名、RAG 调参与 `HF_ENDPOINT`
+> **关于「模型 API 密钥」**：生成与裁判默认走云端 OpenAI 兼容接口，需要一个 API key。
+> key 只从环境变量或 `~/.dsh/.credentials.yaml` 读取，**不写入仓库、不进日志、错误体回显会自动脱敏**。
+> 相关运行时配置：`LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_BASE`、`JUDGE_PROVIDER` / `JUDGE_MODEL` / `JUDGE_API_BASE`、
+> `OLLAMA_BASE_URL`（嵌入与 reranker 仍用它）、RAG 调参与 `HF_ENDPOINT`
 > （见 `.env`）。若未来切云端模型，只需在 `config.py` 增加对应 key 并改 `rag_core` 的调用层。
 
 ### 本地运行（与 Streamlit 同机）
@@ -504,14 +521,15 @@ flowchart TB
 | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | **冻结测试集**（24 题，从未参与调参；语料 1434 块 = 1219 文本 + 215 图像 caption） | faithfulness **0.901 ± 0.022** / answer_relevancy **0.975** / context_precision **0.869** / context_recall **0.948**（3 轮独立回归） | **对外引用的绝对值口径**；`python eval_test.py` 可复现       |
 | **held-out A 组 v2**（38 题 = 30 文本 + 8 图片题；门控 faith ≥0.85 且 recall ≥0.80） | faith **0.915** / relevancy 0.958 / precision 0.824 / recall **0.975** → **PASS** | 只准用它调参                                                 |
-| **图片命中率 top-8**（8 题图片问答）                         | **8/8 = 100%，全部 rank=1 命中**                             | 期望块按 `image_path` 锚定（`eval_heldout.py` 用 `expected_image` 子串匹配 `image_path`）；题面为自然用户问法。逐题明细由 `python eval_heldout.py` 本地生成（`eval_heldout.py:89` 输出 `eval_results_heldout_A_images.csv`），**产物未随仓库分发，需本地重跑** |
+| **图片命中率 top-8**（8 题图片问答）                         | **7/8 = 87.5%**（生产库现状；唯一 MISS=`微信小程序开发实战/p020`，rank=1 为 5/8）。旧 caption 库为 8/8，B3 换描述器后出现回归，修复排在 v1.1 | 期望块按 `image_path` 锚定（`eval_heldout.py` 用 `expected_image` 子串匹配 `image_path`）；题面为自然用户问法。逐题明细由 `python eval_heldout.py` 本地生成（`eval_heldout.py:89` 输出 `eval_results_heldout_A_images.csv`），**产物未随仓库分发，需本地重跑** |
 | **held-out B 组**（20 题语料外；门控拒答率 ≥90%）            | **20/20 = 100% → PASS**                                      | 硬拒答 + 接地自检 + 教材路由共同生效                         |
 | **混合检索 vs 纯向量**（隔离 reranker 的 A/B 差值）          | precision **+0.18** / recall **+0.16** / faith +0.09 / relevancy +0.05，四项全正向 | 100 题（`python run_ab.py` 的 A/B 两轮，产物 `eval_results_vector.csv` / `eval_results_hybrid.csv` 各 100 行；**产物未随仓库分发，需本地重跑**）× 697 块历史语料（A/B 当时的块数，见 `config.py` 乱码清洗注释与 `test_retrieval.py` 的块数断言）；**只看差值** |
 | **reranker OFF vs ON**（59 题全量语料）                      | precision +0.120 / relevancy +0.133 / recall +0.096 / faith +0.032，四项全正向 | reranker 救「正确块排 30+」的难 query                        |
 | **性能**（本地推理，数字硬件绑定，跨机不可比）               | fast 全链路 P50 **5.9s** / P95 13.4s；accurate 检索 + 精排段 GPU 稳态 P50 **1.16s**（CPU 基线 21.1s ≈ **18×** 提速）；语义缓存命中 6.4s → **40ms** | 明细与完整演化时间线见本地 `EVALUATION.md`（**不随仓库分发**） |
 
-> 检索侧指标（precision / recall）三轮零方差，方差全部来自生成侧（temp 0.2）；
-> 裁判为独立模型 qwen2.5:7b（与生成 llama3.1:8b 不同源，破自评偏差）。
+> ⚠️ 上表数值是**本地模式基线**（生成 llama3.1:8b / 裁判 qwen2.5:7b）的历史实测，
+> 用于和当前云端模式做对照，不代表云端模式的复测结果。
+> 检索侧指标（precision / recall）三轮零方差，方差全部来自生成侧（temp 0.2）。
 
 ### held-out 门控
 

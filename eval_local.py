@@ -13,7 +13,7 @@ eval_local.py — 本地自实现 RAG 评估（W3 兜底方案）
 特点：
   - 零额外依赖（不装 ragas / datasets / nest_asyncio）；裁判默认独立模型 qwen2.5:3b
     （T2：与生成模型 llama3.1:8b 不同源，破除「同模型既生成又打分」的自评偏差；
-    可切 JUDGE_PROVIDER=deepseek 走 API，见 config.py）
+    可切 JUDGE_PROVIDER=openai 走 API，见 config.py）
   - 四个指标 = 你自己的代码，对应『自己实现评估而非套用框架』的取舍
   - 复用 rag_core.retrieve_and_rerank 与 build_rag_chain，保证『评估用的来源』=『线上用的来源』
   - 输出 eval_results.csv + 控制台汇总
@@ -25,7 +25,6 @@ import json
 import re
 import csv
 import os
-import urllib.request
 
 import config
 from rag_core import (
@@ -38,46 +37,24 @@ from rag_core import (
 
 # ====================== T2: 独立裁判（2026-08-22）======================
 # 原实现裁判复用 rag_core.ollama_chat（与生成同模型 llama3.1:8b），存在自评价偏差。
-# 现按 config.JUDGE_PROVIDER 分流：
-#   local    → Ollama 本地独立模型（默认 qwen2.5:3b），数据不出本机
-#   deepseek → DeepSeek API（需 .env 配 JUDGE_API_KEY），效果更强但数据出本机
-import ollama
-_judge_client = ollama.Client(host=config.OLLAMA_BASE_URL)
+# C2（2026-10-16）：改走 llm_provider.judge_chat，与生产 grounding.py 共用同一裁判入口，
+# 按 config.JUDGE_PROVIDER 分流：
+#   local    → Ollama 本地独立模型
+#   openai   → OpenAI 兼容云端（需 key；兼容旧写法 deepseek），效果好但数据出本机
+import llm_provider
 
 
-def _judge_local(messages):
-    """本地 Ollama 裁判（独立模型，温度 0 逼稳定 JSON）。"""
-    resp = _judge_client.chat(
-        model=config.JUDGE_MODEL, messages=messages, options={"temperature": 0.0}
-    )
-    return resp["message"]["content"]
+def _judge_call(messages):
+    """统一裁判入口（C2，2026-10-16）。
 
+    此前这里有两份各自实现的裁判：_judge_local 直连本地 Ollama，_judge_deepseek
+    把模型名硬编码成 "deepseek-chat"——而本中转的模型清单里没有它，直接 403。
+    现统一走 llm_provider.judge_chat：模型名与 base 全部来自 config，
+    key 自动从环境变量或 ~/.dsh/.credentials.yaml 解析，并对错误体做脱敏。
+    """
+    return llm_provider.judge_chat(messages, temperature=0.0)
 
-def _judge_deepseek(messages):
-    """DeepSeek API 裁判（OpenAI 兼容 /chat/completions，标准库实现零新依赖）。
-    模型固定 deepseek-chat；JUDGE_MODEL 是 Ollama 的模型名，两种 provider 各自独立。"""
-    if not config.JUDGE_API_KEY:
-        raise RuntimeError("JUDGE_PROVIDER=deepseek 但 .env 未设置 JUDGE_API_KEY")
-    body = json.dumps(
-        {
-            "model": "deepseek-chat",
-            "messages": messages,
-            "temperature": 0.0,
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(
-        config.JUDGE_API_BASE + "/chat/completions",
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {config.JUDGE_API_KEY}",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    return data["choices"][0]["message"]["content"]
-
-# 裁判模型：温度设 0，逼它稳定输出可解析的 JSON（T2 起默认独立模型 qwen2.5:3b，可切 DeepSeek API）
+# 裁判模型：温度设 0，逼它稳定输出可解析的 JSON（C2 起默认 kimi-k2.6，与生成模型不同源）
 
 EVAL_CSV = os.path.join(
     os.path.dirname(__file__), os.environ.get("EVAL_CSV_NAME", "eval_results.csv")
@@ -176,18 +153,15 @@ def _extract_json(text: str):
 
 def _judge_once(system: str, user: str, retries: int = 2):
     """让裁判模型回答一次，返回解析后的 dict；失败重试，最终仍失败返回 {}。
-    T2（2026-08-22）：裁判按 config.JUDGE_PROVIDER 选择——local=Ollama 独立模型
-    （默认 qwen2.5:3b，与生成模型不同源）；deepseek=DeepSeek API。"""
+    T2（2026-08-22）/ C2（2026-10-16）：裁判按 config.JUDGE_PROVIDER 分流，
+    与生成模型不同源；local=Ollama，openai=OpenAI 兼容云端（默认 kimi-k2.6）。"""
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
     for _ in range(retries + 1):
         try:
-            if config.JUDGE_PROVIDER == "deepseek":
-                content = _judge_deepseek(messages)
-            else:
-                content = _judge_local(messages)
+            content = _judge_call(messages)
             parsed = _extract_json(content)
             if parsed is not None:
                 return parsed

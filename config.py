@@ -19,6 +19,55 @@ LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 # Ollama 默认本地端口；换机器/远程只需改这里
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
+# ---------- 裁判模型提供方（C2 去本地化，2026-10-16）----------
+# 为什么裁判也必须切云：生产 /query 的 grounded 自检走 grounding.py，默认本地
+# qwen2.5:7b（约 4.7 GB），与生成模型叠加会撑爆 8 GB 显存。
+# 为什么必须独立配置：裁判若与生成同模型会产生自评偏差（同源打分虚高）。
+# 实测（2026-10-16，同一 JSON 接地任务，3 次）：
+#   kimi-k2.6      → 3/3 JSON 成功，1.4~1.6s（零 reasoning）
+#   glm-5.2        → 3/3，6.7~24.1s
+#   qwen3.8-flash  → 1/3（2 次 DNS 失败），7.8~29.6s
+# 故默认裁判选 kimi-k2.6：最快、最稳，且与生成 deepseek-v4.1-flash 不同源。
+#   JUDGE_PROVIDER=local  → Ollama（JUDGE_MODEL 为 Ollama 模型名）
+#   JUDGE_PROVIDER=openai → OpenAI 兼容云端（兼容旧写法 deepseek）
+JUDGE_PROVIDER = os.getenv("JUDGE_PROVIDER", "local").strip().lower()
+JUDGE_MODEL = os.getenv("JUDGE_MODEL", "kimi-k2.6")
+JUDGE_API_BASE = os.getenv("JUDGE_API_BASE", "https://kuaipao.pro/v1")
+# 裁判 key：留空时回退到同一个中转 key（环境变量或 ~/.dsh/.credentials.yaml）
+JUDGE_API_KEY = os.getenv("JUDGE_API_KEY", "")
+# 裁判输出是结构化 JSON，预算需求远小于生成；默认关闭思维链（同上 C3 实测原因）
+JUDGE_DISABLE_THINKING = os.getenv("JUDGE_DISABLE_THINKING", "true").strip().lower() == "true"
+JUDGE_MAX_TOKENS = int(os.getenv("JUDGE_MAX_TOKENS", "4096"))
+JUDGE_MAX_TOKENS_CAP = int(os.getenv("JUDGE_MAX_TOKENS_CAP", "8192"))
+
+# ---------- 生成模型提供方（C3 去本地化，2026-10-15）----------
+# 背景：本地 llama3.1:8b（约 4.9 GB 显存）+ 裁判 qwen2.5:7b（约 4.7 GB）
+# 在 8 GB 卡上装不下；Windows WDDM 不报 OOM，而是让 CUDA 调用挂住（见 04 纪律 28）。
+# 生成先切云端，裁判另批处理。默认 ollama：不设该变量时行为与旧版完全一致，可随时回滚。
+#   LLM_PROVIDER=ollama → 本地 Ollama（LLM_MODEL 必须是 Ollama 模型名）
+#   LLM_PROVIDER=openai → OpenAI 兼容云端（LLM_MODEL 为云端模型名，走 LLM_API_BASE）
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
+# 云端 OpenAI 兼容接口地址（仅 LLM_PROVIDER=openai 时使用）
+LLM_API_BASE = os.getenv("LLM_API_BASE", "https://kuaipao.pro/v1")
+# 云端 key：留空时由 llm_provider.resolve_api_key() 依次尝试环境变量与
+# ~/.dsh/.credentials.yaml 的 KUAIPAO_API_KEY；key 绝不写入仓库/日志/响应。
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+# 单次请求超时（秒）；推理模型首响可能较慢，默认留足
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "180"))
+# 初始 max_tokens 与自动扩容上限。推理模型（deepseek-v4.1-flash）实测
+# max_tokens=256 时 256 个 token 全耗在 reasoning、content 为空；
+# 故默认预算不低于 1024，空 content+reasoning 占满时自动翻倍到 cap。
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+# 是否要求云端模型关闭思维链（默认 true）。
+# 实测（2026-10-15，真实 RAG 提示、8 块上下文、max_tokens=4096）：
+#   deepseek-v4.1-flash 默认开启思考，3/3 次把预算全烧在 reasoning 上，
+#   content 为空、finish=length，单次耗时 20~23s；失败是概率性的，不是必现。
+#   显式传 reasoning_effort=none / thinking.type=disabled 后 0 reasoning，
+#   正常产出 content（5.9~33s）。因此默认关闭思考；模型不支持该字段时
+#   由如下的自动降级路径处理（见 llm_provider._cloud_post 的字段裁剪重试）。
+LLM_DISABLE_THINKING = os.getenv("LLM_DISABLE_THINKING", "true").strip().lower() == "true"
+LLM_MAX_TOKENS_CAP = int(os.getenv("LLM_MAX_TOKENS_CAP", "8192"))
+
 # ---------- RAG 调参（这些数为什么这么定）----------
 # 注意：实际评估基线为 800/150（.env 与 README 一致；2026-08-22 统一口径，
 # v2 A/B 等全部数字均在 CHUNK_SIZE=800 下测得）。勿再改回 500/80 以免与证据脱节。
@@ -109,16 +158,11 @@ PERSIST_DIRECTORY = os.getenv("PERSIST_DIRECTORY", "./chroma_db")
 # 均字符/页 低于此阈值视为无文字层（扫描版），建库时告警跳过而非静默空索引。
 PDF_MIN_CHARS_PER_PAGE = int(os.getenv("PDF_MIN_CHARS_PER_PAGE", "30"))
 
-# ---------- 评估裁判（T2: 独立裁判，2026-08-22） ----------
-# 生成用 LLM_MODEL（llama3.1:8b）；裁判默认用独立模型，避免「同模型既生成又打分」的自评价偏差。
-#   JUDGE_PROVIDER=local    → Ollama 本地独立模型（JUDGE_MODEL 指定，如 qwen2.5:7b，数据不出本机）
-#   JUDGE_PROVIDER=deepseek → DeepSeek API（需 JUDGE_API_KEY；效果强，但数据出本机，谨慎用）
-JUDGE_PROVIDER = os.getenv("JUDGE_PROVIDER", "local")
-# 2026-08-22 定稿：3b vs 7b 十题实测（judge_compare_3b7b.json）后选 7b——
-# 拆分完整、判定符合语义、能识别检索失败场景；3b 会把无关内容判 True。
-JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:7b")
-JUDGE_API_KEY = os.getenv("JUDGE_API_KEY", "")
-JUDGE_API_BASE = os.getenv("JUDGE_API_BASE", "https://api.deepseek.com/v1")
+# ---------- 评估裁判（T2: 独立裁判，2026-08-22；C2 于 2026-10-16 迁至文件前部）----------
+# 裁判配置（JUDGE_PROVIDER / JUDGE_MODEL / JUDGE_API_BASE / JUDGE_API_KEY /
+# JUDGE_DISABLE_THINKING / JUDGE_MAX_TOKENS）已统一上移到「裁判模型提供方」区块。
+# 保留本注释只为标记历史位置；此处不得再重复定义同名变量，否则会静默覆盖默认值
+# （C2 实测踩过：旧块 JUDGE_API_BASE=api.deepseek.com 覆盖了新默认值，导致 401）。
 
 # ---------- 低置信阈值（T3: 拒答/提示机制，2026-08-22） ----------
 # top-1 向量相似度（cosine）低于此值 → 判定「资料可能不足」，UI 显式提示而非硬答。
