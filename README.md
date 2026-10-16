@@ -23,7 +23,7 @@ AdaptiveTutor 由两个进程组成，各自负责一件事：
               │  HTTP /retrieve  /images
               └──> course-rag(FastAPI, :8010)
                         │
-                        ├── Ollama 本地：嵌入(nomic-embed-text) + 精排(bge-reranker-v2-m3)
+                        ├── Ollama 本地：嵌入(bge-m3) + 精排(bge-reranker-v2-m3)
                         └── 云端 API：生成(deepseek-v4.1-flash) + 裁判(kimi-k2.6)
 ```
 
@@ -35,7 +35,7 @@ AdaptiveTutor 由两个进程组成，各自负责一件事：
 因此：
 
 - **生成、裁判** → 云端 OpenAI 兼容 API（显存占用归零）
-- **嵌入、精排** → 留在本机（`nomic-embed-text` 约 1.2 GB + reranker 约 2.2 GB，可共存）
+- **嵌入、精排** → 留在本机（`bge-m3` 约 1.2 GB + reranker 约 2.2 GB，可共存）
 
 > ⚠️ **数据边界**：用户问题与检索到的教材正文会发送给中转 API；嵌入阶段不出本机。
 > 需要严格「数据不出本机」时，把 `LLM_PROVIDER` / `JUDGE_PROVIDER` 都设为本地。
@@ -48,12 +48,12 @@ reasoning 上、`content` 为空；**关闭思维链后 4/4 成功、约 2s**。
 ### 3.1 前置
 
 - Python 3.11+（tutor）与 3.11/3.13（course-rag）
-- 宿主 Ollama 已启动，且已拉取 `nomic-embed-text`；精确模式另需 `bge-reranker-v2-m3` 权重
+- 宿主 Ollama 已启动，且已拉取 `bge-m3`；精确模式另需 `bge-reranker-v2-m3` 权重
 - 一个 OpenAI 兼容的中转 API key
 
 ```bash
 ollama serve
-ollama pull nomic-embed-text
+ollama pull bge-m3
 ```
 
 ### 3.2 配置
