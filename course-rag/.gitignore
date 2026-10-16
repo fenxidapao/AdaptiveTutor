@@ -7,6 +7,8 @@ chroma_db_backup*/
 chroma_db_broken*/
 # 对照索引（换描述器前的旧 caption 库，用于 A/B 复跑，见 B3 说明；可重建，不入库）
 chroma_db_v1/
+# C1 对照索引（bge-m3 / 1024 维；与 nomic 768 维库并存做 A/B，可重建，不入库）
+chroma_db_m3/
 __pycache__/
 *.pyc
 

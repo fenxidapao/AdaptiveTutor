@@ -411,6 +411,71 @@ def test_judge_api_base_default_is_relay(monkeypatch):
     finally:
         importlib.reload(cfg)
 
+
+# ====================== 8. 云端瞬时错误重试（C3.1） ======================
+def test_transient_error_retries_then_succeeds(monkeypatch):
+    """中转实测约 21% 请求瞬时失败；重试后成功，不应把整次调用判死。"""
+    monkeypatch.setattr(config, "LLM_RETRY_ATTEMPTS", 3)
+    monkeypatch.setattr(config, "LLM_RETRY_BACKOFF", 0.01)
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise llm_provider.TransientLLMError("getaddrinfo failed")
+        return "ok"
+
+    assert llm_provider._call_with_retry(flaky, label="t") == "ok"
+    assert len(calls) == 3
+
+
+def test_transient_error_exhausts_and_raises(monkeypatch):
+    monkeypatch.setattr(config, "LLM_RETRY_ATTEMPTS", 3)
+    monkeypatch.setattr(config, "LLM_RETRY_BACKOFF", 0.01)
+    calls = []
+
+    def always_fail():
+        calls.append(1)
+        raise llm_provider.TransientLLMError("SSL handshake failure")
+
+    with pytest.raises(llm_provider.LLMError) as exc:
+        llm_provider._call_with_retry(always_fail, label="t")
+    assert len(calls) == 3
+    assert "3 次" in str(exc.value)
+
+
+def test_non_transient_error_not_retried(monkeypatch):
+    """401/403 等非瞬时错误必须立即上抛，不浪费重试。"""
+    monkeypatch.setattr(config, "LLM_RETRY_ATTEMPTS", 3)
+    monkeypatch.setattr(config, "LLM_RETRY_BACKOFF", 0.01)
+    calls = []
+
+    def unauthorized():
+        calls.append(1)
+        raise llm_provider.LLMError("云端返回 HTTP 401")
+
+    with pytest.raises(llm_provider.LLMError):
+        llm_provider._call_with_retry(unauthorized, label="t")
+    assert len(calls) == 1
+
+
+def test_dns_error_is_transient(monkeypatch):
+    """getaddrinfo failed 必须被归为可重试，否则评测会被 21% 的网络抖动污染。"""
+    import urllib.error
+    monkeypatch.setattr(config, "LLM_RETRY_ATTEMPTS", 2)
+    monkeypatch.setattr(config, "LLM_RETRY_BACKOFF", 0.01)
+    monkeypatch.setattr(llm_provider, "resolve_api_key", lambda: "k")
+
+    def boom(req, timeout=None):
+        raise urllib.error.URLError("[Errno 11001] getaddrinfo failed")
+
+    monkeypatch.setattr(llm_provider.urllib.request, "urlopen", boom)
+    with pytest.raises(llm_provider.LLMError) as exc:
+        llm_provider._cloud_post([{"role": "user", "content": "x"}], 0.0, 64,
+                                 model="m", base_url="https://x/v1", api_key="k")
+    assert isinstance(exc.value, llm_provider.TransientLLMError)
+
+
 # ====================== 6. provider 名称解析 ======================
 @pytest.mark.parametrize("raw,expected", [
     ("openai", "openai"), ("OPENAI", "openai"), (" openai ", "openai"),

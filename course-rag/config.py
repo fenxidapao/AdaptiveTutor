@@ -14,7 +14,11 @@ load_dotenv()
 os.environ.setdefault("HF_ENDPOINT", os.getenv("HF_ENDPOINT", "https://hf-mirror.com"))
 
 # ---------- 模型与运行时（来自 .env，给默认值便于本地直接跑）----------
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+# C1（2026-10-16）：嵌入模型由 nomic-embed-text(768维) 换为 bge-m3(1024维)。
+# 为什么换：nomic 是英文中心模型，中文语料相似度基线偏高（config 下方阈值注释早有记录）；
+# bge-m3 是多语言/中文友好模型，维度 768→1024。
+# ⚠️ 换嵌入模型必须**全量重建索引**，不能复用旧 collection（维度不兼容）。
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "bge-m3")
 LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 # Ollama 默认本地端口；换机器/远程只需改这里
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -67,6 +71,12 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 #   由如下的自动降级路径处理（见 llm_provider._cloud_post 的字段裁剪重试）。
 LLM_DISABLE_THINKING = os.getenv("LLM_DISABLE_THINKING", "true").strip().lower() == "true"
 LLM_MAX_TOKENS_CAP = int(os.getenv("LLM_MAX_TOKENS_CAP", "8192"))
+
+# 云端瞬时错误重试（C3.1，2026-10-16）：中转实测约 21% 请求瞬时失败
+# （getaddrinfo failed / SSL handshake），重试即成功。指数退避：1.5s、3s。
+# 只重试瞬时类错误（DNS/SSL/超时/429/5xx）；401/403/400 不重试。
+LLM_RETRY_ATTEMPTS = int(os.getenv("LLM_RETRY_ATTEMPTS", "3"))
+LLM_RETRY_BACKOFF = float(os.getenv("LLM_RETRY_BACKOFF", "1.5"))
 
 # ---------- RAG 调参（这些数为什么这么定）----------
 # 注意：实际评估基线为 800/150（.env 与 README 一致；2026-08-22 统一口径，
@@ -169,7 +179,10 @@ PDF_MIN_CHARS_PER_PAGE = int(os.getenv("PDF_MIN_CHARS_PER_PAGE", "30"))
 # 由 _thr_scan.py 实测：语料内 59 题 top1 p5=0.6896、语料外 10 题 max=0.7686（分布有重叠，
 # nomic-embed-text 中文基线相似度偏高）→ 阈值取语料内 p5，误拒≈5%，漏拒部分语料外问题；
 # 因此实现为「低置信提示」而非硬拒答。改阈值后重跑 _thr_scan.py 校准。
-LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))
+# C1 重标定（2026-10-16，bge-m3）：原 0.69 按 nomic 分布取语料内 p5；
+# 新模型实测 30 题语料内 p5=0.604、p10=0.694，20 题语料外 median=0.518/max=0.763。
+# 取 0.62（≈p5~p10）：软提示命中约 3~5% 语料内题。
+LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.62"))
 
 # ---------- 硬拒答 / 生成接地自检（P1，2026-08-24 工程化落地） ----------
 # 软提示（LOW_CONFIDENCE_THRESHOLD）仍保留给「快速模式」；此处为「精确模式」的硬拒答闸门：
@@ -179,7 +192,9 @@ LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))
 #   - 生成阶段：GROUNDED_VERIFY_ENABLED 时，独立裁判判定回答是否完全基于上下文
 #     （grounded），未接地则把答案替换为硬拒文案，杜绝软提示下的幻觉外溢。
 # 实测校准：启用后跑 eval_heldout.py（B 组拒答率应 ≥90%），据结果回调阈值。
-HARD_REJECT_VECTOR_THRESHOLD = float(os.getenv("HARD_REJECT_VECTOR_THRESHOLD", "0.55"))
+# C1 重标定（2026-10-16，bge-m3）：0.58 在实测表上误拒语料内 1/30=3.3%、
+# 放过语料外约 30%（比 0.55 更紧一点，且误拒率不变）；语料外漏拒由 reranker 阈值 + 接地自检兜底。
+HARD_REJECT_VECTOR_THRESHOLD = float(os.getenv("HARD_REJECT_VECTOR_THRESHOLD", "0.58"))
 HARD_REJECT_RERANK_THRESHOLD = float(os.getenv("HARD_REJECT_RERANK_THRESHOLD", "0.30"))
 GROUNDED_VERIFY_ENABLED = os.getenv("GROUNDED_VERIFY_ENABLED", "true").lower() == "true"
 # grounded 自检：回答被支撑比例（faithfulness 口径）低于此值 → 判未接地，触发硬拒替换。
@@ -295,3 +310,9 @@ VISUAL_RECALL_K = int(os.getenv("VISUAL_RECALL_K", "8"))
 #   平均长度 110.9 → 349.0 字（3.1×）；含文件名类 token 的 caption 34(15.8%) → 49(22.8%)；
 #   215/215 都带「图中文字：」抄录段（旧为 3）；四张目标图的判别性 token **0/6 → 6/6**。
 IMAGE_CAPTIONS_CSV = os.getenv("IMAGE_CAPTIONS_CSV", "_image_captions.csv")
+# B3 修复（2026-10-16）：嵌入用 caption 与生成用 caption 分离。
+# 实测：新描述器（逐字转写）的文本对「创建小程序需要填哪些设置项」这类问题判别力更差——
+# 在 215 张图内 p020 排名：旧 v1 caption 第 10 / 新摘要第 34 / 新全文第 28。
+# 故嵌入与 BM25 用 v1 短描述（判别力强），生成与引用用新 caption（信息全）。
+# 置空字符串 = 不分离，退回单 caption 行为。
+IMAGE_EMBED_CAPTIONS_CSV = os.getenv("IMAGE_EMBED_CAPTIONS_CSV", "_image_captions_v1_qwen25vl.csv")
