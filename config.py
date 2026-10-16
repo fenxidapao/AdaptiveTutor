@@ -173,7 +173,10 @@ PDF_MIN_CHARS_PER_PAGE = int(os.getenv("PDF_MIN_CHARS_PER_PAGE", "30"))
 # 由 _thr_scan.py 实测：语料内 59 题 top1 p5=0.6896、语料外 10 题 max=0.7686（分布有重叠，
 # nomic-embed-text 中文基线相似度偏高）→ 阈值取语料内 p5，误拒≈5%，漏拒部分语料外问题；
 # 因此实现为「低置信提示」而非硬拒答。改阈值后重跑 _thr_scan.py 校准。
-LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))
+# C1 重标定（2026-10-16，bge-m3）：原 0.69 按 nomic 分布取语料内 p5；
+# 新模型实测 30 题语料内 p5=0.604、p10=0.694，20 题语料外 median=0.518/max=0.763。
+# 取 0.62（≈p5~p10）：软提示命中约 3~5% 语料内题。
+LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.62"))
 
 # ---------- 硬拒答 / 生成接地自检（P1，2026-08-24 工程化落地） ----------
 # 软提示（LOW_CONFIDENCE_THRESHOLD）仍保留给「快速模式」；此处为「精确模式」的硬拒答闸门：
@@ -183,7 +186,9 @@ LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.69"))
 #   - 生成阶段：GROUNDED_VERIFY_ENABLED 时，独立裁判判定回答是否完全基于上下文
 #     （grounded），未接地则把答案替换为硬拒文案，杜绝软提示下的幻觉外溢。
 # 实测校准：启用后跑 eval_heldout.py（B 组拒答率应 ≥90%），据结果回调阈值。
-HARD_REJECT_VECTOR_THRESHOLD = float(os.getenv("HARD_REJECT_VECTOR_THRESHOLD", "0.55"))
+# C1 重标定（2026-10-16，bge-m3）：0.58 在实测表上误拒语料内 1/30=3.3%、
+# 放过语料外约 30%（比 0.55 更紧一点，且误拒率不变）；语料外漏拒由 reranker 阈值 + 接地自检兜底。
+HARD_REJECT_VECTOR_THRESHOLD = float(os.getenv("HARD_REJECT_VECTOR_THRESHOLD", "0.58"))
 HARD_REJECT_RERANK_THRESHOLD = float(os.getenv("HARD_REJECT_RERANK_THRESHOLD", "0.30"))
 GROUNDED_VERIFY_ENABLED = os.getenv("GROUNDED_VERIFY_ENABLED", "true").lower() == "true"
 # grounded 自检：回答被支撑比例（faithfulness 口径）低于此值 → 判未接地，触发硬拒替换。
