@@ -72,6 +72,12 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 LLM_DISABLE_THINKING = os.getenv("LLM_DISABLE_THINKING", "true").strip().lower() == "true"
 LLM_MAX_TOKENS_CAP = int(os.getenv("LLM_MAX_TOKENS_CAP", "8192"))
 
+# 云端瞬时错误重试（C3.1，2026-10-16）：中转实测约 21% 请求瞬时失败
+# （getaddrinfo failed / SSL handshake），重试即成功。指数退避：1.5s、3s。
+# 只重试瞬时类错误（DNS/SSL/超时/429/5xx）；401/403/400 不重试。
+LLM_RETRY_ATTEMPTS = int(os.getenv("LLM_RETRY_ATTEMPTS", "3"))
+LLM_RETRY_BACKOFF = float(os.getenv("LLM_RETRY_BACKOFF", "1.5"))
+
 # ---------- RAG 调参（这些数为什么这么定）----------
 # 注意：实际评估基线为 800/150（.env 与 README 一致；2026-08-22 统一口径，
 # v2 A/B 等全部数字均在 CHUNK_SIZE=800 下测得）。勿再改回 500/80 以免与证据脱节。

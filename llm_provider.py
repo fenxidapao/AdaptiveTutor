@@ -47,6 +47,15 @@ class ThinkingUnsupported(LLMError):
     """该模型不认关闭思维链的字段（上游 400/422）。调用方应换一个变体重试。"""
 
 
+class TransientLLMError(LLMError):
+    """可重试的瞬时错误：DNS/SSL/连接超时/429/5xx。
+
+    实测（2026-10-16）：本中转出现约 21% 的请求以 getaddrinfo failed /
+    SSLV3_ALERT_HANDSHAKE_FAILURE 失败，重试即可成功。故这类错误单独成类，
+    由 _call_with_retry 做指数退避重试，而不是直接判死。
+    """
+
+
 # --------------------------------------------------------------------------
 # 凭据解析（绝不回显 key 本身）
 # --------------------------------------------------------------------------
@@ -167,6 +176,37 @@ _THINKING_OFF_ATTEMPTS = (
 )
 
 
+def _retry_attempts() -> int:
+    return max(1, int(getattr(config, "LLM_RETRY_ATTEMPTS", 3)))
+
+
+def _retry_backoff() -> float:
+    return float(getattr(config, "LLM_RETRY_BACKOFF", 1.5))
+
+
+def _call_with_retry(fn, label: str):
+    """对瞬时错误（DNS/SSL/超时/429/5xx）做指数退避重试。
+
+    实测（2026-10-16）本中转约 21% 请求瞬时失败（getaddrinfo failed /
+    SSLV3_ALERT_HANDSHAKE_FAILURE），重试即可成功。
+    非瞬时错误（401/403/400 等）不重试，立即上抛。
+    """
+    import time as _time
+    attempts = _retry_attempts()
+    last = None
+    for i in range(attempts):
+        try:
+            return fn()
+        except TransientLLMError as exc:
+            last = exc
+            if i + 1 < attempts:
+                delay = _retry_backoff() * (2 ** i)
+                print("[llm_provider] %s 瞬时失败，%.1fs 后重试（%d/%d）：%s"
+                      % (label, delay, i + 2, attempts, str(exc)[:120]))
+                _time.sleep(delay)
+    raise LLMError("云端调用 %d 次仍失败（%s）：%s" % (attempts, label, str(last)[:200]))
+
+
 def _cloud_headers(api_key: str) -> dict:
     if not api_key:
         raise LLMError(
@@ -223,15 +263,20 @@ def _cloud_post(messages, temperature, max_tokens, *, model, base_url, api_key,
             raise ThinkingUnsupported(
                 "HTTP %s 不接受该关闭思考参数：%s" % (exc.code, detail)
             ) from exc
+        if exc.code in (408, 409, 425, 429, 500, 502, 503, 504):
+            raise TransientLLMError(
+                "云端瞬时故障 HTTP %s（模型 %s）：%s" % (exc.code, model, detail)
+            ) from exc
         raise LLMError(
             "云端返回 HTTP %s（模型 %s）：%s" % (exc.code, model, detail)
         ) from exc
-    except urllib.error.URLError as exc:
-        raise LLMError(
-            "云端网络不可达（%s）：%s" % (base_url, exc.reason)
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise TransientLLMError(
+            "云端网络不可达（%s）：%s" % (base_url, reason)
         ) from exc
     except json.JSONDecodeError as exc:
-        raise LLMError("云端返回非 JSON 响应：%s" % exc) from exc
+        raise TransientLLMError("云端返回非 JSON 响应：%s" % exc) from exc
 
 
 def _cloud_chat(messages, temperature, max_tokens=None, *, model, base_url, api_key,
@@ -252,10 +297,13 @@ def _cloud_chat(messages, temperature, max_tokens=None, *, model, base_url, api_
         b = budget
         while True:
             try:
-                body = _cloud_post(
-                    messages, temperature, b,
-                    model=model, base_url=base_url, api_key=api_key,
-                    thinking_off=disable_thinking, thinking_style=style,
+                body = _call_with_retry(
+                    lambda: _cloud_post(
+                        messages, temperature, b,
+                        model=model, base_url=base_url, api_key=api_key,
+                        thinking_off=disable_thinking, thinking_style=style,
+                    ),
+                    label="chat/%s" % model,
                 )
             except ThinkingUnsupported as exc:
                 last_reason = str(exc)
@@ -296,8 +344,12 @@ def _cloud_chat_stream(messages, temperature, max_tokens=None, *, model, base_ur
         headers=_cloud_headers(api_key),
         method="POST",
     )
+    def _open():
+        return urllib.request.urlopen(req, timeout=config.LLM_TIMEOUT)
+
     try:
-        with urllib.request.urlopen(req, timeout=config.LLM_TIMEOUT) as resp:
+        resp = _call_with_retry(_open, label="chat_stream/%s" % model)
+        try:
             for raw in resp:
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
@@ -314,6 +366,11 @@ def _cloud_chat_stream(messages, temperature, max_tokens=None, *, model, base_ur
                 piece = delta.get("content") or ""
                 if piece:
                     yield piece
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
     except urllib.error.HTTPError as exc:
         detail = ""
         try:
