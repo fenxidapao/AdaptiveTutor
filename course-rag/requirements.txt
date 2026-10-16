@@ -1,0 +1,35 @@
+# ===== 依赖（2026-08-18 锁定）=====
+# 2026-08-18 重构：已彻底移除 langchain 全家桶（langchain_core/ollama/chroma/
+# text_splitters/community），改为直接依赖 ollama 官方 SDK + chromadb 原生客户端。
+# 好处：依赖从十几个包瘦成下面这些，且不再有『langchain 全家桶必须同线』的
+# is_data_content_block 符号冲突风险，可复现性直接上一个台阶。
+#
+# 风险说明：
+#  - torch / transformers 是 sentence-transformers 的传递依赖且体积大（各 GB 级）。
+#    当前机器轮子齐全、锁精确版零风险；若换机器 Python 版本与下列精确 wheel 不兼容
+#    导致 pip 失败，可把对应 == 放宽为 >= 下限再装。
+#  - 注：pypdf 6.16.1，PDF 接入开箱可用。
+
+# ---- 核心直接依赖（替代 langchain 的两块）----
+ollama==0.6.2          # Ollama 官方 SDK：嵌入（nomic-embed-text）+ 生成（llama3.1:8b）
+chromadb==1.5.9        # 向量库原生客户端（PersistentClient）；替代 langchain_chroma
+
+# ---- 应用直接依赖 ----
+streamlit==1.61.1
+python-dotenv==1.2.2
+pypdf==6.16.1   # PDF 加载必需（替代 PyPDFLoader）
+python-docx==1.2.0   # .docx 课程资料支持（python-docx 提取文本层；旧版 .doc 需先转 .docx）
+
+# ---- reranker（可选，需一次性下载权重 ~2.2GB）----
+sentence-transformers==5.7.0
+# torch / transformers 为传递依赖且体积大：用「有上限的下限」而非精确版，
+# 提升换机器 pip 安装成功率（不同 Python 版本的精确轮子可能缺失）；
+# 上限锁大版本，避免跨大版本行为漂移导致 reranker 异常。
+torch>=2.13.0,<3
+transformers>=5.15.0,<6
+
+# ===== 评估（W3）：放弃 ragas——它与 langchain 0.3 全家桶不兼容（0.2.x 与 0.1.22 都会在 import 时
+# 拉取已移除的 langchain_community.chat_models.vertexai，且 pip 会把 0.1.22 自动升回 0.2.x）。
+# 改用 eval_local.py：本机 Ollama 当裁判（复用 rag_core.ollama_chat），自己实现 faithfulness /
+# answer_relevancy / context_precision / context_recall 四个指标。零额外依赖。
+# 因此本项目评估不需要 datasets / nest_asyncio / ragas 任何额外包。

@@ -1,0 +1,11 @@
+# ===== 评估栈依赖（held-out 门控 / 本地评估用）=====
+# 与 requirements.txt 核心锁定保持一致；包含 reranker 全家桶（默认开启后精确模式需要）。
+# 不含 streamlit（UI 不需要）。
+ollama==0.6.2
+chromadb==1.5.9
+python-dotenv==1.2.2
+pypdf==6.16.1
+python-docx==1.2.0
+sentence-transformers==5.7.0
+torch>=2.13.0,<3
+transformers>=5.15.0,<6

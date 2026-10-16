@@ -1,0 +1,25 @@
+# ===== API 服务最小依赖（FastAPI + Docker 镜像用）=====
+# 与 requirements.txt 的核心锁定保持一致：ollama==0.6.2 / chromadb==1.5.9。
+# 不含 streamlit（UI）与 sentence-transformers/torch（reranker 全家桶，各 GB 级）：
+# Docker 镜像内默认 RERANKER_ENABLED=false；需要 reranker 时请在本地用
+# requirements.txt 运行，或自行把 torch 装进镜像（见 README「Docker 部署」说明）。
+#
+# 版本策略：项目核心依赖精确锁定（==）；fastapi/uvicorn 用「下限 + 大版本上限」，
+# 避免精确版本跨机器轮子缺失，同时锁住大版本防行为漂移。
+
+# ---- 与 requirements.txt 共享的核心 ----
+ollama==0.6.2
+chromadb==1.5.9
+python-dotenv==1.2.2
+pypdf==6.16.1
+python-docx==1.2.0
+
+# ---- API 服务 ----
+fastapi>=0.111,<1
+uvicorn[standard]>=0.29,<1
+python-multipart>=0.0.9   # POST /documents 文件上传必需
+
+# ---- MCP stdio server（2026-09-18：手写 JSON-RPC 迁移到官方 SDK；2.x 中 FastMCP
+# 更名 MCPServer，mcp_server.py import 的是 mcp.server.mcpserver.MCPServer）。
+# 注意：清华镜像源当时无此包，安装需 -i https://pypi.org/simple ----
+mcp==2.2.0

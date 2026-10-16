@@ -1,0 +1,4202 @@
+﻿png_path,caption,elapsed_s,model,prompt_tokens,completion_tokens,total_tokens,cost,error
+data/images/Linux第1章概述/p008_i00.png,"这是一幅黑白线条风格的动物头像插图，主要元素为一只具有弯曲大角、面部拟人化表情的牛科动物（如非洲水牛）头部特写。
+
+图中文字：无可辨认文字",1.84,qwen3-vl-plus,292,50,342,0.0,
+data/images/Linux第1章概述/p009_i00.png,"这是一张展示三个主流Linux发行版标志及其名称的插图，主要元素包括Red Hat、Ubuntu和CentOS的官方Logo与对应文字标识。
+
+图中文字： 
+redhat 
+ubuntu 
+CentOS",1.81,qwen3-vl-plus,283,47,330,0.0,
+data/images/Linux第1章概述/p006_i00.png,"这是一张人物肖像照片，主要元素为一位双臂交叉、面带微笑的中年男性，背景为模糊的弧形建筑结构。
+
+图中文字：无可辨认文字",2.46,qwen3-vl-plus,339,42,381,0.0,
+data/images/Linux第1章概述/p013_i00.png,"这是一张 VMware Workstation Pro 安装向导的截图，显示“最终用户许可协议”界面，包含协议文本区域、已勾选的“我接受许可协议中的条款(A)”复选框，以及底部的“打印(P)”、“上一步(B)”、“下一步(N)”和“取消”按钮。
+
+图中文字： 
+VMware Workstation Pro 安装 
+最终用户许可协议 
+请仔细阅读以下许可协议。 
+VMWARE 最终用户许可协议 
+请注意，在本软件的安装过程中无论可能会出现任何条款， 
+使用本软件都将受此最终用户许可协议各条款的约束。 
+重要信息，请仔细阅读：您一旦下载、安装或使用本软件， 
+你（自然人或法人）即同意接受本最终用户许可协议（“本 
+☑ 我接受许可协议中的条款(A) 
+打印(P) 
+上一步(B) 
+下一步(N) 
+取消",5.64,qwen3-vl-plus,711,195,906,0.0,
+data/images/Linux第1章概述/p012_i00.png,"这是一张 VMware Workstation Pro 16 安装向导的欢迎界面截图，主要元素包括左侧的 VMware Workstation Pro 16 标志、右侧的欢迎标题、说明文字、版权信息、网址链接及底部的“下一步(N)”和“取消”按钮。
+
+图中文字： 
+VMware Workstation Pro 安装 
+VMWARE 
+WORKSTATION 
+PRO™ 
+16 
+欢迎使用 VMware Workstation Pro 安装向导 
+安装向导将在您的计算机上安装 VMware Workstation Pro 
+。单击“下一步”继续，或单击“取消”退出安装向导。 
+版权所有 1998-2020 VMware, Inc. 保留所有权利。本产品 
+受美国和国际版权及知识产权法保护。VMware 产品受下 
+方网站中所列的一项或多项专利保护： 
+http://www.vmware.com/go/patents-cn 
+下一步(N) 
+取消",5.65,qwen3-vl-plus,739,204,943,0.0,
+data/images/Linux第1章概述/p014_i00.png,"这是一张 VMware Workstation Pro 安装过程中的兼容性设置对话框截图，主要元素包括标题栏、信息提示区域、超链接文本、带复选框的选项以及底部导航按钮。
+
+图中文字： 
+VMware Workstation Pro 安装 
+兼容的设置 
+更改 Windows 功能兼容性的设置 
+安装程序检测到主机启用了 Hyper-V 或 Device/Credential Guard。要在启用了 Hyper-V 或 Device/Credential Guard 的主机上运行 VMware Workstation Pro，请在主机上通过“打开或关闭 Windows 功能”安装 Windows Hypervisor Platform (WHP)，或者从系统中移除 Hyper-V 角色。如果您希望安装程序在主机上自动安装 WHP，请选中以下复选框。 
+有关更多详细信息，请参阅以下知识库文章。 
+在 VMware Workstation 中支持 Windows 主机 VBS 的最低要求 
+自动安装 Windows Hypervisor Platform (WHP) 
+上一步(B) 
+下一步(N) 
+取消",6.3,qwen3-vl-plus,711,207,918,0.0,
+data/images/Linux第1章概述/p016_i00.png,"这是一张 VMware Workstation Pro 安装过程中的“用户体验设置”对话框截图，主要元素包括两个复选框选项、一段说明文字、一个超链接及底部导航按钮。
+
+图中文字： 
+VMware Workstation Pro 安装 
+用户体验设置 
+编辑默认设置以提高您的用户体验。 
+自动时检查产品更新(C) 
+在 VMware Workstation Pro 启动时，检查应用程序和已安装软件组件是否有新版本。 
+加入 VMware 客户体验提升计划(J) 
+VMware 客户体验提升计划 (CEIP) 将向 VMware 提供相关信息，以帮助 VMware 改进产品和服务、解决问题、并向您建议如何以最佳方式部署和使用我们的产品。作为 CEIP 的一部分，VMware 会定期收集和您所持有的 VMware 密钥相关的使用 VMware 产品和服务的 
+了解更多信息 
+上一步(B) 
+下一步(N) 
+取消",16.45,qwen3-vl-plus,711,194,905,0.0,
+data/images/Linux第1章概述/p017_i00.png,"这是一张 VMware Workstation Pro 安装向导的“快捷方式”设置界面截图，主要元素包括窗口标题、说明文字、两个已勾选的快捷方式选项（桌面和开始菜单程序文件夹）以及底部导航按钮。
+
+图中文字： 
+VMware Workstation Pro 安装 
+快捷方式 
+选择您要放入系统的快捷方式。 
+在以下位置创建 VMware Workstation Pro 的快捷方式： 
+桌面(D) 
+开始菜单程序文件夹(S) 
+上一步(B) 
+下一步(N) 
+取消",19.06,qwen3-vl-plus,711,114,825,0.0,
+data/images/Linux第1章概述/p018_i00.png,"这是一张 VMware Workstation Pro 安装向导的界面截图，主要元素包括窗口标题栏、安装准备提示文字、操作说明文本及底部三个按钮（“上一步”、“安装”、“取消”），其中“安装(1)”按钮被红色箭头指向。
+
+图中文字： 
+VMware Workstation Pro 安装 
+已准备好安装 VMware Workstation Pro 
+单击“安装”开始安装。单击“上一步”查看或更改任何安装设置。单击“取消”退出向导。 
+上一步(B) 
+安装(1) 
+取消",4.16,qwen3-vl-plus,711,125,836,0.0,
+data/images/Linux第1章概述/p015_i00.png,"这是一张 VMware Workstation Pro 安装程序的“自定义安装”界面截图，主要元素包括安装路径输入框、更改按钮、功能复选框及底部导航按钮，并配有红色手写标注说明。
+
+图中文字： 
+VMware Workstation Pro 安装 
+自定义安装 
+选择安装目标及任何其他功能。 
+建议不要安装在C盘 
+安装位置: 
+C:\Program Files (x86)\VMware\VMware Workstation\ 
+更改... 
+增强型键盘驱动程序(需要重新引导以使用此功能(E) 
+此功能要求主机驱动器上具有 10MB 空间。 
+将 VMware Workstation 控制台工具添加到系统 PATH 
+要修改目录请选择这里 
+上一步(B) 
+下一步(N) 
+取消",21.55,qwen3-vl-plus,711,170,881,0.0,
+data/images/Linux第1章概述/p020_i00.png,"这是一张 VMware Workstation Pro 16 安装向导完成界面的截图，主要元素包括软件标志、完成提示文字、操作说明及底部两个按钮（“许可证”和“完成”）。
+
+图中文字： 
+VMware Workstation Pro 安装 
+VMWARE WORKSTATION PRO™ 16 
+VMware Workstation Pro 安装向导已完成 
+单击“完成”按钮退出安装向导。 
+如果要立即输入许可证密钥，请按下面的“许可证”按钮。 
+许可证(L) 
+完成(F)",7.1,qwen3-vl-plus,711,120,831,0.0,
+data/images/Linux第1章概述/p019_i00.png,"这是一张 VMware Workstation Pro 安装向导的界面截图，主要元素包括窗口标题栏、安装进度提示文字、状态说明、绿色进度条以及底部操作按钮。
+
+图中文字： 
+VMware Workstation Pro 安装 
+正在安装 VMware Workstation Pro 
+安装向导正在安装 VMware Workstation Pro，请稍候。 
+状态： 正在 VMware 密钥上设置自定义注册表权限。 
+上一步(B) 
+下一步(N) 
+取消",11.26,qwen3-vl-plus,711,103,814,0.0,
+data/images/Linux第1章概述/p024_i00.png,"这是一张 VMware Workstation Pro 15.5 的“新建虚拟机向导”界面截图，主要元素包括左侧产品标识、右侧配置类型选项（典型/自定义）、说明文字、红色标注的操作步骤提示及底部导航按钮。
+
+图中文字： 
+新建虚拟机向导 
+VMWARE 
+WORKSTATION 
+PRO™ 
+15.5 
+欢迎使用新建虚拟机向导 
+您希望使用什么类型的配置？ 
+○ 典型(推荐)(T) 
+通过几个简单的步骤创建 Workstation 15.x 
+虚拟机。 
+◎ 自定义(高级)(C) 
+创建带有 SCSI 控制器类型、虚拟磁盘类型 
+以及与旧版 VMware 产品兼容性等高级选项 
+的虚拟机。 
+1. 按照自己的想法自定义虚拟机 
+2. 点击 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",28.14,qwen3-vl-plus,583,195,778,0.0,
+data/images/Linux第1章概述/p021_i00.png,"这是一张 VMware Workstation Pro 16 安装完成界面的截图，主要元素包括软件标志、版本号、完成提示文字及“完成”按钮。
+
+图中文字： 
+VMware Workstation Pro 安装 
+VMWARE WORKSTATION PRO™ 16 
+VMware Workstation Pro 安装向导已完成 
+单击“完成”按钮退出安装向导。 
+完成(F)",29.99,qwen3-vl-plus,711,89,800,0.0,
+data/images/Linux第1章概述/p023_i00.png,"这是一张 VMware Workstation 15.5 Pro 软件界面的截图，主要显示了“文件”菜单展开状态及主界面三个操作按钮，其中“创建新的虚拟机”按钮被红色框标出，并有红色箭头和注释说明两个位置均可创建新虚拟机。
+
+图中文字： 
+文件(F) 编辑(E) 查看(V) 虚拟机(M) 选项卡(T) 帮助(H) 
+新建虚拟机(N)... Ctrl+N 
+新建窗口(W) 
+打开(O)... Ctrl+O 
+扫描虚拟机(S)... 
+关闭选项卡(C) Ctrl+W 
+连接服务器(S)... Ctrl+L 
+虚拟化物理机(P)... 
+导出为 OVF(E)... 
+映射虚拟硬盘(M)... 
+退出(X) 
+这两个位置都能选择创建一台新的虚拟机，点击一个都可以 
+WORKSTATION 15.5 PRO™ 
+创建新的虚拟机 
+打开虚拟机 
+连接远程服务器 
+vmware",33.81,qwen3-vl-plus,514,220,734,0.0,
+data/images/Linux第1章概述/p026_i00.png,"这是一张“新建虚拟机向导”界面的截图，主要元素包括安装来源选项（光盘、ISO文件）、“稍后安装操作系统”单选按钮及其说明、底部导航按钮（上一步、下一步、取消）以及红色标注的操作指引箭头和文字。
+
+图中文字： 
+新建虚拟机向导 
+安装客户机操作系统 
+虚拟机如同物理机，需要操作系统。您将如何安装客户机操作系统？ 
+安装来源： 
+安装程序光盘(D): 
+无可用驱动器 
+安装程序光盘映像文件(iso)(M): 
+浏览(R)... 
+稍后安装操作系统(S)。 
+创建的虚拟机将包含一个空白硬盘。 
+1.勾选稍后安装 
+2.点击 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",4.65,qwen3-vl-plus,606,173,779,0.0,
+data/images/Linux第1章概述/p025_i00.png,"这是一张对比展示 VMware 新建虚拟机向导中“选择虚拟机硬件兼容性”步骤的双窗格截图，左侧为 Workstation 15.x 兼容性配置，右侧为 Workstation 16.x 兼容性配置，包含下拉菜单、复选框、列表及按钮等界面元素。 
+图中文字： 
+新建虚拟机向导 
+选择虚拟机硬件兼容性 
+该虚拟机需要何种硬件功能？ 
+虚拟机硬件兼容性 
+硬件兼容性(H)：Workstation 15.x 
+兼容：☑ ESX Server(S) 
+兼容产品： 
+Fusion 11.x 
+Workstation 15.x 
+限制： 
+64 GB 内存 
+16 个处理器 
+10 个网络适配器 
+8 TB 磁盘大小 
+3 GB 共享图形内存 
+点击 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消 
+新建虚拟机向导 
+选择虚拟机硬件兼容性 
+该虚拟机需要何种硬件功能？ 
+虚拟机硬件兼容性 
+硬件兼容性(H)：Workstation 16.x 
+兼容：☑ ESX Server(S) 
+兼容产品： 
+Fusion 12.x 
+Workstation 16.x 
+限制： 
+128 GB 内存 
+32 个处理器 
+10 个网络适配器 
+8 TB 磁盘大小 
+8 GB 共享图形内存 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",7.61,qwen3-vl-plus,1023,329,1352,0.0,
+data/images/Linux第1章概述/p029_i00.png,"这是一张虚拟机创建向导中的“处理器配置”界面截图，主要元素包括处理器数量与内核数量的下拉选择框、计算结果显示区、红色注释箭头及底部导航按钮。 
+图中文字： 
+新建虚拟机向导 
+处理器配置 
+为此虚拟机指定处理器数量。 
+处理器 
+处理器数量(P): 1 
+每个处理器的内核数量(C): 2 
+处理器内核总数: 2 
+这两结果相乘 
+不能超过物理 
+机的CPU个数 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",3.61,qwen3-vl-plus,585,127,712,0.0,
+data/images/Linux第1章概述/p027_i00.png,"这是一张虚拟机创建向导的界面截图，主要元素包括操作系统类型单选框、版本下拉选择框、操作指引标注及底部导航按钮。 
+图中文字： 
+新建虚拟机向导 
+选择客户机操作系统 
+此虚拟机中将安装哪种操作系统？ 
+客户机操作系统 
+Microsoft Windows(W) 
+Linux(L) 
+VMware ESX(X) 
+其他(O) 
+1.勾选linux系统 
+版本(V) 
+CentOS 7 64 位 
+2.选择版本为CentOS7 64位 
+3.点击 
+帮助 
+<上一步(B) 
+下一步(N) > 
+取消",5.62,qwen3-vl-plus,606,139,745,0.0,
+data/images/Linux第1章概述/p028_i00.png,"这是一张 VMware 虚拟机创建向导的截图，显示“命名虚拟机”步骤界面，包含虚拟机名称输入框、安装位置路径输入框、提示文字及导航按钮。 
+图中文字： 
+新建虚拟机向导 
+命名虚拟机 
+您希望该虚拟机使用什么名称？ 
+虚拟机名称(V): 
+hadoop100 
+这里设置虚拟机的名称 
+位置(L): 
+G:\workspace\vmware\vm02\hadoop100 
+浏览(R)... 
+在“编辑”>“首选项”中可更改默认位置。 
+这是设置虚拟机安装的根目录 
+注意：不建议安装在带中文或空格的目录 
+< 上一步(B) 
+下一步(N) > 
+取消",18.36,qwen3-vl-plus,564,165,729,0.0,
+data/images/Linux第1章概述/p031_i00.png,"这是一张虚拟机创建向导中“此虚拟机的内存”配置界面的截图，主要元素包括内存大小选择滑块、推荐值说明、输入框及操作按钮，并带有手写标注提示。
+
+图中文字： 
+新建虚拟机向导 
+此虚拟机的内存 
+您要为此虚拟机使用多少内存？ 
+指定分配给此虚拟机的内存量。内存大小必须为 4 MB 的倍数。 
+此虚拟机的内存(M): 
+2048 MB 
+最大推荐内存: 
+13.4 GB 
+推荐内存: 
+1 GB 
+客户机操作系统最低推荐内存: 
+512 MB 
+64 GB 
+32 GB 
+16 GB 
+8 GB 
+4 GB 
+2 GB 
+1 GB 
+512 MB 
+256 MB 
+128 MB 
+64 MB 
+32 MB 
+16 MB 
+8 MB 
+4 MB 
+1.看电脑配置决定 
+16G物理机给4G 
+2.点击 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",17.28,qwen3-vl-plus,564,232,796,0.0,
+data/images/Linux第1章概述/p032_i00.png,"这是一张虚拟机网络配置向导的界面截图，主要元素包括标题栏、网络类型选择区域（含四个单选按钮及其说明）、红色标注的提示文字与箭头，以及底部操作按钮。
+
+图中文字： 
+新建虚拟机向导 
+网络类型 
+要添加哪类网络？ 
+网络连接 
+● 使用桥接网络(R) 
+为客户机操作系统提供直接访问外部以太网网络的权限。客户机在外部网络上必须有自己的 IP 地址。 
+● 使用网络地址转换(NAT)(E) 
+为客户机操作系统提供使用主机 IP 地址访问主机拨号连接或外部以太网网络连接的权限。 
+● 使用仅主机模式网络(H) 
+将客户机操作系统连接到主机上的专用虚拟网络。 
+● 不使用网络连接(T) 
+1.选用NAT的网络模式会比较安全 
+2.点击 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",5.21,qwen3-vl-plus,603,204,807,0.0,
+data/images/Linux第1章概述/p033_i00.png,"这是一张虚拟机创建向导的界面截图，主要元素包括标题栏、问题提示、SCSI控制器类型单选列表（含推荐选项标注）、操作指引箭头及底部导航按钮。
+
+图中文字： 
+新建虚拟机向导 
+选择 I/O 控制器类型 
+您要使用何种类型的 SCSI 控制器？ 
+I/O 控制器类型 
+SCSI 控制器： 
+BusLogic(U) （不适用于 64 位客户机） 
+LSI Logic(L) （推荐） 
+LSI Logic SAS(S) 
+准虚拟化 SCSI(P) 
+1.按推荐的来 
+2.点击 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",4.18,qwen3-vl-plus,560,154,714,0.0,
+data/images/Linux第1章概述/p034_i00.png,"这是一张虚拟机创建向导的界面截图，主要元素包括“选择磁盘类型”标题、四个磁盘类型单选按钮（其中SCSI(S)被选中并标注为推荐）、红色箭头指示的操作步骤说明，以及底部的导航按钮。
+
+图中文字： 
+新建虚拟机向导 
+选择磁盘类型 
+您要创建何种磁盘？ 
+虚拟磁盘类型 
+○ IDE(I) 
+● SCSI(S) (推荐) 
+○ SATA(A) 
+○ NVMe(V) 
+1.选择磁盘类型，按推荐的来 
+2.点击 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",3.94,qwen3-vl-plus,583,142,725,0.0,
+data/images/Linux第1章概述/p030_i00.png,"这是一张Windows任务管理器与资源监视器联动操作的教程插图，主要元素包括任务管理器左侧导航栏、性能标签页、资源监视器窗口（含进程列表与CPU使用率图表），以及标注操作步骤的红色数字序号和说明文字。
+
+图中文字： 
+任务管理器 
+进程 
+性能 
+应用历史记录 
+启动应用 
+用户 
+详细信息 
+服务 
+设置 
+性能 
+CPU 
+3% 2.94 GHz 
+内存 
+资源监视器 
+文件(F) 监视器(M) 帮助(H) 
+概述 CPU 内存 磁盘 网络 
+进程 
+4% CPU 使用率 
+100% 最大频率 
+名称 PID 描述 状态 线程数 CPU 平均 CPU 
+Secure System 428 已暂停 - 0 0.00 
+SearchHost.exe 12636 SearchHo... 已暂停 87 0 0.00 
+LockApp.exe 16512 LockApp.e... 已暂停 30 0 0.00 
+SystemSettings.exe 7792 设置 已暂停 54 0 0.00 
+ShellExperienceHost.exe 26112 Windows ... 已暂停 34 0 0.00 
+dwm.exe 1856 桌面窗口... 正在运行 102 0 0.29 
+系统中断 - 延迟过程... 正在运行 - 0 0.26 
+Taskmgr.exe 34332 任务管理器 正在运行 44 0 0.19 
+服务 
+0% CPU 使用率 
+关联的句柄 
+搜索句柄 
+关联的模块 
+能看到CPU上是带数字的。 
+并且cpu是从0开始的， 
+表示我这台电脑是32个cpu 
+Intel(R) Core 
+运行新任务 
+复制 
+资源监视器 
+CPU 
+% 利用率 
+CPU 29 - 已停止 
+CPU 30 - 已停止 
+CPU 31 - 已停止 
+0% 
+100% 
+0% 
+100% 
+0% 
+100% 
+0% 
+100% 
+3) 点击这3个点的图标 
+4) 点击资源监视器 
+2) 点击性能 
+1) 点击任务管理器 
+辅助功能: 调查 
+任务管理器 
+任务栏设置 
+备注 显示器设置 
+回 品",24.58,qwen3-vl-plus,2243,565,2808,0.0,
+data/images/Linux第1章概述/p035_i00.png,"这是一张虚拟机创建向导的界面截图，主要元素包括标题栏、问题提示、三个磁盘选项单选按钮（其中“创建新虚拟磁盘(V)”被选中并有红色标注说明）、底部导航按钮（帮助、上一步、下一步、取消）以及两处手写红色批注。
+
+图中文字： 
+新建虚拟机向导 
+选择磁盘 
+您要使用哪个磁盘？ 
+磁盘 
+● 创建新虚拟磁盘(V) 
+虚拟磁盘由主机文件系统上的一个或多个文件组成，客户机操作系统会将其视为单个硬盘。虚拟磁盘可在一台主机上或多台主机之间轻松复制或移动。 
+○ 使用现有虚拟磁盘(E) 
+选择此选项可重新使用以前配置的磁盘。 
+○ 使用物理磁盘 (适用于高级用户)(P) 
+选择此选项可为虚拟机提供直接访问本地硬盘的权限。需要具有管理员特权。 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消 
+1.方便以后的使用，勾选它 
+2.点击",5.27,qwen3-vl-plus,541,231,772,0.0,
+data/images/Linux第1章概述/p037_i00.png,"这是一张虚拟机创建向导中的“指定磁盘文件”步骤界面截图，主要元素包括标题、说明文字、文件名输入框、浏览按钮及底部导航按钮。
+
+图中文字： 
+新建虚拟机向导 
+指定磁盘文件 
+您要在何处存储磁盘文件？ 
+磁盘文件(F) 
+将使用多个磁盘文件创建一个 30 GB 虚拟磁盘。将根据此文件名自动命名这些磁盘文件。 
+hadoop100.vmdk 
+浏览(R)... 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消",11.07,qwen3-vl-plus,564,130,694,0.0,
+data/images/Linux第1章概述/p038_i00.png,"这是一张 VMware Workstation 创建虚拟机的配置确认界面插图，主要元素包括虚拟机名称、位置、版本、操作系统、硬件配置列表及“自定义硬件”按钮、“完成”按钮等操作控件。
+
+图中文字： 
+新建虚拟机向导 
+已准备好创建虚拟机 
+单击“完成”创建虚拟机。然后可以安装 CentOS 7 64 位。 
+将使用下列设置创建虚拟机： 
+名称： hadoop100 
+位置： G:\workspace\vmware\vm02\hadoop100 
+版本： Workstation 15.x 
+操作系统： CentOS 7 64 位 
+硬盘： 30 GB, 拆分 
+内存： 2048 MB 
+网络适配器： NAT 
+其他设备： 2 个 CPU 内核, CD/DVD, USB 控制器, 打印机, 声卡 
+自定义硬件(C)... 
+1.如果配置不满意，可以在此进行修改 
+2.点击 
+< 上一步(B) 
+完成 
+取消",10.69,qwen3-vl-plus,564,233,797,0.0,
+data/images/Linux第1章概述/p036_i00.png,"这是一张虚拟机创建向导中“指定磁盘容量”步骤的界面截图，主要元素包括磁盘大小输入框、两个单选按钮选项（立即分配空间、拆分存储为多个文件）及底部导航按钮，并带有红色标注说明操作步骤。
+
+图中文字： 
+新建虚拟机向导 
+指定磁盘容量 
+磁盘大小为多少？ 
+最大磁盘大小 (GB)(S): 30.0 
+针对 CentOS 7 64 位 的建议大小: 20 GB 
+立即分配所有磁盘空间(A)。 
+分配所有容量可以提高性能，但要求所有物理磁盘空间立即可用。如果不立即分配所有空间，虚拟磁盘的空间最初很小，会随着您向其中添加数据而不断变大。 
+将虚拟磁盘存储为单个文件(O) 
+将虚拟磁盘拆分成多个文件(M) 
+拆分磁盘后，可以更轻松地在计算机之间移动虚拟机，但可能会降低大容量磁盘的性能。 
+帮助 
+< 上一步(B) 
+下一步(N) > 
+取消 
+1.安装的软件比较多，30G或50G都可以 
+2.勾选这里 
+3.点击",17.34,qwen3-vl-plus,564,259,823,0.0,
+data/images/Linux第1章概述/p039_i00.png,"这是一张展示虚拟机管理界面的教材插图，左侧为文件资源管理器中名为“hadoop100”的文件夹，右侧为该虚拟机的配置详情窗口，包含设备参数与操作按钮。 
+图中文字： 
+库 
+在此处键入内容进行搜索 
+我的计算机 
+hadoop100 
+这就是刚才配置的电脑 
+名字是刚才自己取的 
+主页 
+hadoop100 
+hadoop100 
+开启此虚拟机 
+编辑虚拟机设置 
+设备 
+内存 
+2 GB 
+处理器 
+2 
+硬盘 (SCSI) 
+30 GB 
+CD/DVD (IDE) 
+正在使用文件 E:... 
+网络适配器 
+NAT 
+USB 控制器 
+存在 
+声卡 
+自动检测 
+显示器 
+自动检测 
+描述 
+在此处键入对该虚拟机的描述。",4.66,qwen3-vl-plus,1103,184,1287,0.0,
+data/images/Linux第1章概述/p042_i00.png,"这是一张 CentOS 7 安装引导菜单的屏幕截图，主要元素包括标题“CentOS 7”、三个菜单选项（其中“Install CentOS 7”被红色框选并有中文注释箭头）、底部提示信息及右向箭头符号。
+
+图中文字： 
+CentOS 7 
+Install CentOS 7 
+选择它之后回车 
+test this media & install CentOS 7 
+Troubleshooting 
+Press Tab for full configuration options on menu items.",2.76,qwen3-vl-plus,277,104,381,0.0,
+data/images/Linux第1章概述/p041_i00.png,"这是一张虚拟机管理界面的截图，主要元素包括虚拟机名称“hadoop100”、启动按钮、设备配置列表（内存、处理器、硬盘等）及右侧说明文字。
+
+图中文字： 
+主页 
+hadoop100 
+开启此虚拟机 
+编辑虚拟机设置 
+设备 
+内存 
+2 GB 
+处理器 
+2 
+硬盘 (SCSI) 
+30 GB 
+CD/DVD (IDE) 
+正在使用文件 G:... 
+网络适配器 
+NAT 
+USB 控制器 
+存在 
+声卡 
+自动检测 
+打印机 
+存在 
+显示器 
+自动检测 
+描述 
+在此处键入对该虚拟机的描述。 
+开启虚拟机开始安装系统",3.99,qwen3-vl-plus,443,151,594,0.0,
+data/images/Linux第1章概述/p040_i00.png,"这是一张 VMware 虚拟机设置界面的截图，主要展示“CD/DVD (IDE)”设备的配置选项，包括选择 ISO 映像文件路径及确认操作的步骤标注。
+
+图中文字： 
+主页 
+hadoop100 
+开启此虚拟机 
+编辑虚拟机设置 
+设备 
+内存 2 GB 
+处理器 2 
+硬盘 (SCSI) 30 GB 
+CD/DVD (IDE) 自动检测 
+网络适配器 NAT 
+USB 控制器 存在 
+声卡 自动检测 
+打印机 存在 
+显示器 自动检测 
+描述 
+在此处键入对该虚拟机的描述。 
+1.点击这里，选择cd/dvd的方式安装系统 
+虚拟机设置 
+硬件 选项 
+设备 摘要 
+内存 2 GB 
+处理器 2 
+硬盘 (SCSI) 30 GB 
+CD/DVD (IDE) 自动检测 
+网络适配器 NAT 
+USB 控制器 存在 
+声卡 自动检测 
+打印机 存在 
+显示器 自动检测 
+设备状态 
+□ 已连接(C) 
+☑ 启动时连接(O) 
+连接 
+○ 使用物理驱动器(P): 
+自动检测 
+● 使用 ISO 映像文件(M): 
+G:\workspace\vmware\CentOS ▼ 浏览(B)... 
+高级(V)... 
+2.找到centos7镜像文件所在的位置 
+添加(A)... 
+移除(R) 
+3.点击确定 
+确定 
+取消 
+帮助",8.71,qwen3-vl-plus,1698,321,2019,0.0,
+data/images/Linux第1章概述/p042_i01.png,"这是一张显示Linux系统安装过程中的终端日志截图，主要元素包括命令提示符、错误信息、状态提示（OK/ERROR）及设备挂载信息。 
+图中文字：Press the <ENTER> key to begin the installation process. 
+[ 18.039319] dracut-pre-udev[388]: modprobe: ERROR: could not insert 'floppy': 
+No such device 
+[ OK ] Started Device-Mapper Multipath Device Controller. 
+[ OK ] Started Show Plymouth Boot Screen. 
+[ OK ] Reached target Paths. 
+[ OK ] Reached target Basic System. 
+Starting Open-iSCSI... 
+[ OK ] Started Open-iSCSI. 
+Starting dracut initqueue hook... 
+24.891829] sd 0:0:0:0: [sda] Assuming drive cache: write through 
+21.715394] dracut-initqueue[758]: mount: /dev/sr0 is write-protected, mounting read-only",5.31,qwen3-vl-plus,277,228,505,0.0,
+data/images/Linux第1章概述/p043_i00.png,"这是一张 CentOS 7 安装界面的截图，显示语言选择步骤，左侧为语言列表（含“中文”高亮），右侧为所选语言的子选项（“简体中文 (中国)”被选中），底部有“退出”和“继续”按钮，并附有红色手写标注说明操作步骤。
+
+图中文字： 
+欢迎使用 CENTOS 7。 
+您在安装过程中想使用哪种语言？ 
+δελτα 
+Точкій 
+ไทย 
+Türkçe 
+Українська 
+اردو 
+Tiếng Việt 
+IsiZulu 
+Telugu 
+Tajik 
+Thai 
+Turkish 
+Ukrainian 
+Urdu 
+Vietnamese 
+Zulu 
+中文 
+Chinese 
+在这里进行搜索。 
+CENTOS 7 安装 
+帮助！ 
+简体中文 (中国) 
+繁體中文 (台灣) 
+繁體中文 (中華人民共和國香港特別行 
+简体中文 (新加坡) 
+1.强烈建议使用中文，如果你日语很好，当我没有建议。 
+2.请选简体，对自己好一点 
+3.点击 
+退出(O) 
+继续(C)",6.17,qwen3-vl-plus,438,252,690,0.0,
+data/images/Linux第1章概述/p044_i00.png,"这是一张展示Linux系统安装配置界面与桌面环境时间设置界面的组合插图，左侧为安装向导的“本地化”和“软件/系统”选项列表，右侧为CentOS 7桌面中世界地图时间选择窗口及任务栏时间显示。
+
+图中文字： 
+本地化 
+日期和时间(T) 
+亚洲 上海 区 
+键盘(K) 
+汉语 
+语言支持(L) 
+简体中文 (中国) 
+软件 
+安装源(O) 
+本地介质 
+软件选择(S) 
+最小安装 
+系统 
+安装位置(D) 
+已选择自动分区 
+KDUMP 
+已启用 Kdump 
+网络和主机名(N) 
+未部署 
+SECURITY POLICY 
+No profile selected 
+日期 & 时间 
+CENTOS 7 桌面 
+23 : 49 
+关-14 小时(UTC) 
++0800 
+2021年 11月 25日 
+立即上所有更改并调整 
+16:49 
+2021/11/25",4.99,qwen3-vl-plus,409,228,637,0.0,
+data/images/Linux第1章概述/p047_i00.png,"这是一张 CentOS 7 安装过程中的“安装信息摘要”界面截图，主要元素包括左侧的 CentOS 标志与分类导航（软件、系统），右侧各项配置项及其当前设置（如时区、语言、安装源、磁盘位置等），以及底部的操作按钮和提示文字。
+
+图中文字： 
+安装信息摘要 
+CENTOS 7 安装 
+cn 
+帮助！ 
+日期和时间(I) 
+亚洲/上海 时区 
+键盘(K) 
+汉语 
+语言支持(L) 
+简体中文 (中国) 
+软件 
+安装源(I) 
+本地介质 
+软件选择(S) 
+最小安装 
+系统 
+安装位置(D) 
+已选择自动分区 
+网络和主机名(N) 
+未连接 
+KDUMP 
+已启用 Kdump 
+SECURITY POLICY 
+No profile selected 
+配置完之后， 
+点击开始安装 
+退出(Q) 
+开始安装(B) 
+在点击“开始安装”按钮前我们并不会操作您的磁盘。",5.7,qwen3-vl-plus,813,210,1023,0.0,
+data/images/Linux第1章概述/p046_i00.png,"该插图为 CentOS 7 安装过程中的“安装位置”配置界面截图，左侧为安装步骤导航栏（含“本地化”“软件”“系统”等模块），右侧为主配置区域，显示磁盘选择、分区选项及“完成(D)”按钮等元素。
+
+图中文字： 
+安装目标位置 
+完成(D) 
+这里我们保持默认 
+CENTOS 7 安装 
+cn 
+帮助 ! 
+设备选择 
+选择要在其中安装系统的设备。点击主菜单中的“开始安装”按钮前不会对该设备进行任何操作。 
+本地标准磁盘 
+30 GB 
+VMware, VMware Virtual S 
+sda / 30 GB 空闲 
+专用磁盘 & 网络磁盘 
+添加磁盘(A)... 
+其它存储选项 
+分区 
+自动分配分区(U)。 
+我要配置分区(I)。 
+我想让额外空间可用(M)。 
+加密 
+完整覆盖磁盘以及引导程序(F)... 
+已选择 1 个磁盘：容量 30 GB；30 GB 空闲 
+刷新(R) 
+本地化 
+日期和时间(T) 
+亚洲/上海时区 
+键盘(K) 
+汉语 
+语言支持(L) 
+简体中文 (中国) 
+软件 
+安装源(I) 
+本地介质 
+软件选择(S) 
+最小安装 
+系统 
+安装位置(D) 
+已选择自动分区 
+KDUMP 
+已启用 Kdump 
+防火墙和主机名(N) 
+未连接 
+SECURITY POLICY 
+No profile selected",7.55,qwen3-vl-plus,483,324,807,0.0,
+data/images/Linux第1章概述/p045_i00.png,"该插图为 CentOS 7 安装过程中的“软件选择”界面截图，左侧为安装步骤导航（含本地化、软件、系统等模块），右侧为软件环境选项列表，突出显示“最小安装”和“GNOME 桌面”等选项，并配有中文注释箭头说明。
+
+图中文字： 
+本地化 
+日期和时间(T) 
+亚洲上海时区 
+语言支持(L) 
+简体中文 (中国) 
+软件 
+安装源(I) 
+本地介质 
+系统 
+安装位置(D) 
+已选择自动分区 
+KDUMP 
+已启用 Kdump 
+网络和主机名(N) 
+未连接 
+SECURITY POLICY 
+No profile selected 
+软件选择(S) 
+最小安装 
+完成(D) 
+设置完后点击完成 
+CENTOS 7 安装 
+cn 
+帮助 ! 
+基本环境 
+最小安装 
+基本功能。 
+计算机节点 
+执行计算及处理的安装。 
+基础设施服务器 
+用于操作网络基础设施服务的服务器。 
+文件及打印服务器 
+用于企业的文件、打印及存储服务器。 
+基本网页服务器 
+提供静态及动态互联网内容的服务器。 
+虚拟化主机 
+最小虚拟化主机。 
+带 GUI 的服务器 
+常用于操作网络基础设施服务 GUI 的服务器。 
+GNOME 桌面 
+GNOME 是一个非常直观且用户友好的桌面环境。 
+KDE Plasma Workspaces 
+KDE Plasma Workspaces 是一个高度可配置桌面用户界面，其中包括面板、桌面、系统图标以及桌面与网络很多功能强大的 KDE 应用程序。 
+开发及生成工作站 
+用于软件、硬件、图形或者内容开发的工作站。 
+已选环境的附加选项 
+调试工具 
+调试行为异常程序以及诊断性能问题的工具。 
+兼容性程序库 
+用于在红帽企业版 Linux 的之前版本中构建的应用程序的兼容库。 
+开发工具 
+基本开发环境。 
+安全性工具 
+用于完整性和可信验证的安全性工具。 
+智能卡支持 
+支持物理智能卡认证。 
+系统管理工具 
+对系统管理有用的程序。 
+我们这里选择最小安装 
+也可以选择安装桌面版",10.12,qwen3-vl-plus,483,447,930,0.0,
+data/images/Linux第1章概述/p050_i00.png,"这是一张 CentOS 7 安装完成后的配置界面截图，主要元素包括左侧 CentOS 标志、顶部“配置”标题、“用户设置”区域（含 ROOT 密码与创建用户选项）、底部完成提示及“重启(R)”按钮。
+
+图中文字： 
+配置 
+CENTOS 7 安装 
+cn 
+帮助！ 
+用户设置 
+ROOT 密码 
+已经设置 root 密码 
+创建用户(U) 
+不会创建任何用户 
+完成！ 
+CentOS 已成功安装并可以使用！ 
+重启然后使用吧！ 
+重启(R) 
+使用本产品即表示遵守此许可协议 /usr/share/centos-release/EULA",15.13,qwen3-vl-plus,783,143,926,0.0,
+data/images/Linux第1章概述/p049_i00.png,"这是一张 CentOS 7 安装过程中的“用户设置”配置界面截图，主要元素包括左侧的 CentOS 标志与导航栏、右侧的 ROOT 密码设置状态（已设置）、创建用户选项（未创建），以及底部的完成提示与“完成配置(F)”按钮。
+
+图中文字： 
+配置 
+CentOS 7 安装 
+cn 
+帮助！ 
+用户设置 
+ROOT 密码 
+已经设置 root 密码 
+创建用户(U) 
+不会创建任何用户 
+完成！ 
+CentOS 已成功安装，不过仍有一些配置需要完成。 
+完成之后，请点击结束配置按钮。 
+完成配置(F)",16.14,qwen3-vl-plus,783,141,924,0.0,
+data/images/Linux第1章概述/p048_i00.png,"这是一张 CentOS 7 安装过程中的用户设置界面截图，分为左右两部分：左侧为“ROOT 密码”和“创建用户”选项配置页，右侧为 ROOT 密码输入与确认的弹窗界面，含中文注释说明操作步骤与密码示例。
+
+图中文字： 
+配置 
+CENTOS 7 安装 
+cn 
+帮助！ 
+用户设置 
+ROOT 密码 
+Root 密码未设置 
+创建用户(u) 
+不会创建任何用户 
+这里设置密码 
+不创建用户时默认使用root账户 
+正在 /dev/sda1 上创建文件系统 xfs 
+entOS Core SIG 
+roduces the CentOS Linux Distribution. 
+centos.org/SpecialInterestGroup 
+请先完成所有以高亮标记的项目再进行下一步。 
+ROOT 密码 
+完成(F) 
+CENTOS 7 安装 
+cn 
+帮助！ 
+root 账户用于管理系统。为 root 用户输入密码。 
+Root 密码 (R) : ******** 
+确认(Q) : ******** 
+2.点击完成 
+1.为了方便记忆，这里我们将密码设置为“123456” 
+The password you have provided is weak. 密码未通过字典检查。过于简单/系统化/已泄露/常见（Dove）需提高双方强度。",17.57,qwen3-vl-plus,453,286,739,0.0,
+data/images/Linux第1章概述/p053_i00.png,"这是一张展示 VMware 虚拟网络编辑器中 NAT 模式配置界面的截图，包含左侧的虚拟网络列表与设置面板、右侧的 NAT 设置窗口，以及多处红色标注的操作步骤说明（如点击、修改IP地址等）。
+
+图中文字： 
+虚拟网络编辑器 
+名称　类型　外部连接　主机连接　DHCP　子网地址 
+VMnet0　桥接模式　自动桥接　　　　　已启用　192.168.116.0 
+VMnet1　仅主机…　　　　　　　已连接　已启用　192.168.116.0 
+VMnet8　NAT 模式　NAT 模式　　　　　已连接　已启用　192.168.30.0 
+添加网络(E)...　移除网络(O)　重命名网络(W)... 
+VMnet 信息 
+○ 桥接模式(将虚拟机直接连接到外部网络)(B) 
+已桥接至(G)：自动　　　　　　　　　　　　　自动设置(U)... 
+● NAT 模式(与虚拟机共享主机的 IP 地址)(N) 
+○ 仅主机模式(在专用网络内连接虚拟机)(H) 
+☑ 将主机虚拟适配器连接到此网络(V) 
+主机虚拟适配器名称：VMware 网络适配器 VMnet8 
+☑ 使用本地 DHCP 服务将 IP 地址分配给虚拟机(D)　　　　　　　DHCP 设置(P)... 
+子网 IP (I)：192 . 168 . 30 . 0　子网掩码(M)：255 . 255 . 255 . 0 
+还原默认设置(R)　导入(T)...　导出(O)...　确定　取消　应用(A)...　帮助 
+4.点击VMnet8 
+NAT 设置(S)... 
+6.点击 
+5.修改中间一位为30 
+NAT 设置 
+网络： vmnet8 
+子网 IP： 192.168.30.0 
+子网掩码： 255.255.255.0 
+网关 IP(G)： 192 . 168 . 30 . 2 
+端口转发(F) 
+主机端口　类型　虚拟机 IP 地址　描述 
+添加(A)...　移除(R)　属性(P) 
+高级 
+☑ 允许活动的 FTP(T) 
+☑ 允许任何组织唯一标识符(O) 
+UDP 超时(以秒为单位)(U)：30 
+配置端口(C)：0 
+□ 启用 IPv6(E) 
+IPv6 前缀(6)：fd15:4ba5:5a2b:1008::/64 
+DNS 设定(D)...　NetBIOS 设定(N)... 
+确定　取消　帮助 
+7.修改这一位为30",16.57,qwen3-vl-plus,959,664,1623,0.0,
+data/images/Linux第1章概述/p052_i00.png,"这是一张 VMware 虚拟网络编辑器的界面截图，主要元素包括虚拟网络列表（VMnet1、VMnet8）、网络配置选项（仅主机模式、NAT 模式等）、IP 地址与子网掩码设置区域，以及底部的操作按钮（如“更改设置”）和提示信息。
+
+图中文字： 
+虚拟网络编辑器 
+名称　类型　外部连接　主机连接　DHCP　子网地址 
+VMnet1　仅主机...　-　已连接　已启用　192.168.116.0 
+VMnet8　NAT 模式　NAT 模式　已连接　已启用　192.168.30.0 
+添加网络(E)...　移除网络(O)　重命名网络(W)... 
+VMnet 信息 
+○ 桥接模式(将虚拟机直接连接到外部网络)(B) 
+已桥接至(G):　　　　　　　　　　　　　　　　　　　自动设置(U)... 
+○ NAT 模式(与虚拟机共享主机的 IP 地址)(N)　　　　　　　NAT 设置(S)... 
+● 仅主机模式(在专用网络内连接虚拟机)(H) 
+☑ 将主机虚拟适配器连接到此网络(V) 
+主机虚拟适配器名称: VMware 网络适配器 VMnet1 
+☑ 使用本地 DHCP 服务将 IP 地址分配给虚拟机(D)　　　　　　　DHCP 设置(P)... 
+子网 IP (I): 192.168.116.0　子网掩码(M): 255.255.255.0 
+还原默认设置(R)　导入(T)...　导出(X)...　确定　取消　应用(A)　帮助 
+需要具备管理员特权才能修改网络配置。 
+更改设置(C)",20.59,qwen3-vl-plus,698,415,1113,0.0,
+data/images/Linux第1章概述/p055_i00.png,"这是一张展示 Linux 系统网络配置文件（如 `/etc/network/interfaces` 或 `netplan` 风格配置）的文本截图，主要元素包括网络接口类型、IP 配置方式、IPv4/IPv6 参数、接口名称、UUID、IP 地址、网关和 DNS 设置等。
+
+图中文字： 
+TYPE=""Ethernet"" ……#网络类型 (通常是 Ethernet) 
+PROXY_METHOD=""none"" 
+BROWSER_ONLY=""no"" 
+BOOTPROTO=""static"" ……# IP 的配置方法 [none|static|bootp|dhcp] (引导时不使用协议|静态分配 IP|BOOTP 协议|DHCP 协议) 
+DEFROUTE=""yes"" 
+IPV4_FAILURE_FATAL=""no"" 
+IPV6INIT=""yes"" 
+IPV6_AUTOCONF=""yes"" 
+IPV6_DEFROUTE=""yes"" 
+IPV6_FAILURE_FATAL=""no"" 
+IPV6_ADDR_GEN_MODE=""stable-privacy"" 
+NAME=""ens33"" …… 
+UUID=""e83804c1-3257-4584-81bb-660665ac22f6"" ……#随机 id (删除) 
+DEVICE=""ens33"" ……#接口名 (设备,网卡) 
+ONBOOT=""yes"" ……#系统启动的时候网络接口是否有效 (yes/no) 
+#IP 地址 
+IPADDR=192.168.30.100 
+#网关 
+GATEWAY=192.168.30.2 
+#域名解析器 
+DNS1=192.168.30.2",8.53,qwen3-vl-plus,928,369,1297,0.0,
+data/images/Linux第1章概述/p052_i01.png,"这是一张计算机软件菜单界面的截图，主要元素包括顶部菜单栏（含“编辑(E)”等选项）、下拉菜单项（如“剪切(T)”“复制(C)”“粘贴(P)”）以及一个带图标的菜单项“虚拟网络编辑器(N)...”。
+
+图中文字： 
+编辑(E) 查看(V) 虚拟机(M) 选项卡(T) 
+剪切(T) Ctrl+X 
+复制(C) Ctrl+C 
+粘贴(P) Ctrl+V 
+虚拟网络编辑器(N)... 
+首选项(R)... Ctrl+P",33.39,qwen3-vl-plus,211,130,341,0.0,
+data/images/Linux第1章概述/p056_i00.png,"这是一张Linux终端界面的截图，显示了执行`ip addr`命令后的网络接口配置输出，包含回环接口（lo）和以太网接口（ens33）的详细信息，并有一条红色箭头指向IP地址行及右侧中文注释。
+
+图中文字： 
+root@localhost ~]# ip addr 
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000 
+ link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 
+ inet 127.0.0.1/8 scope host lo 
+ valid_lft forever preferred_lft forever 
+ inet6 ::1/128 scope host 
+ valid_lft forever preferred_lft forever 
+2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000 
+ link/ether 00:0c:29:b9:0a:1f brd ff:ff:ff:ff:ff:ff 
+ inet 192.168.30.100/24 brd 192.168.30.255 scope global noprefixroute ens33 
+ valid_lft forever preferred_lft forever 
+ inet6 fe80::23e5:b994:58d7:7216/64 scope link noprefixroute 
+ valid_lft forever preferred_lft forever 
+[root@localhost ~]# 
+看看是否与刚才修改的IPADDR对应",8.64,qwen3-vl-plus,708,398,1106,0.0,
+data/images/Linux第1章概述/p054_i00.png,"这是一组展示 VMware 虚拟网络适配器（VMnet8）属性配置的 Windows 系统对话框截图，包含“常规”状态页、“共享”页及“Internet 协议版本 4 (TCP/IPv4) 属性”页，主要元素有网络连接状态、协议列表、IP/DNS 设置字段及操作按钮。
+
+图中文字： 
+VMware Network Adapter VMnet8 状态 
+常规 
+连接 
+IPv4 连接: 无网络访问权限 
+IPv6 连接: 无网络访问权限 
+媒体状态: 已启用 
+持续时间: 05:35:41 
+速度: 100.0 Mbps 
+详细信息(E)... 
+活动 
+已发送 —— 已接收 
+字节: 9,144 8,448 
+属性(P) 禁用(D) 诊断(G) 
+点击属性 
+关闭(C) 
+
+VMware Network Adapter VMnet8 属性 
+网络 共享 
+连接使用: 
+VMware Virtual Ethernet Adapter for VMnet8 
+配置(C)... 
+此连接使用下列项目(O): 
+☑ Microsoft 网络客户端 
+☐ VMware Bridge Protocol 
+☑ Microsoft 网络的文件和打印机共享 
+☑ Internet 协议版本 4 (TCP/IPv4) 
+☐ Microsoft 网络适配器多路传送器协议 
+☑ Microsoft LLDP 协议驱动程序 
+☑ Internet 协议版本 6 (TCP/IPv6) 
+☑ 链路层拓扑发现响应程序 
+安装(N)... 卸载(U) 属性(R) 
+描述 
+允许你的计算机访问 Microsoft 网络上的资源。 
+确定 取消 
+
+Internet 协议版本 4 (TCP/IPv4) 属性 
+常规 
+如果网络支持此功能，则可以获取自动指派的 IP 设置。否则，你需要从网络系统管理员处获得适当的 IP 设置。 
+○ 自动获得 IP 地址(O) 
+● 使用下面的 IP 地址(S): 
+IP 地址(I): 192 . 168 . 30 . 1 
+子网掩码(U): 255 . 255 . 255 . 0 
+默认网关(D): 192 . 168 . 30 . 2 
+○ 自动获得 DNS 服务器地址(B) 
+● 使用下面的 DNS 服务器地址(E): 
+首选 DNS 服务器(P): 192 . 168 . 30 . 2 
+备用 DNS 服务器(A): · · · 
+□ 退出时验证设置(L) 
+高级(V)... 
+确定 取消 
+点击修改ipv4",21.26,qwen3-vl-plus,1023,585,1608,0.0,
+data/images/Linux第1章概述/p057_i00.png,"这是一张对比展示两个 CentOS Linux 7 终端登录与基本命令执行过程的插图，主要元素包括系统信息、登录提示、密码输入、pwd 命令输出及 shell 提示符。
+
+图中文字： 
+CentOS Linux 7 (Core) 
+Kernel 3.10.0-862.el7.x86_64 on an x86_64 
+localhost login: root 
+Password: 
+[root@localhost ~]# pwd 
+/root 
+[root@localhost ~]# 
+CentOS Linux 7 (Core) 
+Kernel 3.10.0-1127.el7.x86_64 on an x86_64 
+hadoop100 login: root 
+Password: 
+Last login: Wed Jul 29 11:32:55 on tty1 
+[root@hadoop100 ~]# _",5.21,qwen3-vl-plus,546,199,745,0.0,
+data/images/Linux第1章概述/p063_i00.png,"这是一张虚拟机克隆向导的界面截图，主要元素包括标题“克隆源”、两个单选选项（“虚拟机中的当前状态(C)”和“现有快照”）、提示文字及底部导航按钮。
+
+图中文字： 
+克隆虚拟机向导 
+克隆源 
+您想从哪个状态创建克隆？ 
+克隆自 
+● 虚拟机中的当前状态(C) 
+从当前状态创建链接克隆将创建一个新快照。 
+○ 现有快照(仅限关闭的虚拟机)(S): 
+此虚拟机没有可克隆的快照。 
+< 上一步(B) 
+下一步(N) > 
+取消",4.03,qwen3-vl-plus,1531,150,1681,0.0,
+data/images/Linux第1章概述/p064_i00.png,"这是一张Windows系统中“克隆虚拟机向导”的界面截图，主要元素包括标题栏、克隆类型选择区域（含两个单选按钮及其说明文字）和底部导航按钮。
+
+图中文字： 
+克隆虚拟机向导 
+克隆类型 
+您希望如何克隆此虚拟机？ 
+克隆方法 
+创建链接克隆(L) 
+链接克隆是对原始虚拟机的引用，所需的存储磁盘空间较少。但是，必须能够访问原始虚拟机才能运行。 
+创建完整克隆(F) 
+完整克隆是原始虚拟机当前状态的完整副本。此副本虚拟机完全独立，但需要较多的存储磁盘空间。 
+< 上一步(B) 
+下一步(N) > 
+取消",4.4,qwen3-vl-plus,1467,159,1626,0.0,
+data/images/Linux第1章概述/p062_i00.png,"这是一张 VMware Workstation 虚拟机管理界面的截图，主要显示了对名为 “node1” 的虚拟机右键操作时展开的多级上下文菜单，以及右侧虚拟机预览窗口和底部详细信息面板。
+
+图中文字： 
+node1 - VMware Workstation 
+文件(F) 编辑(E) 查看(V) 虚拟机(M) 选项卡(T) 帮助(H) 
+库 
+在此处键入内容进行搜索 
+我的计算机 
+node1 
+node2 
+node3 
+共享的 
+主页 
+node1 
+node2 
+node3 
+关闭选项卡(B) 
+标记为收藏项(F) 
+重命名(A)... 
+打开虚拟机目录(O) 
+移除(R) 
+电源(P) 
+可移动设备(D) 
+暂停(U) 
+发送 Ctrl+Alt+Del(E) 
+抓取输入内容(I) 
+SSH(H) 
+快照(N) 
+捕获屏幕(C) 
+管理(M) 
+安装 VMware Tools(T)... 
+设置(S)... 
+更改硬件兼容性(H)... 
+克隆(C)... 
+上载(U)... 
+下载(W)... 
+从磁盘中删除(D) 
+共享(S)... 
+权限(P)... 
+VNC 连接(V) 
+消息日志(L) 
+4 GB 
+6 
+40 GB 
+正在使用文件 F... 
+NAT 
+存在 
+自动检测 
+存在 
+自动检测 
+虚拟机详细信息 
+状态: 已关机 
+配置文件: F:\Virtual Machines\node1\node1.vmx 
+硬件兼容性: Workstation 15.x 虚拟机 
+主 IP 地址: 网络信息不可用 
+五 ☁ °, 🌙 📊 👤 🔔 
+9:53 周五 
+2022/3/25",8.84,qwen3-vl-plus,1473,398,1871,0.0,
+data/images/Linux第1章概述/p065_i00.png,"这是一张虚拟机克隆向导的界面截图，主要元素包括标题栏、虚拟机名称输入框（含预填文本）、位置路径输入框与浏览按钮、以及底部导航按钮。
+
+图中文字： 
+克隆虚拟机向导 
+新虚拟机名称 
+您希望该虚拟机使用什么名称？ 
+虚拟机名称(V) 
+node1 的克隆 
+输入虚拟机名称 
+位置(L) 
+C:\Users\garyj\Documents\Virtual Machines\node1 的克隆 
+浏览(R)... 
+< 上一步(B) 
+完成 
+取消",9.51,qwen3-vl-plus,1467,123,1590,0.0,
+data/images/Linux第1章概述/p067_i00.png,"这是一张虚拟机管理界面的截图，左侧为虚拟机列表（含“我的计算机”和“共享的虚拟机”分组），右侧为选中虚拟机“node4”的配置详情面板，包含操作按钮与硬件设备参数。
+
+图中文字： 
+我的计算机 
+node1 
+node2 
+node3 
+node4 
+共享的虚拟机 
+node4 
+开启此虚拟机 
+编辑虚拟机设置 
+设备 
+内存 
+4 GB 
+处理器 
+6 
+硬盘 (SCSI) 
+40 GB 
+CD/DVD (IDE) 
+正在使用文件 F:...",5.88,qwen3-vl-plus,871,126,997,0.0,
+data/images/Linux第1章概述/p066_i00.png,"这是一张对比展示 VMware Workstation 虚拟机克隆过程两个阶段的界面截图：左图为克隆进行中（含进度条），右图为克隆完成状态（含三步完成列表与关闭按钮）。
+
+图中文字： 
+克隆虚拟机向导 
+正在克隆虚拟机 
+✓ 正在准备克隆操作 
+VMware Workstation 
+正在克隆... 
+取消 
+关闭 
+克隆虚拟机向导 
+正在克隆虚拟机 
+✓ 正在准备克隆操作 
+✓ 正在创建完整克隆 
+✓ 完成 
+关闭",9.34,qwen3-vl-plus,753,129,882,0.0,
+data/images/Linux第1章概述/p068_i00.png,"这是一张显示网络接口配置参数的文本截图，主要元素为多行键值对形式的配置信息，其中部分数值以红色高亮显示。
+
+图中文字： 
+DEVICE=ens33 
+TYPE=Ethernet 
+ONBOOT=yes 
+BOOTPROTO=static 
+NAME=""ens33"" 
+IPADDR= 192.168.30.101 
+PREFIX=24 
+GATEWAY= 192.168.30.2 
+DNS1= 192.168.30.2",3.31,qwen3-vl-plus,231,124,355,0.0,
+data/images/Linux第2章基本命令/p003_i00.png,"这是一张Linux根目录结构的树状示意图，主要元素包括根目录“/”及其下的标准系统目录（如bin、boot、dev、etc、home、root、run、sbin、tmp、usr、var），以及部分子目录（如home下的alice、bob、eve；usr下的bin、local、sbin、tmp）和指向关系箭头。
+
+图中文字： 
+/ 
+bin 
+boot 
+dev 
+etc 
+home 
+root 
+run 
+sbin 
+tmp 
+usr 
+var 
+alice 
+bob 
+eve 
+bin 
+local 
+sbin 
+tmp",3.3,qwen3-vl-plus,528,123,651,0.0,
+data/images/Linux第2章基本命令/p030_i00.png,"这是一张Linux终端界面的截图，显示了执行`history`命令后的命令历史列表，以及一条红色箭头指向该命令并附有中文注释说明其用途。
+
+图中文字： 
+[root@hadoop100 test2]# history 
+1 pwd 
+2 vim /etc/sysconfig/network-scripts/ifcfg-ens33 
+3 vi /etc/sysconfig/network-scripts/ifcfg-ens33 
+4 systemctl restart network 
+5 ifconfig 
+6 yum -y install net-tools 
+7 ifconfig 
+8 pwd 
+9 vim a.txt 
+10 hostname 
+11 vi /etc/hostname 
+12 hostname 
+13 reboot 
+查看已经执行过的历史命令",3.77,qwen3-vl-plus,453,146,599,0.0,
+data/images/Linux第2章基本命令/p040_i00.png,"这是一张Linux终端操作截图，展示alias与unalias命令的用法示例，包含多组命令输入与输出、中文注释箭头及标题。 
+图中文字： 
+6.3 alias/unalias-创建/去除要执行命令的别名 
+[root@hadoop100 ~]# which cd 
+/usr/bin/cd 
+[root@hadoop100 ~]# which ls 
+alias ls='ls --color=auto' 
+/usr/bin/ls 
+[root@hadoop100 ~]# which cp 
+alias cp='cp -i' 
+/usr/bin/cp 
+[root@hadoop100 ~]# 
+[root@hadoop100 ~]# ls 
+anaconda-ks.cfg a.txt static test1 test333 
+[root@hadoop100 ~]# cd test1 
+[root@hadoop100 test1]# ls 
+a.txt b.txt c.txt d.txt e.txt test2 test3 test4 test5 test6 
+[root@hadoop100 test1]# cd ~ 
+[root@hadoop100 ~]~# alias demol='cd /root/test1' 
+alias创建要执行命令的别名; 
+[root@hadoop100 ~]# type demol 
+demol 是 `cd /root/test1` 的别名 
+[root@hadoop100 ~]# unalias 
+unalias: 用法:unalias [-a] 名称 [名称 ...] 
+[root@hadoop100 ~]# unalias demol 
+unalias去掉别名; 
+[root@hadoop100 ~]# type demol 
+-bash: type: demol: 未找到 
+[root@hadoop100 ~]#",8.75,qwen3-vl-plus,871,391,1262,0.0,
+data/images/Linux第2章基本命令/p037_i00.png,"这是一张终端命令输出的截图，显示了2022年全年日历，以3×4网格布局呈现12个月份，每页顶部有命令行提示符和`cal 2022`命令。 
+图中文字： 
+[root@hadoop100 ~]# cal 2022 
+2022 
+一月 
+日 一 二 三 四 五 六 
+ 1 
+2 3 4 5 6 7 8 
+9 10 11 12 13 14 15 
+16 17 18 19 20 21 22 
+23 24 25 26 27 28 29 
+30 31 
+二月 
+日 一 二 三 四 五 六 
+ 1 
+2 3 4 5 6 7 8 
+9 10 11 12 13 14 15 
+16 17 18 19 20 21 22 
+23 24 25 26 27 28 29 
+30 31 
+三月 
+日 一 二 三 四 五 六 
+ 1 2 3 4 5 
+6 7 8 9 10 11 12 
+13 14 15 16 17 18 19 
+20 21 22 23 24 25 26 
+27 28 29 30 31 
+四月 
+日 一 二 三 四 五 六 
+ 1 2 
+3 4 5 6 7 8 9 
+10 11 12 13 14 15 16 
+17 18 19 20 21 22 23 
+24 25 26 27 28 29 30 
+31 
+五月 
+日 一 二 三 四 五 六 
+1 2 3 4 5 6 7 
+8 9 10 11 12 13 14 
+15 16 17 18 19 20 21 
+22 23 24 25 26 27 28 
+29 30 31 
+六月 
+日 一 二 三 四 五 六 
+ 1 2 3 4 
+5 6 7 8 9 10 11 
+12 13 14 15 16 17 18 
+19 20",15.07,qwen3-vl-plus,723,700,1423,0.0,
+data/images/Linux第2章基本命令/p039_i00.png,"这是一张Linux终端界面的截图，展示了两次执行`ls /etc`命令的输出结果，内容为/etc目录下的大量配置文件和子目录列表，右侧有手绘箭头和橙色框标注部分文件。
+
+图中文字： 
+[root@hadoop100 ~]# ls /etc 
+adjtime 
+aliases 
+aliases.db 
+alternatives 
+anacrontab 
+asound.conf 
+audit 
+bash_completion.d 
+bashrc 
+binfmt.d 
+centos-release 
+centos-release-upstream 
+chkconfig.d 
+cron.d 
+cron.daily 
+cron.deny 
+cron.hourly 
+cron.monthly 
+crontab 
+cron.weekly 
+crypttab 
+csh.cshrc 
+csh.login 
+dbus-1 
+default 
+depmod.d 
+dhcp 
+DIR_COLORS 
+DIR_COLORS.256color 
+DIR_COLORS.lightbgcolor 
+dracut.conf 
+dracut.conf.d 
+e2fsck.conf 
+environment 
+ethertypes 
+exports 
+favicon.png 
+filesystems 
+firewalld 
+fstab 
+fuse.conf 
+gcrpyt 
+GeoIP.conf 
+GeoIP.conf.default 
+gnupg 
+GREP_COLORS 
+group 
+group- 
+grub2.cfg 
+grub.d 
+gshadow 
+gshadow- 
+gss 
+host.conf 
+hostname 
+hosts 
+hosts.allow 
+hosts.deny 
+init.d 
+inittab 
+iproute2 
+issue 
+issue.net 
+kdump.conf 
+kernel 
+krb5.conf 
+krb5.conf.d 
+ld.so.cache 
+ld.so.conf 
+ld.so.conf.d 
+libaudit.conf 
+libnl 
+libuser.conf 
+locale.conf 
+localtime 
+login.defs 
+logrotate.conf 
+logrotate.d 
+lvm 
+machine-id 
+magic 
+makedumpfile.conf.sample 
+man_db.conf 
+mke2fs.conf 
+modprobe.d 
+modules-load.d 
+motd 
+mtab 
+my.cnf 
+my.cnf.d 
+NetworkManager 
+Networks 
+nsswitch.conf 
+nsswitch.conf.bak 
+openldap 
+opt 
+os-release 
+pam.d 
+passwd 
+passwd- 
+pkcs11 
+pki 
+plymouth 
+pm 
+polkit-1 
+popt.d 
+postfix 
+ppp 
+prelink.conf.d 
+printcap 
+profile 
+profile.d 
+protocols 
+python 
+rc0.d 
+rc1.d 
+rc2.d 
+rc3.d 
+rc4.d 
+rc5.d 
+rc6.d 
+rc.d 
+rc.local 
+redhat-release 
+resolv.conf 
+resolv.conf.save 
+rpc 
+rpm 
+rsyslog.conf 
+rsyslog.d 
+rtwtab 
+rwtab.d 
+sasl2 
+security 
+selinux 
+services 
+sestatus.conf 
+shadow 
+shadow- 
+shells 
+skel 
+ssh 
+ssl 
+statetab 
+statetab.d 
+subgid 
+subuid 
+sudo.conf 
+sudoers 
+sudoers.d 
+sudo-ldap.conf 
+sysconfig 
+sysctl.conf 
+sysctl.d 
+systemd 
+system-release 
+system-release-cpe 
+terminfo 
+tmpfiles.d 
+tuned 
+udev 
+vconsole.conf 
+vimrc 
+vircc 
+vmware-tools 
+wgetrc 
+wpa_supplicant 
+X11 
+xdg 
+xinetd.conf 
+xinetd.d 
+yum 
+yum.conf 
+yum.repos.d",15.55,qwen3-vl-plus,978,700,1678,0.0,
+data/images/Linux第2章基本命令/p045_i01.png,"这是一张终端命令行界面的截图，展示了两次执行 `cat` 命令查看 `/root/b.txt` 文件内容的操作，第二次附加了 `sort` 管道命令，输出结果按字典序排序。
+
+图中文字： 
+[root@hadoop100 ~]# cat /root/b.txt 
+java 
+python 
+hadoop 
+spark 
+flink 
+hive 
+[root@hadoop100 ~]# cat /root/b.txt | sort 
+flink 
+hadoop 
+hive 
+java 
+python 
+spark",3.37,qwen3-vl-plus,283,117,400,0.0,
+data/images/Linux第2章基本命令/p041_i00.png,"这是一张终端界面截图，显示了 `info cd` 命令的输出内容，属于 GNU Info 系统中的 Bash 内建命令手册页面，主要元素包括命令提示符、手册标题、NAME 列表及 BASH BUILTIN COMMANDS 说明段落。
+
+图中文字： 
+[root@hadoop100 ~]# info cd 
+File: *manpages*, Node: cd, Up: (dir) 
+BASH_BUILTINS(1) General Commands Manual BASH_BUILTINS(1) 
+NAME 
+bash, ., .., [, alias, bg, bind, break, builtin, caller, cd, command, 
+compgen, complete, compopt, continue, declare, dirs, disown, echo, 
+enable, eval, exec, exit, export, false, fc, fg, getopts, hash, help, 
+history, jobs, kill, let, local, logout, mapfile, popd, printf, pushd, 
+pwd, read, readonly, return, set, shift, shopt, source, suspend, test, 
+times, trap, true, type, typeset, ulimit, umask, unalias, unset, wait - 
+bash built-in commands, see bash(1) 
+BASH BUILTIN COMMANDS 
+Unless otherwise noted, each builtin command documented in this section 
+as accepting options preceded by - accepts -- to signify the end of the 
+options. The :, true, false, and test builtins do not accept options 
+and do not treat -- specially. The exit, logout, break, continue, let, 
+and shift builtins accept and process arguments beginning with - 
+without requiring --. Other builtins that accept arguments but are not 
+specified as accepting options interpret arguments beginning with - as 
+invalid options and require -- to prevent this interpretation. 
+: [arguments] 
+No effect; the command does nothing beyond expanding arguments 
+and performing any specified redirections. A zero exit code is 
+returned.",10.27,qwen3-vl-plus,690,421,1111,0.0,
+data/images/Linux第2章基本命令/p045_i00.png,"这是一张展示 Linux 终端操作的教材插图，包含两个并列的终端窗口，主要元素有命令行输入（如 `ls`, `cat`, `wc`, `grep`）、输出结果、红色标注箭头及中文注释。
+
+图中文字： 
+[root@hadoop100 ~]# ls 
+anaconda-ks.cfg a.txt b.txt static test1 test333 
+[root@hadoop100 ~]# cat b.txt 
+java 
+python 
+hadoop 
+spark 
+hive 
+6行 
+6个单词 
+36个字节 
+[root@hadoop100 ~]# cat b.txt | wc 
+6 6 36 
+[root@hadoop100 ~]# 
+[root@hadoop100 ~]# cat /root/b.txt 
+java 
+python 
+hadoop 
+spark 
+flink 
+hive 
+[root@hadoop100 ~]# cat /root/b.txt | grep h 
+hadoop 
+python 
+hive 
+查找包含“h”的所在行",5.76,qwen3-vl-plus,233,232,465,0.0,
+data/images/Linux第2章基本命令/p065_i00.png,"这是一张Linux终端中`ls -l`命令输出结果的示意图，用红色箭头将输出字段与上方的中文列标题一一对应标注。主要元素包括命令行提示符、`ls -l`命令、文件权限、链接数、属主、属组、大小、修改时间及文件名。
+
+图中文字： 
+文件类型与权限 链接数 文件属主 文件属组 文件大小 建立或最近修改的时间 文件名字 
+[root@cloud z3]# ls -l 
+总计 4 
+-rw-rw-r-- 1 z3 z3 8 10-23 16:56 a.txt 
+[root@cloud z3]#",4.47,qwen3-vl-plus,600,155,755,0.0,
+data/images/Linux第2章基本命令/p061_i00.png,"这是一张Linux终端界面的截图，显示了执行`cat /etc/group`命令后输出的系统用户组信息列表，右侧有红色中文注释说明其用途。
+
+图中文字： 
+[root@hadoop100 ~]# cat /etc/group 
+root:x:0: 
+bin:x:1: 
+daemon:x:2: 
+sys:x:3: 
+adm:x:4: 
+tty:x:5: 
+disk:x:6: 
+lp:x:7: 
+mem:x:8: 
+kmem:x:9: 
+wheel:x:10: 
+cdrom:x:11: 
+mail:x:12:postfix 
+man:x:15: 
+dialout:x:18: 
+floppy:x:19: 
+games:x:20: 
+tape:x:33: 
+video:x:39: 
+ftp:x:50: 
+lock:x:54: 
+audio:x:63: 
+nobody:x:99: 
+users:x:100: 
+utmp:x:22: 
+utempter:x:35: 
+input:x:999: 
+systemd-journal:x:190: 
+systemd-network:x:192: 
+dbus:x:81: 
+polkitd:x:998: 
+ssh_keys:x:997: 
+sshd:x:74: 
+postdrop:x:90: 
+postfix:x:89: 
+hugo:x:1000: 
+test1:x:1001: 
+test2:x:1002: 
+[root@hadoop100 ~]#",8.03,qwen3-vl-plus,674,362,1036,0.0,
+data/images/Linux第2章基本命令/p074_i00.png,"这是一张Linux终端界面的截图，显示了两个命令的执行结果：`top &` 启动后台进程并输出其PID，以及 `ps` 命令列出当前进程信息，包含PID、TTY、TIME和CMD列。
+
+图中文字： 
+[root@slave3 tmp]# top & 
+[1] 1571 
+[root@slave3 tmp]# ps 
+PID TTY TIME CMD 
+1388 pts/0 00:00:00 bash 
+1571 pts/0 00:00:00 top 
+1572 pts/0 00:00:00 ps",3.6,qwen3-vl-plus,201,151,352,0.0,
+data/images/Linux第2章基本命令/p072_i00.png,"这是一张展示 Linux 终端中 `ps` 命令不同输出格式的教材插图，包含三个 `ps` 命令及其输出结果：`ps`、`ps x` 和 `ps aux`，主要元素为进程列表的列标题（如 PID、TTY、STAT、COMMAND 等）和具体进程信息。
+
+图中文字： 
+[root@slave3 tmp]# ps 
+ PID TTY TIME CMD 
+ 1388 pts/0 00:00:00 bash 
+ 1562 pts/0 00:00:00 ps 
+[root@slave3 tmp]# ps x 
+ PID TTY STAT TIME COMMAND 
+ 1 ? Ss 0:00 /sbin/init 
+ 2 ? S 0:00 [kthreadd] 
+ 3 ? S 0:00 [migration/0] 
+ 4 ? S 0:00 [ksoftirqd/0] 
+ 5 ? S 0:00 [stopper/0] 
+[root@slave3 tmp]# ps aux 
+USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND 
+root 1 0.0 0.1 19232 1496 ? Ss 18:28 0:00 /sbin/init 
+root 2 0.0 0.0 0 0 ? S 18:28 0:00 [kthreadd] 
+root 3 0.0 0.0 0 0 ? S 18:28 0:00 [migration/0] 
+root 4 0.0 0.0 0 0 ? S 18:28 0:00 [ksoftirqd/0] 
+root 5 0.0 0.0 0 0 ? S 18:28 0:00 [stopper/0] 
+root 6 0.0 0.0 0 0 ? S 18:28 0:00 [watchdog/0]",12.62,qwen3-vl-plus,718,548,1266,0.0,
+data/images/Linux第2章基本命令/p075_i00.png,"这是一张Linux终端界面的截图，展示了使用`jobs`、`ps`和`kill`命令管理后台进程的操作过程，主要元素包括命令提示符、命令输出（作业列表与进程列表）、进程状态（Stopped/Killed）及PID等信息。
+
+图中文字： 
+[root@slave3 tmp]# jobs 
+[1]+ Stopped top 
+[root@slave3 tmp]# jobs 
+[1]+ Stopped top 
+[root@slave3 tmp]# ps 
+ PID TTY TIME CMD 
+1388 pts/0 00:00:00 bash 
+1571 pts/0 00:00:00 top 
+1574 pts/0 00:00:00 ps 
+[root@slave3 tmp]# kill -9 1571 
+[root@slave3 tmp]# jobs 
+[1]+ Killed top 
+[root@slave3 tmp]# ps 
+ PID TTY TIME CMD 
+1388 pts/0 00:00:00 bash 
+1575 pts/0 00:00:00 ps",16.42,qwen3-vl-plus,333,258,591,0.0,
+data/images/Linux第3章Vi编辑器/p006_i00.png,"这是一张说明文本编辑器界面元素的示意图，主要包含左侧的行号/状态栏、三条红色箭头及其指向的中文标注，以及底部一行文件信息文本。
+
+图中文字： 
+游标 
+什么都没有的符号 
+提示信息， 
+""test.txt"" [New File]",3.49,qwen3-vl-plus,771,66,837,0.0,
+data/images/Linux第2章基本命令/p073_i00.png,"这是一张Linux终端中运行`top`命令的截图，主要元素包括系统概览信息、内存与交换分区统计、以及按资源占用排序的进程列表（含PID、USER、COMMAND等列）。右侧有红色中文注释。
+
+图中文字： 
+[root@hadoop100 ~]# top 
+top - 00:35:05 up 1:48, 2 users, load average: 0.00, 0.01, 0.05 
+Tasks: 117 total, 1 running, 116 sleeping, 0 stopped, 0 zombie 
+%Cpu(s): 0.0 us, 0.0 sy, 0.0 ni,100.0 id, 0.0 wa, 0.0 hi, 0.0 si, 0.0 st 
+KiB Mem : 1865308 total, 1584004 free, 115636 used, 165668 buff/cache 
+KiB Swap: 2097148 total, 2097148 free, 0 used. 1569044 avail Mem 
+PID USER PR NI VIRT RES SHR S %CPU %MEM TIME+ COMMAND 
+1 root 20 0 193488 6476 4080 S 0.0 0.3 00:01.28 systemd 
+2 root 20 0 0 0 0 S 0.0 0.0 00:00.01 kthreadd 
+3 root 20 0 0 0 0 S 0.0 0.0 00:00.05 ksoftirqd/0 
+5 root 0 -20 0 0 0 S 0.0 0.0 00:00.00 kworker/0:0H 
+6 root 20 0 0 0 0 S 0.0 0.0 00:00.10 kworker/u256:0 
+7 root rt 0 0 0 0 S 0.0 0.0 00:00.01 migration/0 
+8 root 20 0 0 0 0 S 0.0 0.0 00:00.00 rcu_bh 
+9 root 20 0 0 0 0 S 0.0 0.0 00:00.50 rcu_sched 
+10 root 0 -20 0 0 0 S 0.0 0.0 00:00.00 lru-add-drain 
+11 root rt 0 0 0 0 S 0.0 0.0 00:00.02 watchdog/0 
+12 root rt 0 0 0 0 S 0.0 0.0 00:00.03 watchdog/1 
+13 root",27.26,qwen3-vl-plus,981,700,1681,0.0,
+data/images/Linux第3章Vi编辑器/p004_i00.png,"这是一张Linux终端界面的截图，显示了使用vim编辑器打开文件、安装vim软件包的过程及yum包管理器的依赖解析输出。主要元素包括命令行提示符、执行的命令（如`vi a.txt`、`vim`、`yum -y install vim`）、安装日志、镜像源列表、依赖关系处理信息及右侧的文件大小与时间列。
+
+图中文字： 
+[root@hadoop100 ~]# vi a.txt 
+[root@hadoop100 ~]# vim 
+Dash: vim: 未找到命令 
+[root@hadoop100 ~]# yum -y install vim 
+已加载插件：fastestmirror 
+Loading mirror speeds from cached hostfile 
+ * base: mirrors.njupt.edu.cn 
+ * extras: mirrors.aliyun.com 
+ * updates: mirrors.aliyun.com 
+base | 3.6 kB 00:00:00 
+extras | 2.9 kB 00:00:00 
+updates | 2.9 kB 00:00:00 
+正在解决依赖关系 
+--> 正在检查事务 
+---> 软件包 vim-enhanced.x86_64.2.7.4.629-8.el7_9 将被 安装 
+---> 正在处理依赖关系 vim-common = 2:7.4.629-8.el7_9，它被软件包 2:vim-enhanced-7.4.629-8.el7_9.x86_64 需要 
+---> 正在处理依赖关系 perl(:MODULE_COMPAT_5.16.3)，它被软件包 2:vim-enhanced-7.4.629-8.el7_9.x86_64 需要 
+---> 正在处理依赖关系 libperl.so()(64bit)，它被软件包 2:vim-enhanced-7.4.629-8.el7_9.x86_64 需要 
+---> 正在处理依赖关系 libgpm.so.2()(64bit)，它被软件包 2:vim-enhanced-7.4.629-8.el7_9.x86_64 需要",19.71,qwen3-vl-plus,483,516,999,0.0,
+data/images/Linux第3章Vi编辑器/p006_i01.png,"这是一张展示文本编辑器插入模式状态的示意图，主要元素包括顶部的文本行“This is the test file,linel”、左侧的波浪线行号标记、底部的“-- INSERT --”状态提示，以及指向该提示的红色箭头和标注文字“插入模式”。
+
+图中文字：This is the test file,linel 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+~ 
+-- INSERT -- 
+插入模式",3.41,qwen3-vl-plus,848,125,973,0.0,
+data/images/Linux第3章Vi编辑器/p007_i00.png,"该插图展示两个并列的文本编辑器界面，左侧为文件编辑状态（含状态提示），右侧为命令行指令模式（含光标与输入命令）；主要元素包括文本内容、红色注释箭头、文件名与统计信息、命令提示符及输入。
+
+图中文字： 
+This is the test file,line1 
+This is the test file,line2 
+This is the test file,line3 
+编辑已存在文件， 
+3L表示一共有3行， 
+84C表示一共有84个字符 
+""test.txt"" 3L, 84C 
+This is the test file,line1 
+This is the test file,line2 
+This is the test file,line3 
+指令模式 
+:wq",4.06,qwen3-vl-plus,573,160,733,0.0,
+data/images/Linux第4章Shell编程/p023_i00.png,"这是一张展示 PHP 数组语法的代码插图，主要元素包括行号、注释符号“#”、数组声明语句及四个数组元素值。
+
+图中文字： 
+# 或者 
+array_name=( 
+value0 
+value1 
+value2 
+value3 
+)",1.81,qwen3-vl-plus,203,63,266,0.0,
+data/images/Linux第4章Shell编程/p005_i00.png,"这是一张终端命令行界面的截图，主要显示执行 `bash --version` 命令后的输出信息，包括 Bash 版本、版权与许可证声明及提示语。
+
+图中文字： 
+[root@hadoop100 ~]# bash --version 
+GNU bash, 版本 4.2.46(2)-release (x86_64-redhat-linux-gnu) 
+Copyright (C) 2011 Free Software Foundation, Inc. 
+许可证 GPLv3+: GNU GPL 许可证版本3或者更高 <http://gnu.org/licenses/gpl.html> 
+这是自由软件，您可以自由地更改和重新发布。 
+在法律允许的范围内没有担保。 
+[root@hadoop100 ~]#",3.95,qwen3-vl-plus,319,162,481,0.0,
+data/images/Linux第4章Shell编程/p026_i00.png,"这是一张展示编程代码（PHP数组长度获取语法）的教材插图，主要元素为带行号的代码块，包含注释与三行变量赋值语句。
+
+图中文字： 
+# 取得数组元素的个数 
+length=${array_name[@]} 
+# 或者 
+length=${array_name[*]} 
+# 取得数组单个元素的长度 
+lengthn=${array_name[n]}",2.6,qwen3-vl-plus,221,92,313,0.0,
+data/images/Linux第4章Shell编程/p028_i00.png,"这是一张对比展示 Bash 脚本代码及其执行输出的教材插图，左侧为脚本源码（含注释、echo 语句），右侧为终端中运行该脚本的命令与输出结果。 
+图中文字： 
+#!/bin/bash 
+echo ""Shell 传递参数实例！""; 
+echo ""执行的文件名：$0""; 
+echo ""第一个参数为：$1""; 
+echo ""第二个参数为：$2""; 
+echo ""第三个参数为：$3""; 
+$ chmod +x test.sh 
+$ ./test.sh 1 2 3 
+Shell 传递参数实例！ 
+执行的文件名：./test.sh 
+第一个参数为：1 
+第二个参数为：2 
+第三个参数为：3",3.8,qwen3-vl-plus,223,162,385,0.0,
+data/images/Linux第4章Shell编程/p032_i00.png,"这是一张展示 Shell 脚本代码的教材插图，主要元素包括变量赋值、`expr` 命令执行四则运算与取模运算，以及对应的 `echo` 输出语句。
+
+图中文字： 
+a=10 
+b=20 
+val=`expr $a + $b` 
+echo ""a + b : $val"" 
+val=`expr $a - $b` 
+echo ""a - b : $val"" 
+val=`expr $a \* $b` 
+echo ""a * b : $val"" 
+val=`expr $b / $a` 
+echo ""b / a : $val"" 
+val=`expr $b % $a` 
+echo ""b % a : $val""",4.07,qwen3-vl-plus,408,163,571,0.0,
+data/images/Linux第4章Shell编程/p034_i00.png,"这是一张终端命令行界面的截图，显示了执行 `bc` 命令后的启动信息、版权说明、免责声明及一次简单计算（1+3）的结果。
+
+图中文字：[root@master opt]# bc 
+bc 1.06.95 
+Copyright 1991-1994, 1997, 1998, 2000, 
+2004, 2006 Free Software Foundation, 
+Inc. 
+This is free software with ABSOLUTELY 
+NO WARRANTY. 
+For details type `warranty'. 
+1+3 
+4",3.84,qwen3-vl-plus,323,139,462,0.0,
+data/images/Linux第4章Shell编程/p033_i00.png,"这是一张展示 Linux 终端中 Bash 变量赋值与算术运算命令交互过程的截图，主要元素包括多行命令提示符、变量赋值语句（如 `a=3`、`let a=-1`、`let a=1+1,b=1+2`、`let n0--,n1++`）及对应的 `echo` 输出结果。
+
+图中文字： 
+[root@master opt]# a=3 
+[root@master opt]# let a=-1 
+[root@master opt]# echo $a 
+2 
+[root@master opt]# let a=1+1,b=1+2 
+[root@master opt]# echo $a,$b 
+2,3 
+[root@master opt]# n0=10 
+[root@master opt]# n1=10 
+[root@master opt]# let n0--,n1++ 
+[root@master opt]# echo $n0,$n1 
+9,11",5.31,qwen3-vl-plus,351,215,566,0.0,
+data/images/Linux第4章Shell编程/p034_i01.png,"这是一张展示 Linux 终端操作的截图，主要元素包括两条命令及其输出：`cat ./calc.txt` 显示文件内容（算式与结果），`bc ./calc.txt` 调用计算器程序执行该文件并输出版权信息、免责声明及最终计算结果。
+
+图中文字： 
+[root@master opt]# cat ./calc.txt 
+1+3 
+[root@master opt]# bc ./calc.txt 
+bc 1.06.95 
+Copyright 1991-1994, 1997, 1998, 2000, 
+2004, 2006 Free Software Foundation, 
+Inc. 
+This is free software with ABSOLUTELY 
+NO WARRANTY. 
+For details type `warranty'. 
+4",4.5,qwen3-vl-plus,332,176,508,0.0,
+data/images/Linux第4章Shell编程/p042_i00.png,"这是一张展示 Linux 终端中 Shell 脚本内容及执行结果的截图，主要元素包括命令提示符、脚本代码（含 shebang、变量赋值、if-then-else 条件判断、echo 输出）以及脚本运行后的输出。
+
+图中文字： 
+[root@master opt]# cat test 
+#!/bin/bash 
+a=3 
+if [ $a -eq 3 ]; 
+then 
+ echo ""a=3"" 
+else 
+ echo ""a!=3"" 
+fi 
+[root@master opt]# sh test 
+a=3",3.3,qwen3-vl-plus,321,127,448,0.0,
+data/images/Linux第4章Shell编程/p041_i00.png,"这是一张展示三种条件语句（if、if-else、if-else-if-else）语法格式的编程教材插图，主要元素为三列并排的代码块，每列含注释标题、缩进结构的代码及关键字高亮。
+
+图中文字： 
+# if 语句语法格式: 
+if condition 
+then 
+ command1 
+ command2 
+ ... 
+ commandN 
+fi 
+
+# if else 语法格式: 
+if condition 
+then 
+ command1 
+ command2 
+ ... 
+ commandN 
+else 
+ command 
+fi 
+
+# if else-if else 语法格式: 
+if condition1 
+then 
+ command1 
+elif condition2 
+then 
+ command2 
+else 
+ commandN 
+fi",3.96,qwen3-vl-plus,331,167,498,0.0,
+data/images/Linux第4章Shell编程/p043_i00.png,"这是一张展示 Bash 脚本代码的教材插图，主要元素包括 Shebang 行、read 命令、for 循环结构、echo 语句及中文提示文本。
+
+图中文字：#!/bin/bash 
+read -p ""请输入一个路径： "" input 
+for tmpFile in `ls $input`; 
+do 
+ echo ""$tmpFile""; 
+done 
+echo ""完成！""",2.55,qwen3-vl-plus,263,90,353,0.0,
+data/images/Linux第4章Shell编程/p044_i00.png,"这是一张展示 Shell 脚本中 `for` 循环一般格式的代码示例插图，主要元素包括带行号的代码块、注释、关键字（如 `for`、`do`、`done`）、变量占位符（`var`, `item1` 等）和命令占位符（`command1` 等）。
+
+图中文字： 
+# for循环一般格式为: 
+for var in item1 item2 ... itemN 
+do 
+ command1 
+ command2 
+ ... 
+ commandN 
+done",3.29,qwen3-vl-plus,276,127,403,0.0,
+data/images/Linux第4章Shell编程/p045_i00.png,"这是一张展示两个 Bash 脚本文件内容及其执行输出的终端截图，左侧为 `for1.sh` 的代码与运行结果，右侧为 `for2.sh` 的代码与运行结果。
+
+图中文字： 
+[root@master opt]# cat for1.sh 
+#!/bin/bash 
+#for1 
+for loop in 1 2 3 4 5 
+do 
+ echo `expr $loop \* 3` 
+done 
+[root@master opt]# sh for1.sh 
+3 
+6 
+9 
+12 
+15 
+[root@master opt]# cat for2.sh 
+#!/bin/bash 
+#for2 
+for loop 
+do 
+ echo $loop 
+done 
+[root@master opt]# sh for2.sh 1 2 3 
+1 
+2 
+3",4.57,qwen3-vl-plus,375,174,549,0.0,
+data/images/Linux第4章Shell编程/p046_i00.png,"该插图是两组并列的Linux终端命令与输出示例，主要元素包括两个bash脚本文件（for3.sh 和 for4.sh）的源码及其执行结果。
+
+图中文字： 
+[root@master opt]# cat for3.sh 
+#!/bin/bash 
+#for3 
+for loop in $(seq 1 5) 
+do 
+ echo `expr $loop \* 3` 
+done 
+[root@master opt]# sh for3.sh 
+3 
+6 
+9 
+12 
+15 
+[root@master opt]# cat for4.sh 
+#!/bin/bash 
+#for4 
+for ((i=1;i<5;i++)) 
+do 
+ echo `expr $i \* 3` 
+done 
+[root@master opt]# sh for4.sh 
+3 
+6 
+9 
+12",4.06,qwen3-vl-plus,366,180,546,0.0,
+data/images/Linux第4章Shell编程/p048_i00.png,"该插图是编程教材中关于Shell脚本while循环语法结构与实际运行示例的对比图，左侧为while循环的一般格式代码块，右侧为终端中执行脚本的命令与输出。
+
+图中文字： 
+# while循环一般格式为: 
+while condition 
+do 
+ command1 
+ command2 
+ ... 
+ commandN 
+done 
+[root@master opt]# cat count.sh 
+#!/bin/bash 
+i=1 
+while [ $i -le 10 ]; 
+do 
+ let sum+=$i 
+ let i++ 
+done 
+echo ""$sum"" 
+[root@master opt]# sh count.sh 
+55",3.93,qwen3-vl-plus,348,144,492,0.0,
+data/images/Streamlit参考手册/p002_i00.png,"这是一张深色背景的教材封面或标题页插图，主要元素为白色中文标题文字及右上角功能按钮。
+
+图中文字：Python从入门到大神 ↪ 
+Deploy",1.53,qwen3-vl-plus,684,44,728,0.0,
+data/images/Linux第4章Shell编程/p051_i00.png,"这是一张展示终端命令行交互过程的教材插图，主要元素包括多轮执行同一Shell脚本（gradetest1.sh）的输入输出记录，其中包含用户输入分数及脚本返回的成绩等级或错误提示。
+
+图中文字： 
+[root@master opt]# sh gradetest1.sh 
+请输入你的分数：0 
+你的成绩等级为D 
+[root@master opt]# sh gradetest1.sh 
+请输入你的分数：60 
+你的成绩等级为C 
+[root@master opt]# sh gradetest1.sh 
+请输入你的分数：80 
+你的成绩等级为B 
+[root@master opt]# sh gradetest1.sh 
+请输入你的分数：100 
+你的成绩等级为A 
+[root@master opt]# sh gradetest1.sh 
+请输入你的分数：101 
+您输入的分数有误，请重新运行脚本并输入正确的分数！",4.66,qwen3-vl-plus,498,192,690,0.0,
+data/images/Streamlit参考手册/p002_i01.png,"这是一张深色背景的界面截图，主要元素包括左上角的文本“Hello”和右上角的“Deploy”按钮及三点菜单图标。
+
+图中文字：Hello 
+Deploy",1.42,qwen3-vl-plus,684,43,727,0.0,
+data/images/Linux第4章Shell编程/p050_i00.png,"该插图是编程教材中关于Shell脚本中`case`语句语法格式与实际应用示例的对比图，左侧为`case`语句通用结构模板，右侧为一个名为`gradetest1.sh`的分数等级判断脚本内容。
+
+图中文字： 
+# case语句一般格式为: 
+case $变量名 in 
+条件1) 
+ command1 
+ ;; 
+条件2) 
+ command2 
+ ;; 
+esac 
+[root@master opt]# cat gradetest1.sh 
+#!/bin/bash 
+read -p ""请输入你的分数: "" score 
+case $score in 
+[9][0-9]|100) 
+ echo ""你的成绩等级为A"" 
+ ;; 
+[8][0-9]) 
+ echo ""你的成绩等级为B"" 
+ ;; 
+[67][0-9]) 
+ echo ""你的成绩等级为C"" 
+ ;; 
+[0-5][0-9]|[0-9]) 
+ echo ""你的成绩等级为D"" 
+ ;; 
+*) 
+ echo ""您输入的分数有误，请重新运行脚本并输入正确的分数！"" 
+esac",5.67,qwen3-vl-plus,471,255,726,0.0,
+data/images/Streamlit参考手册/p003_i01.png,"这是一张展示一只猫的实物照片插图，主要元素为一只毛色浅灰白、蓝眼睛的长毛猫，倚靠在米色猫抓柱旁。
+
+图中文字：Deploy",1.68,qwen3-vl-plus,483,45,528,0.0,
+data/images/Streamlit参考手册/p003_i00.png,"这是一张深色背景的界面截图，左侧为垂直排列的多级标题列表（1至6级），右上角有“Deploy”按钮及三点菜单图标。
+
+图中文字： 
+1级标题 
+2级标题 
+3级标题 
+4级标题 
+5级标题 
+6级标题 
+Deploy",2.12,qwen3-vl-plus,837,69,906,0.0,
+data/images/Streamlit参考手册/p005_i00.png,"这是一张深色背景的界面截图，仅右上角可见一个“Deploy”按钮及一个三点菜单图标，其余区域为空白或不可辨识内容。
+
+图中文字：Deploy",1.48,qwen3-vl-plus,531,42,573,0.0,
+data/images/Streamlit参考手册/p005_i01.png,"这是一张深色背景的用户交互界面截图，主要元素包括姓名输入提示、文本输入框（内含已输入文字）、输入后的问候语，以及右上角的“Deploy”按钮和菜单图标。
+
+图中文字： 
+请输入你的姓名： 
+涛哥 
+你好，涛哥 
+Deploy",2.32,qwen3-vl-plus,633,67,700,0.0,
+data/images/Streamlit参考手册/p006_i00.png,"这是一张深色背景的密码输入界面截图，主要元素包括密码提示文字、密码输入框（含掩码字符和可见性切换图标）以及下方的密码确认提问。
+
+图中文字： 
+请输入你的密码： 
+你的密码是123456吗？ 
+Deploy",2.05,qwen3-vl-plus,531,64,595,0.0,
+data/images/Streamlit参考手册/p004_i00.png,"这是一张深色背景的学生成绩表插图，包含7名学生的姓名、学号及语文、数学、英语三科成绩与总分。 
+图中文字： 
+姓名　学号　语文　数学　英语　总分 
+0　王林　20230001　80　87　90　257 
+1　李慕婉　20230002　90　92　85　267 
+2　贝罗　20230003　85　87　90　262 
+3　莫厉海　20230004　70　81　95　241 
+4　石萧　20230005　95　92　80　267 
+5　红蝶　20230006　90　69　85　244 
+6　十三　20230007　85　83　90　258 
+Deploy",5.69,qwen3-vl-plus,837,247,1084,0.0,
+data/images/Streamlit参考手册/p007_i00.png,"这是一张深色背景的用户界面插图，展示了一个年龄输入控件及其反馈信息，主要元素包括标签“年龄：”、数值输入框（含减号按钮和加号按钮）、以及下方的提示文本。
+
+图中文字： 
+年龄： 
+11 
+你输入的年龄是11岁 
+Deploy",2.21,qwen3-vl-plus,531,72,603,0.0,
+data/images/Streamlit参考手册/p007_i01.png,"这是一张深色背景的用户界面截图，主要元素包括左上角的标签“多行内容：”、一个宽大的灰色多行文本输入框，以及右上角的“Deploy”按钮和三点菜单图标。
+
+图中文字： 
+多行内容： 
+Deploy",1.91,qwen3-vl-plus,582,62,644,0.0,
+data/images/Streamlit参考手册/p008_i00.png,"这是一张深色背景的用户协议确认界面插图，主要元素包括一个未勾选的复选框、其右侧的文字说明、下方的“不同意”按钮，以及右上角的“Deploy”按钮和三点菜单图标。
+
+图中文字： 
+同意以上条款 
+不同意 
+Deploy",1.83,qwen3-vl-plus,582,65,647,0.0,
+data/images/Streamlit参考手册/p009_i00.png,"这是一张深色背景的用户界面截图，主要内容为密码验证相关的单选题交互区域，包含问题、两个选项（“正确”和“错误”）及反馈文字，右上角有“Deploy”按钮和菜单图标。
+
+图中文字： 
+密码正确吗？ 
+正确 
+错误 
+密码是正确的 
+Deploy",2.07,qwen3-vl-plus,633,72,705,0.0,
+data/images/Streamlit参考手册/p009_i01.png,"这是一张深色背景的下拉选择菜单界面截图，主要元素包括左侧标签“意向学科”、一个带红色边框的下拉输入框（当前显示“AI大模型开发”并含下拉箭头），以及下方展开的六个选项列表项。
+
+图中文字： 
+意向学科 
+AI大模型开发 
+AI大模型开发 
+AI智能应用开发 
+AI嵌入式+机器人开发 
+AI测试 
+AI运维 
+Deploy",2.97,qwen3-vl-plus,786,98,884,0.0,
+data/images/Streamlit参考手册/p011_i00.png,"这是一张深色背景的用户界面插图，展示了一个“模型温度”参数调节滑块及其当前值指示与说明文字。 
+图中文字：模型温度 
+0.10 
+你设定的模型温度是1.1 
+1.10 
+2.00 
+Deploy",2.09,qwen3-vl-plus,582,65,647,0.0,
+data/images/Streamlit参考手册/p010_i00.png,"这是一张深色背景的软件界面截图，显示了“意向学科”筛选区域（含两个红色标签）及下方的三级分类列表（AI大模型开发、AI测试、AI运维）。右上角有“Deploy”按钮和菜单图标
+
+图中文字： 
+意向学科 
+AI智能应用开发 × 
+AI嵌入式+机器… × 
+AI大模型开发 
+AI测试 
+AI运维 
+Deploy",2.64,qwen3-vl-plus,633,91,724,0.0,
+data/images/Streamlit参考手册/p011_i01.png,"这是一张深色背景的用户界面截图，主要元素包括左上角一个标有“新建会话”的按钮、其下方一行提示文字“新建会话成功啦”，以及右上角的“Deploy”按钮和三点菜单图标。
+
+图中文字：新建会话 
+新建会话成功啦 
+Deploy",8.19,qwen3-vl-plus,582,69,651,0.0,
+data/images/Streamlit参考手册/p013_i00.png,"这是一张深色主题的用户界面截图，左侧为搜索面板，包含搜索框和提示文字，右上角有“Deploy”按钮及菜单图标。
+
+图中文字： 
+搜索： 
+页面内容，看看搜索了啥： 
+Deploy",7.81,qwen3-vl-plus,1347,54,1401,0.0,
+data/images/Streamlit参考手册/p012_i00.png,"这是一张文件上传界面的截图，主要元素包括上传区域（含云上传图标、提示文字、文件大小与格式限制）、“Browse files”按钮，以及右上角的“Deploy”按钮和菜单图标。
+
+图中文字： 
+上传文件 
+Drag and drop file here 
+Limit 200MB per file • CSV, JSON 
+Browse files 
+Deploy",8.17,qwen3-vl-plus,531,80,611,0.0,
+data/images/Streamlit参考手册/p014_i00.png,"这是一张深色背景的界面截图，显示三列标题标签和右上角一个“Deploy”按钮及菜单图标。 
+图中文字：第1列 
+第2列 
+第3列 
+Deploy",1.75,qwen3-vl-plus,990,47,1037,0.0,
+data/images/Streamlit参考手册/p015_i00.png,"这是一张深色背景的界面截图，主要元素为三列标题文字（“第1列”“第2列”“第3列”）及右上角的“Deploy”按钮与三点菜单图标。
+
+图中文字：第1列 
+第2列 
+第3列 
+Deploy",1.85,qwen3-vl-plus,1041,66,1107,0.0,
+data/images/Streamlit参考手册/p015_i01.png,"这是一张深色背景的软件界面截图，显示了顶部导航栏（含四个列表选项卡）和下方的标题区域。 
+图中文字：学校列表 年级列表 班级列表 学生列表 
+学校列表数据... 
+Deploy",1.77,qwen3-vl-plus,786,57,843,0.0,
+data/images/Streamlit参考手册/p016_i00.png,"这是一张深色背景的用户界面截图，显示一个可展开的“更多信息”折叠面板，内含三个文本条目。 
+图中文字：更多信息 
+传智教育 
+博学谷 
+黑马程序员 
+Deploy",1.87,qwen3-vl-plus,939,49,988,0.0,
+data/images/Streamlit参考手册/p016_i01.png,"这是一张深色背景的界面截图，主要元素包括左上角的“传智教育”标志及网址，右上角的“Deploy”按钮和三点菜单图标。
+
+图中文字：传智教育 
+www.itcast.cn 
+Deploy",1.87,qwen3-vl-plus,582,54,636,0.0,
+data/images/Streamlit参考手册/p017_i00.png,"这是一张深色背景下的视频播放器界面截图，主要元素包括播放进度条、当前时间/总时长显示、播放按钮、音量控制和右上角的“Deploy”按钮及更多选项图标。
+
+图中文字：0:04 / 14:54 
+Deploy",1.95,qwen3-vl-plus,735,66,801,0.0,
+data/images/Streamlit参考手册/p018_i01.png,"这是一张深色背景的用户界面插图，主要元素为一个带圆角的搜索/输入框，左侧有提示文字，右侧有一个向右箭头按钮。
+
+图中文字：请输入您想问的问题",1.77,qwen3-vl-plus,531,48,579,0.0,
+data/images/微信小程序开发实战/p013_i00.png,"这是一张对比Android与iOS平台应用分类的结构示意图，主要元素包括两个并列的矩形框，分别标注“Android”和“iOS”，每个框内包含若干代表应用的子矩形框。
+
+图中文字： 
+Android 
+微信 for Android 
+微博 for Android 
+其他Android应用 
+iOS 
+微信 for iOS 
+微博 for iOS 
+其他iOS应用",2.21,qwen3-vl-plus,464,81,545,0.0,
+data/images/Streamlit参考手册/p018_i00.png,"这是一张新闻视频截图，主要元素包括江面、飞鸟、远山、树林及电视台标识与新闻标题字幕。 
+图中文字：CCTV 13 
+新闻 
+CCTV.com 
+央视网 
+新闻联播 
+XINWEN LIANBO 
+推进长江十年禁渔 谱写长江大保护新篇章 
+0:41 / 1:06",3.9,qwen3-vl-plus,883,88,971,0.0,
+data/images/微信小程序开发实战/p013_i01.png,"该插图是对比Android与iOS平台应用结构的示意图，主要元素包括两个并列的系统框（Android和iOS），各自包含“微信 for Android/iOS”“微博 for Android/iOS”“其他 Android/iOS 应用”矩形框，以及嵌套在“微信 for Android/iOS”内的六边形“微信小程序”。
+
+图中文字： 
+Android 
+微信 for Android 
+微博 for Android 
+其他 Android应用 
+微信小程序 
+iOS 
+微信 for iOS 
+微博 for iOS 
+其他 iOS应用 
+微信小程序",2.96,qwen3-vl-plus,519,116,635,0.0,
+data/images/微信小程序开发实战/p014_i00.png,"该插图展示了微信公众号平台的官方网站首页及开发账号注册页面，主要元素包括网站顶部导航栏、宣传横幅、二维码登录框、以及注册页面中的四种账号类型选项（订阅号、服务号、小程序、企业微信）。
+
+图中文字： 
+微信公众平台 
+立即注册 | 使用中文 · 
+再小的个体，也有自己的品牌 
+登录 
+使用账号登录 
+微信扫一扫，选择微信旗下的 
+公众号/小程序登录 
+图1-5 微信公众平台的官方网站 
+点击“ 立即注册” 链接，即可进入开发账号的注册页面，在该页面可选择注册的账号类型。 
+公众号 
+注册 
+请选择注册的帐号类型 
+订阅号 
+具有信息发布与传播的能力 
+适合个人及媒体注册 
+服务号 
+具有用户管理与提供业务服务的能力 
+适合企业及组织注册 
+小程序 
+具有出色的体验，可以被便捷地获取与传播 
+适合有服务内容的企业和组织注册 
+企业微信 
+原企业号 
+对内让工作协同高效，对外连接12亿微信用户 
+适合企业及组织注册",5.88,qwen3-vl-plus,739,233,972,0.0,
+data/images/微信小程序开发实战/p015_i00.png,"这是一张微信小程序注册流程的网页界面截图，主要元素包括注册表单（邮箱、密码、确认密码、验证码输入框）、绿色“注册”按钮、进度指示条（账号信息→邮箱激活→信息登记）以及右侧帮助链接区域。
+
+图中文字： 
+小程序注册 
+① 账号信息 ② 邮箱激活 ③ 信息登记 
+返回首页 
+每个邮箱仅能申请一个小程序 
+邮箱 
+作为登录账号，请填写未被微信公众号平台注册、未被微信开放平台注册、未被个人微信号绑定的邮箱 
+密码 
+字母、数字或英文文件名，最少6位，区分大小写 
+确认密码 
+请再次输入密码 
+验证码 
+QGas 
+换一发 
+☑ 已阅读并同意《微信公众号服务协议》及《小程序平台服务条款》 
+注册 
+已有微信小程序？立即登录 
+小程序上线需要开发 
+不会开发？用小程序代码库快速学习开发流程，前往快速学堂 
+创建测试号，免注册快速体验小程序开发，立即申请 
+图1-7 小程序注册页面 
+根据提示填入自己的邮箱、密码、确认密码等，完成账号信息的填写，“注册”按钮，进入提示邮箱激活页面，如图1-8所示。 
+小程序 
+mp.weixin.qq.com/wxopen/waregister?action=step1&token=8lang=zth_CN 
+文档 社区 工具 
+小程序注册 
+新建小程序账号 
+感谢关注！确认邮件已发送至您的注册邮箱： 
+请输入邮箱 
+查收邮件，开通该小程序账号。 
+没有收到邮件？ 
+1、确认您填写的信息是否正确，也可以尝试重新填写。 
+2、检查您的邮箱垃圾箱 
+3、若仍未收到邮件，请申请重新发送",8.15,qwen3-vl-plus,699,379,1078,0.0,
+data/images/微信小程序开发实战/p016_i00.png,"这是一张126邮箱网页界面的截图，显示一封标题为“微信小程序账号激活”的邮件内容，包含发件人、收件人、时间、正文及激活链接等元素。 
+图中文字： 
+126 网易免费邮 
+www.126.com 
+首页 通讯录 应用中心 未读邮件 企业邮箱 微信小程序 
+收信 写信 
+收件箱 
+已删除邮件 
+待办邮件 
+星标联系人邮件 
+草稿箱 
+已发送 
+订阅邮件 
+其他2个文件夹 
+邮件标签 
+邮件中心 
+文件中心 
+邮箱附件 
+微信小程序账号激活 
+发件人：（邮箱地址被遮挡）@weixinhelper@tencent.com 
+收件人：（邮箱地址被遮挡） 
+时 间：2022年08月01日 18:25（星期一） 
+附 【小红书】如需调整企业订单 立即合作 
+公众平台 
+你好， 
+感谢你注册微信小程序。 
+你的登录邮箱为：（邮箱地址被遮挡）@126.com，请点击以下链接激活账号： 
+https://mp.weixin.qq.com/wxopen/activateemail? 
+email=bGhbmzRaSjxaTFAMT2LmNyQ%3D%3DMicket=mmverifycodebreakeremail_1_0938e04377743b14ceca959ca95aeb5d 
+如果以上链接无法点击，请将上面的地址复制到你的浏览器地址栏进入微信公众平台。 
+微信团队 
+请填写下方入群申请",8.93,qwen3-vl-plus,453,365,818,0.0,
+data/images/微信小程序开发实战/p017_i00.png,"这是一张微信小程序开发文档中的流程图插图，展示了“小程序发布流程”的三个主要步骤：小程序信息、小程序开发与管理、版本管理，包含各步骤的操作说明和绿色操作按钮。
+
+图中文字： 
+小程序发布流程 
+1 
+小程序信息 
+补充小程序的基本信息，如名称、图标、类目等。 
+前往填写 
+小程序类目 
+补充小程序的服务类目，设置主体资质 
+前往填写 
+2 
+小程序开发与管理 
+自己开发 
+开发工具 
+下载并安装开发者工具后即可开始工作。前往小程序开发者工具（Windows/Mac） 
+配置开发页 
+在开发者工具的项目AppID和project.config.json中，配置服务器域名、ES6转ES5、上传代码时校验、真机调试等。 
+样例代码 
+可点击下方示例（模板+框架（小程序）、文档中心（基础+组件+接口）、设计规范）查看源码。 
+服务市场 
+提供大量优质、稳定的小程序解决方案，为不同行业提供便捷的小程序解决方案。前往服务市场 
+前往使用 
+拓展更多开发 
+服务丰富 
+提供多平台、多终端的小程序开发服务。 
+能力强大 
+从小程序认证到上线，全流程支持。 
+安全可靠 
+可快速接入微信支付、在线客服系统、客户关系管理。 
+立即体验 
+3 
+版本管理 
+完成开发后，对代码进行审核，审核通过后可发布。 
+前往提交",6.59,qwen3-vl-plus,463,303,766,0.0,
+data/images/微信小程序开发实战/p017_i01.png,"这是一张微信小程序开发管理后台的网页截图，主要显示“开发设置”页面中的“开发者ID”区域，包含AppID（小程序）、AppSecret（密钥）等字段及对应操作按钮。
+
+图中文字： 
+小程序 
+mp.weixin.qq.com/wxamp/dev/profile/get_profile?token=1425075594&lang=zh_CN 
+文档 社区 服务 Wx分析 工具 主 
+小程序 
+首页 
+管理 
+成员管理 
+成员管理 
+用户权限 
+统计 
+访问量 
+数据 
+订阅消息 
+空间管理 
+空间容量接入 
+实用工具 
+开发管理 
+运维中心 监控告警 开发设置 接口权限 安全中心 
+开发者ID 
+开发者ID 
+操作 
+AppID（小程序） 
+AppSecret（密钥） 
+设置① 
+内容安全 
+内容安全检测开关 
+开启",4.77,qwen3-vl-plus,323,190,513,0.0,
+data/images/微信小程序开发实战/p018_i00.png,"这是一张微信小程序开发工具的网页界面截图，主要元素包括左侧导航栏、顶部标签页（“开发能力”与“开发者工具”）、中间的“做信开发者工具”说明区域及绿色“下载”按钮。
+
+图中文字： 
+小程序 
+mp.weixin.qq.com/wxamp/thirdtools/extend?Token=1715790147&lang=zh_CN 
+首页 
+管理 
+成员管理 
+成员管理 
+用户列表 
+统计 
+功能 
+权限管理 
+备份 
+订阅消息 
+页面内容接入 
+开发能力 开发者工具 
+做信开发者工具 
+开发者可以使用微信开发者工具编辑和调试微信小程序的API和页面的开发调试，代码智能检测、小程序预览和发布等功能。 
+查看文档 
+下载",3.76,qwen3-vl-plus,313,166,479,0.0,
+data/images/微信小程序开发实战/p019_i01.png,"这是一张微信开发者工具的界面截图，左侧为启动页（含二维码和版本号），右侧为项目创建界面（含导航菜单和“小程序”项目模板区域）。
+
+图中文字： 
+微信开发者工具 
+v1.02.2208062 
+开始使用 
+个人设置 
+小程序设置 
+小程序 
+云开发 
+小程序管理 
+项目 
+小程序 
+新建小程序项目 
++ 
+新建 
+打开",2.74,qwen3-vl-plus,228,93,321,0.0,
+data/images/微信小程序开发实战/p019_i00.png,"这是一张展示“朗润开发工具”安装过程的双窗体截图，左侧为安装向导界面，右侧为安装完成界面，均包含对话气泡图标、版本号及操作按钮。
+
+图中文字： 
+朗润开发工具 1.06.2206090 安装 
+欢迎使用“朗润开发者工具 
+1.06.2206090”安装向导 
+该安装向导将引导您完成“朗润开发工具 1.06.2206090”的安装。 
+在开始安装之前，请关闭所有其他应用程序。这将允许“安装程序”更新指定的系统文件，而不需要重新启动您的计算机。 
+单击“下一步(N)”继续。 
+<上一步(B)> <下一步(N)> 
+朗润开发工具 1.06.2206090 安装 
+安装完成 
+感谢使用“朗润开发者工具 1.06.2206090” 
+[√] 启动 朗润开发工具 1.06.2206090(E) 
+<上一步(B)> <完成(F)>",6.2,qwen3-vl-plus,219,260,479,0.0,
+data/images/微信小程序开发实战/p020_i00.png,"这是一张展示小程序创建界面的截图，左侧为项目配置表单（含项目名称、目录、AppID等字段），右侧为手机端预览界面；主要元素包括输入框、下拉菜单、二维码、模板缩略图及“确定”按钮。
+
+图中文字： 
+创建小程序 
+项目名称 
+miniprogram1 
+目录 
+C:\Users\liuah\WeChatProjects\miniprogram1 
+AppID 
+小程序 
+开发模式 
+体验版公开发布 
+不使用云服务 
+服务器域名 
+全部未填 
+全部分类 
+图中文字： 
+快速了解云开发 
+云函数 
+数据库 
+云存储 
+云调用",3.72,qwen3-vl-plus,267,145,412,0.0,
+data/images/微信小程序开发实战/p020_i01.png,"这是一张软件设置界面的截图，主要元素包括顶部标签栏（“通用”“外观”“代理”“安全”）、多个配置选项组（主题、调试器主题、自定义外观）及对应的单选按钮、复选框和说明文字。
+
+图中文字： 
+设置 
+通用 外观 代理 安全 
+主题 
+日间（推荐的默认）此主题为亮 
+深色 
+浅色 
+跟随系统 
+调试器主题 
+深色 
+浅色 
+跟随系统 
+跟随自定义外观 
+自定义外观 
+使用默认外观 
+使用自定义外观 
+编辑器主题更换时，询问适配",3.48,qwen3-vl-plus,283,141,424,0.0,
+data/images/微信小程序开发实战/p022_i00.png,"这是一张描述微信客户端与第三方服务器交互架构的分层示意图，主要包含渲染层、逻辑层、Native 层及第三方服务器，并标注了数据请求与响应流向。
+
+图中文字：渲染层 
+WXML和WXSS 
+逻辑层 
+JS 
+Native 
+微信客户端 
+数据请求 
+数据响应 
+第三方服务器",2.01,qwen3-vl-plus,537,72,609,0.0,
+data/images/微信小程序开发实战/p029_i00.png,"这是一张组织结构图，展示“项目管理者”下辖四个平行的职能小组。 
+图中文字：项目管理者 
+产品组 
+设计组 
+开发组 
+测试组",1.46,qwen3-vl-plus,256,40,296,0.0,
+data/images/微信小程序开发实战/p030_i00.png,"这是一张描述软件开发流程的组织结构与阶段流转关系图，主要元素包括三个矩形角色框（产品组、开发组、测试组）、六个圆形流程节点（提需求、设计、开发、体验、测试、发布）以及两个辅助角色框（设计组、项目管理者），通过箭头表示职责归属与流程顺序。
+
+图中文字： 
+产品组 
+提需求 
+设计 
+开发 
+体验 
+测试 
+发布 
+开发组 
+测试组 
+设计组 
+产品组 
+设计组 
+项目管理者",3.33,qwen3-vl-plus,431,113,544,0.0,
+data/images/微信小程序开发实战/p030_i01.png,"这是一张组织结构关系图，展示“管理员”对“项目成员”和“体验成员”的管理关系，以及“项目成员”下设的三类角色（运营者、开发者、数据分析师）与“体验成员”之间的虚线关联。
+
+图中文字： 
+管理员 
+添加、删除 
+项目成员 
+运营者 
+开发者 
+数据分析师 
+添加、删除 
+体验成员 
+添加、删除",2.62,qwen3-vl-plus,431,88,519,0.0,
+data/images/微信小程序开发实战/p033_i00.png,"这是一张网页后台管理系统的弹窗界面截图，主要元素包括标题“添加体验成员”、微信账号输入框、提示文字、绿色“确定”按钮和灰色“取消”按钮。
+
+图中文字： 
+添加体验成员 
+请输入需要绑定的微信号 
+请输入微信号 
+输入微信号搜索，可绑定多个微信号 
+你还可以绑定15个体验成员 
+确定 
+取消",2.37,qwen3-vl-plus,431,82,513,0.0,
+data/images/微信小程序开发实战/p032_i00.png,"这是一张展示“成员管理”功能界面的网页截图，主要元素包括左侧导航栏、顶部标题栏、三个功能模块（管理员、项目成员、体验成员）及对应的表单与操作按钮。
+
+图中文字： 
+小程序 
+mp.weixin.qq.com/xxxmp/user/manage?action=index&user_role=1&token=17157901478lang=zh_CN 
+文档 社区 服务 We分析 工具 
+小程序 
+成员管理 
+成员管理页面 
+所有成员 操作记录 
+管理员 
+项目成员 
+体验成员 
+添加用户 
+请输入搜索词 
+输入邮箱可搜索，可绑定多个微信号 
+剩余可添加人数：15 
+权限设置 
+权限列表 
+运营者权限 
+管理、推广、设置等核心权限，可使用体验版小程序 
+开发者权限 
+开发相关权限，可使用体验版小程序、开发者工具（仅） 
+数据分析师（基础分析） 
+统计小程序数据，可使用体验版小程序 
+确认添加 
+图1-34 成员管理页面 
+显示了管理员、项目成员和体验成员 3 个模块，单击项目成员模块右侧的“” 即可进入添加成员页面，如图1-35 所示。 
+小程宇 
+mp.weixin.qq.com/xxxmp/user/add?user_role=1&sample=1&token=17157901478lang=zh_CN 
+文档 社区 服务 We分析 工具",7.15,qwen3-vl-plus,712,319,1031,0.0,
+data/images/微信小程序开发实战/p034_i00.png,"这是一张微信小程序开发工具的“版本管理”界面截图，主要元素包括左侧导航栏、顶部标题栏、以及右侧分“线上版本”“审核版本”“开发版本”三个区域的版本信息展示区，其中“开发版本”区域显示了版本号、创建时间、下载按钮等。
+
+图中文字： 
+小程序 
+小程 序 
+mp.weixin.qq.com/wxamp/wacodepage/getcodepage?token=171579014786ang=zH_CN 
+文件 社区 服务 We分析 工具 帮助 
+小程 序 
+首页 
+管理 
+版本管理 
+成员管理 
+用户分析 
+统计 
+功能 
+环境一键 
+删除 
+代码库 
+页面内容导入 
+实用工具 
+小程序体验 
+开发 
+开发者设置 
+开发工具 
+云函数 
+版本对比 
+调试 
+小程序发布 
+版本管理 
+线上版本 
+暂无线上版本 
+审核版本 
+暂无提交审核的版本或审核版本已发布上线 
+开发版本 
+版本号 1.0.0 
+创建者 下载 
+发布时间 2022-03-17 14:28:04 
+版本描述 1.0.0 版本用于测试小程序的功能及线上发布",6.06,qwen3-vl-plus,357,273,630,0.0,
+data/images/微信小程序开发实战/p026_i00.png,"该插图是微信小程序开发工具的“基本信息”与“本地设置”界面截图，主要元素包括项目配置面板、基础信息表格、性能分析列表及本地设置选项卡。
+
+图中文字： 
+HELLO 
+1-27 中显示了微信小程序项目的基 本信息，包括发布状态、ID、项目名称等，可以根据实际情况修改 AppID 和项目 
+图1-27 基本信息 
+基本信息 性能分析 本地设置 项目设置 
+项目appid ① 2.23.2 75.15% 
+小程序名称 微信小程序 
+AppID wx8c4e0b9a6d1f3e33 
+AppSecret ****** 
+项目路径 /Users/xxx/WeChatProjects/Hello 
+基础信息 
+项目名称 
+项目目录 
+项目类型 
+项目描述 
+项目版本号 
+项目配置 
+基础库版本 
+调试基础库版本 
+自定义组件支持 
+云开发环境 
+云函数根目录 
+云存储根目录 
+云数据库集合 
+云调用权限 
+云函数超时时间 
+云函数内存大小 
+云函数并发数 
+云函数触发器 
+云函数日志 
+云函数监控 
+云函数告警 
+云函数部署 
+云函数调试 
+云函数测试 
+云函数发布 
+云函数回滚 
+云函数删除 
+云函数重命名 
+云函数复制 
+云函数导出 
+云函数导入 
+云函数分享 
+云函数协作 
+云函数权限 
+云函数安全 
+云函数依赖 
+云函数环境变量 
+云函数启动参数 
+云函数超时设置 
+云函数内存设置 
+云函数并发设置 
+云函数触发器设置 
+云函数日志设置 
+云函数监控设置 
+云函数告警设置 
+云函数部署设置 
+云函数调试设置 
+云函数测试设置 
+云函数发布设置 
+云函数回滚设置 
+云函数删除设置 
+云函数重命名设置 
+云函数复制设置 
+云函数导出设置 
+云函数导入设置 
+云函数分享设置 
+云函数协作设置 
+云函数权限设置 
+云函数安全设置 
+云函数依赖设置 
+云函数环境变量设置 
+云函数启动参数设置 
+上传代码前检查 
+上传代码时自动压缩文件 
+上传代码时自动校验文件完整性 
+上传代码时自动校验文件大小 
+上传代码时自动校验文件格式 
+上传代码时自动校验文件内容 
+上传代码时自动校验文件签名 
+上传代码时自动校验文件哈希 
+上传代码时自动校验文件MD5 
+上传代码时自动校验文件SHA1 
+上传代码时自动校验文件SHA256 
+上传代码时自动校验文件CRC32 
+上传代码时自动校验文件校验和 
+上传代码时自动校验文件数字签名 
+上传代码时自动校验文件证书 
+上传代码时自动校验文件有效期 
+上传代码时自动校验文件颁发者 
+上传代码时自动校验文件主题 
+上传代码时自动校验文件扩展名 
+上传代码时自动校验文件路径 
+上传代码时自动校验文件权限 
+上传代码时自动校验文件所有者 
+上传代码时自动校验文件组 
+上传代码时自动校验文件时间戳 
+上传代码时自动校验文件大小限制",15.58,qwen3-vl-plus,327,700,1027,0.0,
+data/images/微信小程序开发实战/p035_i00.png,"这是一张网页界面截图，展示的是“小程序”后台的“版本管理”页面，主要元素包括左侧导航栏、顶部操作栏、以及“线上版本”“审核版本”“开发版本”三个区域，其中“开发版本”区域显示了版本号、开发时间、下载按钮等信息。
+
+图中文字： 
+小程序 
+首页 
+管理 
+版本管理 
+成员管理 
+用户授权 
+统计 
+功能 
+新增一键 
+模板 
+订阅消息 
+页面内容接入 
+实用工具 
+小程序码 
+开发 
+开发管理 
+开发工具 
+三类服务 
+版本管理 
+线上版本 
+审核版本 
+开发版本 
+版本号 
+1.0 
+开发时间 
+2022-07-17 14:29:04 
+下载 
+下载包 2022年7月17日下午2时29分 第2次上传 
+提交审核",4.22,qwen3-vl-plus,331,192,523,0.0,
+data/images/微信小程序开发实战/p045_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“个人信息”及其下的子目录（images、pages）和各类文件（如.png、.js、.json、.wxml、.wxss等），部分文件以图标标识类型。
+
+图中文字： 
+个人信息 
+images 
+avatar.png 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.18,qwen3-vl-plus,219,117,336,0.0,
+data/images/微信小程序开发实战/p051_i00.png,"这是一张展示本地文件系统目录结构的树状图，主要元素包括根目录“本地生活”及其下的子目录（images、pages、grid、apps）和各类配置与源码文件（.json、.wxml、.wxss、.js等）。
+
+图中文字： 
+本地生活 
+images 
+pages 
+grid 
+grid.js 
+grid.json 
+grid.wxml 
+grid.wxss 
+apps 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.11,qwen3-vl-plus,193,112,305,0.0,
+data/images/微信小程序开发实战/p075_i00.png,"该插图为一个空白的矩形边框，无任何内容或元素。 
+图中文字：无可辨认文字",1.11,qwen3-vl-plus,225,27,252,0.0,
+data/images/微信小程序开发实战/p063_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“婚礼邀请函”及其下的子目录（如images、pages、guest等）和文件（如app.js、app.json等），部分条目前有图标标识类型。
+
+图中文字： 
+婚礼邀请函 
+images 
+pages 
+guest 
+index 
+picture 
+video 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",2.59,qwen3-vl-plus,193,99,292,0.0,
+data/images/微信小程序开发实战/p054_i00.png,"这是一组手机App界面截图，展示婚礼邀请函制作流程中的四个页面：邀请函封面、照片上传页、视频预览页和宾客信息填写页，主要元素包括花卉装饰、新人剪影、视频缩略图、表单输入框及底部导航栏。
+
+图中文字： 
+图2-12“邀请函”页面 
+图2-13“照片”页面 
+邀请函 
+我们的诚挚邀请您参加我们的婚礼！ 
+时间：2022年5月20日 
+地点：杭州市西湖区XX酒店 
+00:10 
+标题：海边婚礼 
+日期：2022-04-18 
+请输入您的姓名 
+请输入您的手机号码 
+请选择您的性别：男 女 
+请选择您的出席状态：出席 拒绝 
+确定",4.29,qwen3-vl-plus,273,175,448,0.0,
+data/images/微信小程序开发实战/p082_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“pages”及其下的子文件夹与各类文件（如 .js、.json、.wxml、.wxss、.rc 等扩展名文件）。
+
+图中文字： 
+比较数字大小 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",2.71,qwen3-vl-plus,203,110,313,0.0,
+data/images/微信小程序开发实战/p084_i00.png,"这是一张手机计算器应用的界面截图，主要元素包括顶部状态栏、标题“计算器”、显示区域（含算式“1023 × 2 =”及结果“2046”）和标准数字与运算符按键布局。
+
+图中文字： 
+WeChat 
+18:41 
+100% 
+计算器 
+1023 × 2 = 
+2046 
+C 
+DEL 
++/− 
+÷ 
+7 
+8 
+9 
+× 
+4 
+5 
+6 
+− 
+1 
+2 
+3 
++ 
+0 
+. 
+=",3.26,qwen3-vl-plus,303,130,433,0.0,
+data/images/微信小程序开发实战/p087_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“pages”及其子目录“index”和“utils”，以及各类文件（如 .js、.json、.wxml、.wxss、.trc 等）和配置文件。
+
+图中文字： 
+计算器 
+pages 
+ index 
+ index.js 
+ index.json 
+ index.wxml 
+ index.wxss 
+ utils 
+ calc.js 
+ math.js 
+ .eslintrc.js 
+ app.js 
+ app.json 
+ app.wxss 
+ project.config.json 
+ project.private.config.json 
+ sitemap.json",3.66,qwen3-vl-plus,207,139,346,0.0,
+data/images/微信小程序开发实战/p101_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“pages”及其下的子文件夹“shoplist”，以及多个JavaScript、JSON、XML、WXSS等类型的文件和配置文件。
+
+图中文字： 
+美食列表 
+pages 
+　shoplist 
+　　shoplist.js 
+　　shoplist.json 
+　　shoplist.wxml 
+　　shoplist.wxss 
+　.eslintrc.js 
+　app.js 
+　app.json 
+　app.wxss 
+　project.config.json 
+　project.private.config.json 
+　sitemap.json",3.04,qwen3-vl-plus,193,122,315,0.0,
+data/images/微信小程序开发实战/p107_i00.png,"这是一张微信小程序界面的截图，展示了一份调查问卷，包含姓名、性别、专业技能（多项选择）和意见输入框，底部有绿色“提交”按钮。
+
+图中文字： 
+姓名： 
+张三 
+性别： 
+男 
+女 
+专业技能： 
+HTML 
+CSS 
+JavaScript 
+Photoshop 
+您的意见： 
+微信小程序 
+提交",2.2,qwen3-vl-plus,303,78,381,0.0,
+data/images/微信小程序开发实战/p094_i00.png,"这是一张手机微信“美食”分类下的商家列表截图，包含四家餐饮店的缩略图、名称、电话、地址和营业时间等信息。 
+
+图中文字： 
+美食 
+宫廷月亮虾饼 
+电话：158****8686 
+地址：任丘市裕华中路与会战道交叉口东 
+南角喜沙汇生活4层 
+营业时间：周一至周日10:00-21:00 
+第1佳大鸡排（霸州店） 
+电话：186****2277 
+地址：任丘市裕华西路与会战北路路口东 
+南角喜沙汇生活4楼小吃街 
+营业时间：周一至周日08:30-22:30 
+口福鸡排 
+电话：133****1010 
+地址：任丘市裕华中路与会战北路东北角 
+喜沙汇生活4楼小吃街 
+营业时间：周一至周日08:30-22:30 
+好食客自助 
+电话：0****66 
+地址：肃宁县光明中路烈士陵园北200米路西 
+营业时间：周一至周日08:30-22:30",6.43,qwen3-vl-plus,303,281,584,0.0,
+data/images/微信小程序开发实战/p108_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“调查问卷”及其下的子目录（如pages、form、app）和各类文件（.js、.wxml、.wxss、.json等），部分文件前有图标标识类型。
+
+图中文字： 
+调查问卷 
+pages 
+form 
+form.js 
+form.wxml 
+form.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.42,qwen3-vl-plus,193,112,305,0.0,
+data/images/微信小程序开发实战/p115_i00.png,"这是一张手机音乐播放器应用的界面截图，分为左右两部分：左侧为歌曲播放界面，含专辑封面、进度条和控制按钮；右侧为播放列表界面，列有歌曲条目及操作按钮。
+
+图中文字： 
+WeChat 
+17:25 
+100% 
+蓝牙 
+搜索 
+我的生日快乐 
+—小娜 
+00:21 
+01:40 
+我的生日快乐 
+小娜 
+WeChat 
+17:27 
+100% 
+蓝牙 
+搜索 
+我的生日快乐 
+正在播放 
+我的生日快乐 
+小娜 
+你的爱人 
+小娜 
+小娜",3.36,qwen3-vl-plus,193,139,332,0.0,
+data/images/微信小程序开发实战/p109_i00.png,"这是一张浏览器开发者工具（DevTools）的“Console”面板截图，主要显示了 JavaScript 对象的展开结构，包含用户信息（姓名、性别、技能、意见）及系统日志。
+
+图中文字： 
+[自热重载] 已开启代码文件保存后自动热重载（不支持 json） 
+[system] Subpackages: N/A 
+[system] LazyCodeLoading: false 
+[system] Launch Time: 281 ms 
+{__webviewId__: 9, name: ""张三"", gender: Array(2), skills: Array(4), opinion: ""微信小程序""} 
+form.js2 (sm):26 
+▶gender: Array(2) 
+ 0: {name: ""男"", value: ""0"", checked: true} 
+ 1: {name: ""女"", value: ""1"", checked: false} 
+ length: 2 
+ my_length: (…) 
+ __proto__: Array(0) 
+name: ""张三"" 
+opinion: ""微信小程序"" 
+▶skills: Array(4) 
+ 0: {name: ""HTML"", value: ""html"", checked: true} 
+ 1: {name: ""CSS"", value: ""css"", checked: true} 
+ 2: {name: ""JavaScript"", value: ""js"", checked: true} 
+ 3: {name: ""Photoshop"", value: ""ps"", checked: false} 
+ length: 4 
+ my_length: (…) 
+ __proto__: Array(0) 
+__webviewId__: 9 
+__proto__: Object 
+[system] WeChatLib: 2.25.2 (2022.7.27 11:42:58)",8.71,qwen3-vl-plus,498,389,887,0.0,
+data/images/微信小程序开发实战/p120_i00.png,"这是一张展示“音乐播放器”项目文件目录结构的树状图，主要元素包括根目录、子文件夹（images、pages、index）、各类配置与脚本文件（.json、.wxml、.js、.wxss等）以及项目配置文件。
+
+图中文字： 
+音乐播放器 
+images 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+info.wxml 
+play.wxml 
+playlist.wxml 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.84,qwen3-vl-plus,207,130,337,0.0,
+data/images/微信小程序开发实战/p103_i00.png,"这是一张浏览器开发者工具（DevTools）的“Network”（网络）面板截图，显示了一个名为 `shopList.js` 的 JSON 响应内容，主要元素包括请求头、响应状态、JSON 数据结构（含多个商家对象，每个含 id、image、name、phone 等字段）及展开的嵌套数据。
+
+图中文字： 
+Wxml Console Sources Network Performance Memory AppData Storage Security Sensor Mock Audits 
+2 hidden 
+appservice 
+{data: Array(10), header: {…}, statusCode: 200, cookies: Array(0), errMsg: ""request:ok""} 
+cookies: [] 
+data: Array(10) 
+0: 
+address: ""任丘市裕华中路与会战道交叉口东南角蕃苏汇生活4层"" 
+businessHours: ""周一至周日10:00-21:00"" 
+id: 1 
+image: ""http://127.0.0.1:3000/deal/2846ed948e95eef4c4d50edaf52a483432023.jpg"" 
+name: ""宫廷月亮虾饼"" 
+phone: ""158****686"" 
+__proto__: Object 
+1: {id: 2, image: ""http://127.0.0.1:3000/deal/c23c7c29e74602f9939158c3f3e21fda141581.jpg"", name: ""第1佳大鸡排（蕃苏店）"", phone: ""18***277..."", address: ""...""} 
+2: {id: 3, image: ""http://127.0.0.1:3000/deal/4e01539c010265284b7b895746aea54836686.jpg"", name: ""口袋鸡排"", phone: ""13***110"", address: ""...""} 
+3: {id: 4, image: ""http://127.0.0.1:3000/deal/ecfae46d443900dfad40b4dacbd84213334496.jpg"", name: ""好食客自助"", phone: ""0317***66"", address: ""...""} 
+4: {id: 5, image: ""http://127.0.0.1:3000/deal/c40ee7af26d6544626f7cc905e2c7c3117336.jpg"", name: ""好再来蛋糕房"", phone: ""13***119"", address: ""...""} 
+5: {id: 6, image: ""http://127.0.0.1:3000/deal/8ce591879123fe1dcf6d48c022",14.72,qwen3-vl-plus,635,700,1335,0.0,
+data/images/微信小程序开发实战/p121_i00.png,"这是一张手机应用界面截图，显示的是一个音乐类App的顶部导航栏与内容区域，主要元素包括状态栏、标题“音乐”、三个标签页（音乐推荐、播放器、播放列表）以及内容区左上角的文本“info”。
+
+图中文字： 
+WeChat 
+17:27 
+100% 
+音乐 
+音乐推荐 
+播放器 
+播放列表 
+info",2.49,qwen3-vl-plus,303,89,392,0.0,
+data/images/微信小程序开发实战/p123_i00.png,"这是一张手机应用界面截图，显示一个音乐类App的底部导航栏，包含“音乐推荐”“播放器”“播放列表”三个标签页，当前选中“音乐推荐”，界面主体为空白区域，底部有提示文字。
+
+图中文字： 
+音乐推荐 
+播放器 
+播放列表 
+到达底部",2.13,qwen3-vl-plus,303,70,373,0.0,
+data/images/微信小程序开发实战/p125_i00.png,"这是一张音乐推荐界面的截图，包含六个带缩略图和标题的歌曲卡片，排列为两行三列。
+
+图中文字： 
+推荐歌曲 
+山水之间 
+惊鸿一面 
+稻香 
+如果当时 
+清明雨上 
+有何不可",1.93,qwen3-vl-plus,203,56,259,0.0,
+data/images/微信小程序开发实战/p131_i00.png,"这是一张空白的矩形框线图，无任何内容元素。 
+图中文字：无可辨认文字",1.12,qwen3-vl-plus,218,26,244,0.0,
+data/images/微信小程序开发实战/p137_i00.png,"这是一张手机微信界面的截图，展示“头像上传下载”功能页面，主要元素包括顶部标题栏、一个含三个心形图案的头像预览框，以及三个绿色操作按钮。
+
+图中文字： 
+头像上传下载 
+更改头像 
+头像上传 
+头像下载",2.03,qwen3-vl-plus,303,67,370,0.0,
+data/images/微信小程序开发实战/p139_i00.png,"这是一张对比展示手机相册界面与全屏图片查看界面的教材插图，主要元素包括左侧的iOS风格相册缩略图视图（含状态栏、标题栏、照片预览区）和右侧的全屏图片查看界面（含页码指示“1/1”）。
+
+图中文字： 
+Weixin 
+13:12 
+100% 
+1/1",2.51,qwen3-vl-plus,213,90,303,0.0,
+data/images/微信小程序开发实战/p133_i00.png,"这是一张展示项目目录结构的树状图，主要元素包括根目录“录查机”、子目录“pages”与“utils”，以及各类文件（如 .js、.json、.wxml、.wxss 等）和配置文件。
+
+图中文字： 
+录查机 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+utils 
+timer.js 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",2.96,qwen3-vl-plus,200,118,318,0.0,
+data/images/微信小程序开发实战/p143_i00.png,"这是一张模拟时钟的界面插图，主要元素包括圆形表盘、12个数字刻度、时针、分针和秒针，以及顶部的状态栏与标题。
+
+图中文字：WeChat 19:45 100% 模拟时钟",1.85,qwen3-vl-plus,303,64,367,0.0,
+data/images/微信小程序开发实战/p144_i00.png,"这是一张手机屏幕截图，显示微信（Weixin）应用的界面顶部状态栏与导航栏，主体为一个空白红色边框区域。
+
+图中文字：WeChat 
+19:49 
+100% 
+Weixin",1.65,qwen3-vl-plus,193,53,246,0.0,
+data/images/微信小程序开发实战/p141_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“头像上传下载”及其下的子目录（images、pages、index）和各类文件（.png、.js、.json、.wxml、.wxss、.eslintrc.js等）。
+
+图中文字： 
+头像上传下载 
+images 
+guest.png 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.18,qwen3-vl-plus,200,126,326,0.0,
+data/images/微信小程序开发实战/p146_i00.png,"这是一张手机屏幕截图，显示微信（WeChat）应用界面，主要内容为一个红色手绘笑脸图案。
+
+图中文字：WeChat 
+15:41 
+100% 
+Weixin",1.5,qwen3-vl-plus,193,46,239,0.0,
+data/images/微信小程序开发实战/p147_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“模拟时钟”及其下的多个文件夹（如pages）和各类文件（如index.js、app.json等），部分文件以图标标识类型。
+
+图中文字： 
+模拟时钟 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.31,qwen3-vl-plus,193,106,299,0.0,
+data/images/微信小程序开发实战/p160_i00.png,"这是一张对比展示两种用户登录界面的教材插图，左侧为默认灰色头像版本，右侧为带粉色卡通头像的版本，两者均包含顶部状态栏、标题“用户登录”、头像占位区、用户名输入框及下方按钮。
+
+图中文字： 
+用户登录 
+请输入昵称 
+获取用户的积分 
+用户登录 
+用户登录 
+获取用户的积分",2.4,qwen3-vl-plus,193,84,277,0.0,
+data/images/微信小程序开发实战/p157_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“罗盘动画”及其下的多级文件夹（如 images、pages、compass）和各类文件（.js、.json、.wxml、.wxss、.config.json 等），部分文件以图标标识类型。
+
+图中文字： 
+罗盘动画 
+images 
+pages 
+compass 
+compass.js 
+compass.json 
+compass.wxml 
+compass.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.41,qwen3-vl-plus,200,126,326,0.0,
+data/images/微信小程序开发实战/p165_i00.png,"图中为纯白色空白区域，无任何可见内容或元素。 
+图中文字：无可辨认文字",1.45,qwen3-vl-plus,303,25,328,0.0,
+data/images/微信小程序开发实战/p166_i00.png,"该图像为纯白色空白图，无任何可见内容或元素。
+
+图中文字：无可辨认文字",1.29,qwen3-vl-plus,277,24,301,0.0,
+data/images/微信小程序开发实战/p166_i01.png,"该图像为纯白色空白图，无任何可见内容或元素。
+
+图中文字：无可辨认文字",1.07,qwen3-vl-plus,277,24,301,0.0,
+data/images/微信小程序开发实战/p167_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“用户登录”、子目录“pages”及其下的“index”文件夹，以及多个配置文件、脚本文件和样式文件。
+
+图中文字： 
+用户登录 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",2.88,qwen3-vl-plus,193,102,295,0.0,
+data/images/微信小程序开发实战/p172_i00.png,"该插图是手机App界面截图，左侧为地图定位与商家信息页，右侧为优惠券列表页，主要元素包括地图标记、店铺图标、优惠券卡片及导航栏。
+
+图中文字： 
+首页 
+我的订单 
+10% 
+优惠券 
+7-11（王府井店） 
+营业时间：00:00-24:00 
+距离：380m 
+评分：4.5 
+收藏 
+电话 
+导航 
+附近美食 
+北京饭店 
+王府井大街 
+中国银行 
+新华书店 
+×10 
+满10元可用 
+单笔消费满10元可用 
+2022-04-01~2022-07-01 
+买一送一 
+满20元可用 
+单笔消费满20元可用 
+2022-04-01~2022-07-01",4.86,qwen3-vl-plus,211,201,412,0.0,
+data/images/微信小程序开发实战/p174_i00.png,"这是一张腾讯位置服务控制台的网页界面截图，主要显示“我的应用”列表页，包含左侧导航栏、顶部菜单栏、应用列表区域及操作按钮。
+
+图中文字： 
+腾讯位置服务 
+产品 ▼ 
+解决方案 ▼ 
+开发文档 ▼ 
+客户案例 ▼ 
+生态合作 ▼ 
+服务升级 ▼ 
+11 控制台 
+首页 
+应用管理 
+我的应用 
+配额管理 
+数据管理 
+个人中心 
+订单 
+工单 
+个性化地图 
+地图用户中心 
+我的应用 
+map 预览 
+Key密钥 
+Role 
+编辑 
+添加Key 
++ 收起 
+操作 
+该应用无Key，请添加Key 
++ 创建应用",3.73,qwen3-vl-plus,312,150,462,0.0,
+data/images/微信小程序开发实战/p174_i01.png,"这是一张腾讯位置服务控制台的网页界面截图，主要显示“我的应用”列表，包含一个名为“map”的应用条目及其Key信息、操作按钮等元素。
+
+图中文字： 
+腾讯位置服务 
+首页 
+应用管理 
+我的应用 
+配置管理 
+数据管理 
+个人中心 
+订单 
+工单 
+个性化地图 
+地图用户中心 
+数据管理 
+轨迹云 
+我的应用 
+map 版本 
+Key名称 Key 
+地图密钥 B**********4A 
+编辑 
+添加Key 
+收起 
+操作 
+编辑",2.99,qwen3-vl-plus,354,116,470,0.0,
+data/images/微信小程序开发实战/p175_i00.png,"这是一张微信小程序后台管理界面的截图，显示“服务器域名”配置页面，包含三个域名配置项（request合法域名、socket合法域名、uploadFile合法域名）及其对应值与可配置数量。
+
+图中文字： 
+小程序 
+推广 
+流量主 
+广告主 
+第三方服务 
+服务 
+设置 
+mp.weixin.qq.com/wxamp/devprofile/get_profile?token=2007913655&lang=zh_CN 
+服务器域名 
+使用官方推出的 微信云开发 或 微信云托管 ，无需配置服务器域名。了解域名配置 
+本月还可修改49次 
+修改 
+服务器配置 
+域名 
+可配置数量 
+request合法域名 
+https://apis.map.qq.com 
+200个 
+socket合法域名 
+- 
+200个 
+uploadFile合法域名 
+- 
+200个",4.54,qwen3-vl-plus,486,182,668,0.0,
+data/images/微信小程序开发实战/p182_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括文件夹（如 images、libs、pages）、JavaScript 文件、JSON 配置文件、WXML 文件及根节点文件等。 
+图中文字：查看附近美食餐厅 
+images 
+libs 
+qqmap-wx-jssdk.js 
+pages 
+coupon 
+map 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",2.87,qwen3-vl-plus,315,101,416,0.0,
+data/images/微信小程序开发实战/p173_i00.png,"这是一组展示腾讯位置服务JavaScript SDK文档与“我的应用”页面操作流程的网页截图，包含SDK介绍页、应用管理列表页及创建应用弹窗界面。 
+图中文字： 
+图5-22 微信小程序 JavaScript SDK页面 
+击图 5-22 中的“申请秘钥”链接进入“我的应用”页面，“我的应用”页面如图 5-23 
+图5-23 “我的应用”页面 
+击图 5-23 中的“+创建应用”按钮，会弹出“创建应用”悬浮框，如图 5-24所示。 
+图5-24（注：原图未显示图5-24内容，但根据上下文推断应为弹窗，而当前图像仅含前三张截图；严格按可见内容，以下为实际图像中所有可辨文字） 
+腾讯位置服务 
+产品 
+解决方案 
+开发文档 
+客户案例 
+生态合作 
+服务升级 
+搜索 
++ 控制台 
+微信小程序JavaScript SDK 
+SDK 
+开发指南 
+入门及使用限制 
+核心概念 
+地点搜索 
+关键词输入提示 
+逆地址解析(坐标转地址) 
+地址解析(地址转坐标) 
+路线规划 
+距离计算 
+简介 
+腾讯位置服务为你提供小程序提供了基础的标点能力、线和面的绘制接口等地图相关和位置服务，使开发者可以自由地实现自己的微信小程序产品。在此基础上，腾讯位置服务借助JavaScript SDK专为小程序开发者提供的JS数据服务工具包，可以在小程序中调用腾讯位置服务的POI检索、关键点输入提示、地点解析、逆地址解析、行政区划和距离计算等数据服务，让你的小程序更强大！ 
+Hello world! 
+1. 申请开发者密钥(key)：申请密钥 
+2. 开通webserviceAPI服务：控制台 → 应用管理 → 我的应用 → 添加key → 勾选WebServiceAPI → 保存 
+（小程序SDK需要用到webserviceAPI的部分服务，所以使用该功能的KEY需要具备相应的权限） 
+3. 下载微信小程序JavaScriptSDK、微信小程序JavaScriptSDK v1.1、JavaScriptSDK v1.2 
+4. 安全域名设置：在小程序管理后台 → 开发 → 开发设置 → 服务器域名 中设置request合法域名，填写https://apis.map.qq.com 
+5. 小程序示例 
+我的应用 
+应用管理 
+我的应用 
+配置管理 
+数据管理 
+个人中心 
+订单 
+工单 
+个性化地图 
+地图用户中心 
+我的应用 
+您需要先创建应用 
+然后在应用中添加key并进行管理 
++ 创建应用 
+腾讯位置服务 
+产品 
+解决方案 
+开发文档 
+客户案例 
+生态合作 
+服务升级 
+搜索 
++ 控制台 
+我的应用 
+应用管理 
+我的应用 
+配置管理 
+数据管理 
+个人中心 
+订单 
+工单 
+个性化地图 
+地图用户中心 
+创建应用 
+应用名称* 名称可包含汉字、数字、字母，不超过10个字 
+应用类型* 请选择应用类型 
+取消 
+确定 
+联系客服",13.85,qwen3-vl-plus,937,659,1596,0.0,
+data/images/微信小程序开发实战/p186_i00.png,"这是一张微信聊天界面的截图，主要元素包括顶部状态栏、聊天标题“在线聊天”、两个用户头像及对应的消息气泡（蓝色和绿色），以及底部输入框与发送按钮。
+
+图中文字： 
+WeChat 
+16:23 
+100% 
+在线聊天 
+我来自微信小程序端 
+自动回复 
+我来自服务器端 
+请输入聊天内容... 
+发送",3.17,qwen3-vl-plus,303,88,391,0.0,
+data/images/微信小程序开发实战/p185_i00.png,"这是一张展示手机微信聊天界面的教材插图，包含两个并列截图：左侧为空白聊天窗口，右侧为含一条绿色气泡消息的聊天窗口，底部均有输入框与“发送”按钮。
+
+图中文字： 
+左图顶部状态栏：10:24 100% 
+左图标题栏：微信聊天 
+左图底部输入框提示：请输入聊天内容… 
+左图右下角按钮：发送 
+
+右图顶部状态栏：10:12 100% 
+右图标题栏：微信聊天 
+右图消息气泡（绿色）内文字：我来自微信小程序端 
+右图消息气泡左侧头像旁文字：自己 
+右图底部输入框提示：请输入聊天内容… 
+右图右下角按钮：发送",3.94,qwen3-vl-plus,193,176,369,0.0,
+data/images/微信小程序开发实战/p189_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“在线聊天”及其下的子目录（images、pages、index）和各类文件（.js、.json、.wxml、.wxss、.eslintrc.js等）。
+
+图中文字： 
+在线聊天 
+images 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",2.86,qwen3-vl-plus,299,116,415,0.0,
+data/images/微信小程序开发实战/p197_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“点餐”及其下的子目录（如images、pages、order、utils）和各类文件（如.js、.json、.wxss等），部分文件以图标标识类型。
+
+图中文字： 
+点餐 
+images 
+pages 
+index 
+list 
+order 
+checkout 
+detail 
+list 
+record 
+utils 
+decodeCookie.js 
+shopcartAnimate.js 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.22,qwen3-vl-plus,221,123,344,0.0,
+data/images/微信小程序开发实战/p201_i00.png,"这是一张手机应用界面的截图，显示一个“数据请求失败”的提示弹窗，背景为微信小程序界面（顶部有“Weixin”和“美食屋”字样，底部有导航栏图标）。
+
+图中文字： 
+Weixin 
+美食屋 
+数据请求失败 
+取消 
+重试",1.95,qwen3-vl-plus,303,65,368,0.0,
+data/images/微信小程序开发实战/p201_i01.png,"这是一张手机应用界面截图，显示一个“用户未登录”的提示弹窗，背景为微信（Weixin）应用界面，底部有导航栏图标。
+
+图中文字： 
+Weixin 
+用户未登录 
+取消 
+重试",1.68,qwen3-vl-plus,303,52,355,0.0,
+data/images/微信小程序开发实战/p176_i00.png,"这是一张浏览器开发者工具的“Console”面板截图，显示了一段 JavaScript 对象的展开结构，内容为一个包含 10 个酒店数据项的数组（data），每个对象含 id、title、address 等字段，以及顶层的 status、message、count、request_id、region 等属性。
+
+图中文字： 
+{status: 0, message: ""query ok"", count: 96, request_id: ""0361122042157bf2f5abb8861e7f89ea2765fe07dd""} 
+count: 96 
+data: Array(10) 
+▶ 0: {id: ""7434784532776404406"", title: ""军都大酒店"", address: ""北京市东城区十三陵镇水库路""...} 
+▶ 1: {id: ""3579013506623382147"", title: ""北京瑞安宾馆(正义路店)"", address: ""北京市东城区正义..."" 
+▶ 2: {id: ""8081196041087584565"", title: ""华纺酒店(北京正义路店)"", address: ""北京市东城区正义..."" 
+▶ 3: {id: ""10341648049536168453"", title: ""东安民意饭店"", address: ""北京市东城区东安民巷甲23..."" 
+▶ 4: {id: ""11149888501385669688"", title: ""北京23号"", address: ""北京市东城区东交民巷甲23号"" 
+▶ 5: {id: ""6832333789981329904"", title: ""桔子酒店(北京天安门店)"", address: ""北京市东城区东交..."" 
+▶ 6: {id: ""7024021189823315968"", title: ""北京娜亚格方公寓(2号店)"", address: ""北京市东城区东..."" 
+▶ 7: {id: ""1914966968685761364"", title: ""东都宾馆"", address: ""北京市东城区东交民巷20号"", te... 
+▶ 8: {id: ""3898414076808513649"", title: ""首都大酒店A座"", address: ""北京市东城区前门东大街3号"" 
+▶ 9: {id: ""3161565500563468633"", title: ""首都大酒店"", address: ""北京市东城区前门东大街3号"", ... 
+length: 10 
+nv.length: (…) 
+__proto__: Array(0) 
+message: ""query ok"" 
+region: {title: ""中国""} 
+request_id: ""03611",16.21,qwen3-vl-plus,339,700,1039,0.0,
+data/images/微信小程序开发实战/p209_i00.png,"这是一张宣传手机点餐功能的插图，主要元素包括橙色按钮、红色背景、番茄与罗勒叶的沙拉碗、一杯饮品、柠檬片装饰及文字标语。
+
+图中文字：开启点餐之旅→ 
+小程序 新体验 
+手机点餐免排队哦",1.99,qwen3-vl-plus,200,63,263,0.0,
+data/images/微信小程序开发实战/p207_i00.png,"这是一张浏览器开发者工具（DevTools）的“Console”面板截图，显示了两条 JavaScript 数组输出日志，内容为本地静态资源路径列表。 
+图中文字： 
+(3) [""http://localhost/static/uploads/default/banner_1.png"", ""http://localhost/static/uploads/default/banner_2.png"", ""http://localhost/static/uploads/default/banner_3.png""] 
+0: ""http://localhost/static/uploads/default/banner_1.png"" 
+1: ""http://localhost/static/uploads/default/banner_2.png"" 
+2: ""http://localhost/static/uploads/default/banner_3.png"" 
+length: 3 
+nv_length: (…) 
+__proto__: Array(0) 
+http://localhost/static/uploads/default/image_ad.png 
+(4) [""http://localhost/static/uploads/default/bottom_1.png"", ""http://localhost/static/uploads/default/bottom_2.png"", ""http://localhost/static/uploads/default/bottom_3.png"", ""http://localhost/static/uploads/default/bottom_1.png""] 
+0: ""http://localhost/static/uploads/default/bottom_1.png"" 
+1: ""http://localhost/static/uploads/default/bottom_2.png"" 
+2: ""http://localhost/static/uploads/default/bottom_3.png"" 
+3: ""http://localhost/static/uploads/default/bottom_1.png"" 
+length: 4 
+nv_length: (…) 
+__proto__: Array(0) 
+index.js? [sm]:24 
+index.js? [sm]:25 
+index.js? [sm]:26",7.09,qwen3-vl-plus,447,321,768,0.0,
+data/images/微信小程序开发实战/p215_i00.png,"这是一张手机微信小程序“美食屋”的菜单界面截图，主要元素包括左侧分类导航栏、右侧商品列表（含菜品图片、名称、价格及加购按钮）以及顶部导航栏。
+
+图中文字： 
+WeChat 
+9:38 
+100% 
+美食屋 
+热销推荐 
+热销推荐 
+特色小吃 
+奶香糯玉米松饼 
+¥ 14 
+甜粥 
+鲜枣馍 
+¥ 13 
+凉菜 
+华夫饼 
+¥ 12 
+醇香奶茶 
+琥珀珍珠奶茶（中杯） 
+¥ 10 
+主食 
+香柠咖啡（大杯） 
+¥ 14 
+小炒菜 
+柠檬椰果养乐多/大杯 
+¥ 17 
+现磨咖啡 
+芒果养乐多/大杯 
+¥ 16 
+鲜果奶茶 
+葡萄柚养乐多/大杯 
+¥ 18",5.03,qwen3-vl-plus,375,197,572,0.0,
+data/images/微信小程序开发实战/p211_i00.png,"这是一张浏览器开发者工具（DevTools）的“Console”面板截图，显示了 JavaScript 对象的展开结构，主要元素包括控制台顶部标签栏、左侧树状展开图标、对象属性列表（含 id、name、food 字段）以及底部的源文件信息。
+
+图中文字： 
+Wxml Console Sources Network Performance ▶ 2 ▶ 1 
+Default levels ▼ 1 hidden 
+{1: {…}, 2: {…}, 3: {…}, 4: {…}, 5: {…}, 6: {…}, 7: {…}, 8: {…}, 9: {…}} 
+list.js? [sm]:10 
+1: {id: 1, name: ""热销推荐"", food: {…}} 
+2: {id: 2, name: ""特色小吃"", food: {…}} 
+3: {id: 3, name: ""甜粥"", food: {…}} 
+4: {id: 4, name: ""凉菜"", food: {…}} 
+5: {id: 5, name: ""醇香奶茶"", food: {…}} 
+6: {id: 6, name: ""主食"", food: {…}} 
+7: {id: 7, name: ""小炒菜"", food: {…}} 
+8: {id: 8, name: ""现磨咖啡"", food: {…}} 
+9: {id: 9, name: ""鲜果奶茶"", food: {…}} 
+__proto__: Object 
+{: 50, v: 10} 
+list.js? [sm]:19",7.71,qwen3-vl-plus,276,363,639,0.0,
+data/images/微信小程序开发实战/p247_i00.png,"这是一张手机微信应用内的“消费记录”界面截图，主要元素包括顶部状态栏、橙色标题栏、用户头像、消费记录列表（含时间与金额）及底部导航栏图标。
+
+图中文字： 
+WeChat 
+16:21 
+100% 
+消费记录 
+消费记录 
+消费 
+2022-09-02 13:07:29 
+¥29 
+消费 
+2022-09-02 11:52:36 
+¥11 
+消费 
+2022-07-26 16:36:34 
+¥14 
+消费 
+¥13 
+首页 
+订单 
+我的",3.85,qwen3-vl-plus,303,160,463,0.0,
+data/images/微信小程序开发实战/p253_i00.png,"该插图为教材中展示的三张手机界面截图，分别标注为“图7-1 ‘首页’的页面效果”、“图7-2 ‘消息’的页面效果”及第三张未编号的界面截图，主要元素包括状态栏、导航栏、内容区域及底部标签栏（含图标与文字标签）。
+
+图中文字： 
+图7-1 “首页”的页面效果 
+图7-2 “消息”的页面效果 
+首页 
+消息 
+联系人 
+搜索 
+消息 
+联系人 
+搜索 
+联系我们[] 
+首页 
+消息 
+联系我们",3.09,qwen3-vl-plus,310,122,432,0.0,
+data/images/微信小程序开发实战/p254_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根文件夹“components”及其两个子文件夹“test”和“test2”，每个子文件夹内含四个同名不同扩展名的文件（.js、.json、.wxml、.wxss），并以图标区分文件类型。
+
+图中文字： 
+components 
+test 
+test.js 
+test.json 
+test.wxml 
+test.wxss 
+test2 
+test2.js 
+test2.json 
+test2.wxml 
+test2.wxss",2.83,qwen3-vl-plus,222,115,337,0.0,
+data/images/微信小程序开发实战/p241_i00.png,"这是一张手机微信小程序的“订单列表”界面截图，主要元素包括订单时间、商品名称与数量、价格、以及“查看详情”和“未取餐”按钮。 
+图中文字： 
+订单列表 
+下单时间：2022-09-02 11:55:35 
+华夫饼 
+等2件商品 ￥29 
+下单时间：2022-09-02 11:31:37 
+鲜芋奶茶/中杯 
+等1件商品 ￥11 
+下单时间：2022-07-26 16:36:27 
+奶香糯玉米松饼 
+等1件商品 ￥14 
+下单时间：2022-07-15 16:56:33 
+鲜枣馍 
+等1件商品 ￥13 
+下单时间：2022-07-15 15:01:21 
+华夫饼 
+等6件商品 ￥72 
+下单时间：2022-07-15 10:27:11 
+葡萄柚养乐多/大杯 
+等1件商品 ￥18 
+下单时间：2022-07-06 15:49:45 
+查看详情 
+未取餐 
+首页 
+订单 
+我的",7.28,qwen3-vl-plus,303,310,613,0.0,
+data/images/微信小程序开发实战/p256_i00.png,"这是一张手机屏幕截图，显示一个类似代码编辑器或文件路径查看器的界面，主要元素包括顶部状态栏、标题栏、路径文本和底部文件路径文本。
+
+图中文字：WeChat 
+15:11 
+100% 
+Weixin 
+pages/home/home.wxml 
+custom-tab-bar/index.wxml",2.16,qwen3-vl-plus,303,73,376,0.0,
+data/images/微信小程序开发实战/p260_i00.png,"这是一张手机屏幕截图，显示微信小程序的界面，顶部为状态栏与导航栏，主体区域仅显示“首页”文字，底部标注了文件路径。
+
+图中文字： 
+WeChat 
+15:55 
+100% 
+自定义标签栏 
+首页 
+custom-tab-bar/index.wxml",2.01,qwen3-vl-plus,303,69,372,0.0,
+data/images/微信小程序开发实战/p258_i00.png,"这是一张展示项目文件目录结构的树状图，左右并列显示两个相似但略有差异的文件夹层级结构，主要元素包括根目录、子文件夹（如 images、node_modules、app）、配置文件（如 package-lock.json、project.config.json）及源码文件（如 app.js、index.wxml）。
+
+图中文字： 
+images 
+miniprogram_npm 
+node_modules 
+page 
+advertising 
+app.js 
+app.json 
+app.wxss 
+package-lock.json 
+package.json 
+project.config.json 
+project.private.config.json 
+sitemap.json 
+custom-tab-bar 
+index.js 
+index.json 
+index.wxml 
+images 
+node_modules 
+page 
+advertising 
+app.js 
+app.json 
+app.wxss 
+package-lock.json 
+package.json 
+project.config.json 
+project.private.config.json",3.99,qwen3-vl-plus,193,172,365,0.0,
+data/images/微信小程序开发实战/p257_i00.png,"这是一张展示项目文件目录结构的教材插图，左侧为 VANT 项目的 pages 目录树（含 index、app 等子目录及多个 .json/.js/.wxml/.wxss 文件），右侧为 VANT 项目的根目录树（含 miniprogram_npm、node_modules、pages、utils 等目录及多个配置与源文件）。
+
+图中文字： 
+VANT 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+app.js 
+package.json 
+project.config.json 
+project.private.config.json 
+sitemap.json 
+VANT 
+miniprogram_npm 
+node_modules 
+pages 
+utils 
+app.js 
+app.json 
+package-lock.json 
+package.json 
+project.config.json 
+project.private.config.json 
+sitemap.json",4.33,qwen3-vl-plus,200,184,384,0.0,
+data/images/微信小程序开发实战/p262_i00.png,"这是一张手机电影类App的界面截图对比图，左侧为“正在热映”列表页，右侧为“搜索”页；主要元素包括顶部导航栏、分类标签、电影缩略图、标题、简介文本及底部按钮。
+
+图中文字： 
+正在热映　搜索　分类 
+电影列表 
+英雄儿女 
+大闹工区 
+我和我的祖国 
+查看更多 
+正在热映　搜索　分类 
+电影列表 
+搜索 
+英雄儿女 
+大闹工区　大闹工区 
+长津湖　雄狮少年　红海行动",3.0,qwen3-vl-plus,211,121,332,0.0,
+data/images/微信小程序开发实战/p265_i00.png,"这是一张手机微信小程序的弹窗提示界面截图，主要元素包括顶部状态栏、导航栏、居中显示的白色圆角弹窗，弹窗内含标题、提示语及两个操作按钮。
+
+图中文字： 
+微信小程序 
+好好学习，天天向上！！！ 
+取消 
+确认",2.0,qwen3-vl-plus,207,66,273,0.0,
+data/images/微信小程序开发实战/p264_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“miniprogram npm”及其下的子目录（如node_modules、pages）、JavaScript文件（如eslintrc.js、app.js）、配置文件（如package.json、project.config.json）等。
+
+图中文字： 
+miniprogram npm 
+node_modules 
+pages 
+eslintrc.js 
+app.js 
+app.wxss 
+package-lock.json 
+package.json 
+project.config.json 
+project.private.config.json 
+sitemap.json",4.14,qwen3-vl-plus,187,108,295,0.0,
+data/images/微信小程序开发实战/p263_i00.png,"该插图是教材中的两幅手机界面截图，左侧为WeUI组件库的“分类”标签页效果（含九宫格图标与文字标签），右侧为微信小程序扩展能力展示页面（含列表项与底部导航栏）。
+
+图中文字： 
+正在热映 搜索 分类 
+爱情 剧情 喜剧 
+家庭 动画 文艺 
+都市 动作 科幻 
+图7-15 “分类”标签页的效果 
+顶部的标签栏使用了 WeUI 组件 
+正在热映” 标签页使用了 WeUI 
+签页使用了 WeUI 组件库中的 
+了 WeUI 组件库中的 grid 组件。 
+遇到多人协作开发的情况，不 
+格统一。微信官方设计团队为 
+与微信原生视觉体验一致的组 
+户的使用感知更加统一。 
+于预览 WeUI 组件库的微信小程 
+库有两种方式，下面分别进行 
+引入 WeUI 组件库 
+b 配置项用于添加扩展库，通过 
+包大小。在 app.json 文件中添 
+10:38 小程序扩展能力展示 … 
+以下是对小程序的扩展能力的支持，包括 
+WeUI 组件库和一些常见的功能模块，具体需 
+性能优化、小程序开发者文档。 
+菜单 
+基础组件 
+操作反馈 
+导航相关 
+0.00 
+搜索相关 
+扩展模板 
+首页 发现 我",7.01,qwen3-vl-plus,333,320,653,0.0,
+data/images/微信小程序开发实战/p267_i00.png,"这是一张展示项目文件目录结构的树状图，主要元素包括根目录“电影列表”及其下的子目录（images、pages、index）和各类文件（.js、.json、.wxml、.wxss、.eslintrc.js等）。
+
+图中文字： 
+电影列表 
+images 
+pages 
+index 
+index.js 
+index.json 
+index.wxml 
+index.wxss 
+tab1.wxml 
+tab2.wxml 
+tab3.wxml 
+.eslintrc.js 
+app.js 
+app.json 
+app.wxss 
+project.config.json 
+project.private.config.json 
+sitemap.json",3.5,qwen3-vl-plus,214,131,345,0.0,
+data/images/微信小程序开发实战/p272_i00.png,"该插图是教材中关于微信小程序“待办事项”功能的界面效果对比图，包含三个手机屏幕截图（图7-22、图7-23、右下角未编号图），展示输入区域、列表区域、复选框及状态切换等UI元素。
+
+图中文字： 
+图7- 22 “ 待办事项” 微信小程序的页面效果 
+输入区域 
+请输入待办事项 
+添加 
+待办事项 
+已办事项 
+图7- 23 添加待办事项后的页面效果 
+请输入待办事项 
+添加 
+待办事项 
+待办事项1 
+已办事项 
+待办事项 
+已办事项 
+✓ 待办事项1",4.27,qwen3-vl-plus,1755,155,1910,0.0,
+data/images/微信小程序开发实战/p273_i00.png,"这是一张 HBuilderX 插件市场页面的截图，主要元素包括插件标题、作者信息、下载与收藏数据、插件ID、文件体积、更新日期、版本号，以及右侧的“使用 HBuilderX 导入插件”和“下载插件ZIP”按钮。
+
+图中文字： 
+全部 前端组件 JS SDK uni-app前端模板 App原生插件 web 项目 uniCloud HBuilderX 
+搜索想要的插件？ 提交需求 已有需求 插件开发指南 发布插件 
+HBuilderX / HBuilderX / scss/sass编译 
+scss/sass编译 sass 编译 CSS预编译 SCSS 
+编译scss/sass为css，uni-app编译或对文件右键-外部命令编译时使用 
+作者：DCloud-HBuilderX团队 
+下载人数：424,700 下载次数：1,104,040 收藏人数：2,032 
+★★★★★（253） 
+插件ID：compile-node.sass 
+插件包体积：761.6KB 
+更新日期：2021-11-22 版本：0.0.7 
+使用 HBuilderX 导入插件 
+注意：导入此插件需要使用 2.9+ 以上版本的 HBuilderX 
+下载插件ZIP 
+本站所有收费插件均支持免费试用，切勿私下交易或购买不可正常试用的插件，而造成不必要的纠纷。",7.42,qwen3-vl-plus,398,339,737,0.0,
+data/images/微信小程序开发实战/p274_i01.png,"这是一张展示微信小程序项目文件结构的教材插图，主要元素包括左侧导航栏、顶部路径栏、中间的文件/文件夹缩略图网格（含图标与名称）、底部状态栏及操作按钮。
+
+图中文字： 
+新建项目 
+uni-app 
+Wap2App 
+5+App 
+H5打包 
+√ 65%接入进度 
+√ 90%接入进度 
+新建uni-app项目 
+打开一个已有的uni-app、Android、iOS原生App、小程序、H5等平台工程，立即体验！ 
+ToDevice 
+D:\WeChat Mini Program\miniprogram\test 
+当前路径： 
+新建项目 
+上传 
+hello uni-app 
+基于uni-app框架开发的示例项目，支持多端发布 
+hello uniCloud 
+基于uniCloud云开发的示例项目，支持多端发布 
+uni-starter 
+基于uni-id的用户体系模板，支持多端发布 
+uni-admin 
+uni-app管理后台模板，支持多端发布 
+uni-ui项目 
+基于uni-ui组件库的示例项目，支持多端发布 
+hello trike 
+基于uni-app的三轮车示例项目，支持多端发布 
+新闻/资讯类模板 
+基于uni-app的新闻资讯类模板，支持多端发布 
+旅游/酒店类模板 
+基于uni-app的旅游酒店类模板，支持多端发布 
+网络漫画/小说类 
+基于uni-app的网络漫画/小说类模板，支持多端发布 
+Vue版本：2 ● 2 ● 3 
+新建uniCloud（支持跨平台云函数开发，内含数据库和云存储） 
+上手教程/快速开始/新手指南（CSDN） 
+返回 
+创建项目",7.93,qwen3-vl-plus,318,366,684,0.0,
+data/images/微信小程序开发实战/p274_i00.png,"该插图是软件界面截图，展示了 HBuilder X 3.4.15 的快捷键切换界面与 Settings.json 配置界面，主要元素包括菜单栏、下拉菜单（含“工具”→“设置”路径）、编辑器配置面板及文件路径导航栏。
+
+图中文字： 
+文件(F) 编辑(E) 选择(S) 查找(R) 运行(D) 发行(A) 视图(V) 工具(T) 帮助(H) 
+Ctrl+K, Ctrl+S 
+Appearance language 
+自定义快捷键(C) 
+预设快捷键方案切换(M) 
+HBuilder X 
+VS Code 
+代码风格设置(I) 
+主题(T) 
+项目管理器默认主题(I) 
+外部命令(C) 
+外部命令小结配置(S) 
+插件安装(P) 
+新建项目 
+主题切换 
+图7-26 快捷键切换界面 
+的基本设置 
+用户对编辑器进行自定义设置。在菜单栏中执行 工具”→“ 设置”命 
+中可以修改 HBuilderX 编辑器的设置。Settings.json 配置界面如图 7 
+文件(F) 编辑(E) 选择(S) 查找(R) 运行(D) 发行(A) 视图(V) 工具(T) 帮助(H) 
+Settings.json - HBuilder X 3.4.15 
+user > settings.json 
+Settings.json 
+常用配置 
+编辑器配置 
+运行配置 
+插件配置 
+源码视图 
+常用配置 
+编辑器字体大小 
+编辑器字体(英文) 
+Consoles 
+编辑器字体(中文) 
+背景效果 Light 
+Appearance language 
+自定义快捷键(C) 
+预设快捷键方案切换(M) 
+代码风格设置(I) 
+主题(T) 
+项目管理器默认主题(I) 
+外部命令(C) 
+取文本光标位置(O) 
+外部命令小结配置(S) 
+插件安装(P)",9.74,qwen3-vl-plus,446,424,870,0.0,
+data/images/微信小程序开发实战/p275_i00.png,"这是一张软件“设置”界面的截图，主要显示“安全”选项卡下的两个开关选项及其说明文字。 
+图中文字： 
+设置 
+通用 外观 快捷键 编辑器 代理 安全 拓展 
+服务端口 
+工具的服务端口已关闭，命令行和 HTTP 都无法调用工具。详细信息：文档 
+允许获取工具登录票据 
+开启后可以通过小程序自动化接口获取工具当前登录票据。",2.88,qwen3-vl-plus,347,108,455,0.0,
+data/images/微信小程序开发实战/p276_i00.png,"这是一张展示微信小程序开发调试过程的教材插图，包含上方的控制台日志输出区域和下方的开发者工具界面（模拟器与项目结构树），主要元素有时间戳日志、VSCODE终端提示、IDE启动信息、模拟器预览窗口及项目文件树。
+
+图中文字： 
+【广告】13:08:36.797 DCloud 2022新春招聘开启：欢迎前端、Android、C++/QT等岗位！速速点击 
+13:08:36.797 项目“ToDoList”开始编译... 
+13:08:38.640 请注意运行模式下，因日志输出、sourceMap以及未压缩源码等原因，性能和包体积，均不及发布模式。若要正式发布，请点击发行菜单或使用cli发布命令进行发布 
+13:08:38.648 小程序各资源读取内容与自定义组件实际机制存在差异，可能存在样式布局兼容问题，参考：https://uniapp.dcloud.io/matter?id=mp 
+13:08:38.692 在编译中... 
+13:08:43.545 项目“ToDoList”编译成功。前端运行日志。请另行在小程序开发工具的控制台查看。 
+13:08:43.564 正在自动激活开发者工具... 
+13:08:44.240 【微信小程序开发工具】- initialize 
+13:08:44.248 【微信小程序开发工具】 
+13:08:44.246 【微信小程序开发工具】✓ IDE server has started, listening on http://127.0.0.1:23225 
+13:08:44.246 【微信小程序开发工具】- open IDE 
+13:08:44.252 【微信小程序开发工具】 
+13:08:44.256 【微信小程序开发工具】✓ open IDE 
+13:08:45.353 【微信小程序开发工具】 
+13:08:45.359 微信开发者工具已启动，白BuilderX中依次文件并保存，会自动刷新微信编辑器 
+13:08:45.361 注 
+13:08:45.372 1. 可以通过微信开发者工具切换pages.json?condition配置的页面，或者关闭微信开发者工具，然后再从BuilderX中启动指定页面 
+13:08:45.375 2. 如果出现微信开发者工具启动后白屏的问题，检查是否启动多个微信开发者工具，如果是则关闭所有打开的微信开发者工具，然后再重新运行 
+13:08:45.398 3. 运行模式下不压缩代码且含有sourcemap，体积较大；若要正式发布，请点击发行菜单进行发布 
+图7-30 初次运行之后的调试信息 
+行之后的项目效果如图 7-",30.11,qwen3-vl-plus,648,700,1348,0.0,
+data/images/微信小程序开发实战/p279_i00.png,"这是一张浏览器开发者工具（DevTools）的“Console”面板截图，显示了一个 JavaScript 对象的展开结构，包含 Observer 实例、其属性（如 id、status、value）及内部 reactiveGetter/setter 函数等。
+
+图中文字： 
+Wxml Console Sources Network Default levels 1 hidden 
+{(...)} __ob__: Observer 
+0: 
+id: 1661757364452 
+status: ""todo"" 
+value: ""微信小程序"" 
+__ob__: Observer {value: {...}, dep: Dep, vmCount: 0} 
+get id: f reactiveGetter() 
+set id: f reactiveSetter(newVal) 
+get status: f reactiveGetter() 
+set status: f reactiveSetter(newVal) 
+get value: f reactiveGetter() 
+set value: f reactiveSetter(newVal) 
+__proto__: Object 
+length: 1 
+nv_length: (...) 
+__ob__: Observer {value: Array(1), dep: Dep, vmCount: 0} 
+__proto__: Array 
+index.js? (sm):172",33.29,qwen3-vl-plus,277,234,511,0.0,
+data/images/微信小程序开发实战/p286_i00.png,"这是一张展示前端项目目录结构的树状图，主要元素包括根目录“短视频”及其下的多个子目录（如common、components、pages、static）和各类文件（.vue、.js、.json、.html、.scss等）。
+
+图中文字： 
+短视频 
+common 
+config.js 
+components 
+MyTitle 
+MyTitle.vue 
+pages 
+detail 
+detail.vue 
+index 
+index.vue 
+static 
+App.vue 
+index.html 
+main.js 
+manifest.json 
+pages.json 
+uni.scss",14.45,qwen3-vl-plus,207,110,317,0.0,
+data/images/微信小程序开发实战/p297_i00.png,"这是一张手机微信界面的截图，显示一个短视频播放页面，主要内容为钢琴演奏视频及其信息栏。 
+图中文字： 
+短視頻 
+视频详情 
+下载APP 
+【歌单】安静轻音：触手可及的治愈旋律 
+收藏量 24.9万 1345弹幕 时间：12-15 
+00:00 
+07:05",8.35,qwen3-vl-plus,243,91,334,0.0,
+data/images/微信小程序开发实战/p294_i00.png,"这是一组四张视频缩略图的网格布局，每张图包含标题、播放量、时长/点赞数等元数据信息。主要元素包括自然风景、文字标题、数字统计和平台水印。
+
+图中文字： 
+一个角色的三观到底可以正到什么地步 
+24.9万　1345 
+【全梗高能】一个角色的三观到底能够正到什么地步【世… 
+63.8万　7825 
+【歌单】安静轻音：触手可及的治愈旋律 
+63.8万　7825 
+【歌单】软软的歌｜治愈温柔学习工作 
+40.0万　1066 
+《爱情公寓》令人窒息的操作！",11.85,qwen3-vl-plus,213,171,384,0.0,
+data/images/微信小程序开发实战/p299_i00.png,"这是一张展示多个视频缩略图及其标题、播放量、评论数等信息的界面截图，主要元素包括三组视频卡片，每组含缩略图、标题文字、观看次数与评论数。
+
+图中文字： 
+世界上最小的网站有多小？ 
+→ 就这么小！ 
+206次观看 445条评论 
+晚餐合集～越吃越想吃，喜欢的一定要试试！ 
+270次观看 1179条评论 
+改革春风吹满地 
+521次观看 564条评论",3.48,qwen3-vl-plus,193,123,316,0.0,
+data/images/微信小程序开发实战/p301_i00.png,"这是一张教材中的评论列表插图，包含四个带头像、用户名、评论内容和时间戳的条目。 
+图中文字： 
+评论 (454) 
+小白 
+12-15 
+建立一个网站要知道它本身的价值意义，就必须得让用户知道他们从中可以得到什么，这样才能体现出网站本身的意义 
+随心 
+12-15 
+说得很好，网站会增强企业和名望，让更多的客户看到公司的信息 
+大海 
+12-15 
+很多的企业都想做一个网站去获取更多的目标用户 
+天空 
+12-15 
+当一个网站建设的十分成功的时候，往往会给客户留下很好的印象，会给企业加分",3.65,qwen3-vl-plus,213,145,358,0.0,
+data/images/微信小程序开发实战/p289_i00.png,"这是一张浏览器开发者工具（DevTools）的“Console”面板截图，显示了 JavaScript 对象的展开结构，主要元素包括对象层级、属性名（如 text、__ob__）、值类型（如 Observer、Array）、以及控制台顶部的标签页和右上角的文件路径信息。
+
+图中文字： 
+Wasm Console Sources Network Performance Memory AppData Storage Security Sensor Mock 
+Appender Filter All levels 
+index.js? [sm]:286 
+(19) [(-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-), (-)] 
+0: Observer {value: (-), dep: Dep, vmCount: 0} 
+ text: ""首页"" 
+ __ob__: Observer {value: (-), dep: Dep, vmCount: 0} 
+ get lst: ƒ reactiveGetter() 
+ set lst: ƒ reactiveSetter(newVal) 
+ get text: ƒ reactiveGetter() 
+ set text: ƒ reactiveSetter(newVal) 
+ __proto__: Object 
+1: Observer {value: (-), dep: Dep, vmCount: 0} 
+ text: ""功能"" 
+ __ob__: Observer {value: (-), dep: Dep, vmCount: 0} 
+ get lst: ƒ reactiveGetter() 
+ set lst: ƒ reactiveSetter(newVal) 
+ get text: ƒ reactiveGetter() 
+ set text: ƒ reactiveSetter(newVal) 
+ __proto__: Object 
+2: {__ob__: Observer} 
+3: {__ob__: Observer} 
+4: {__ob__: Observer} 
+5: {__ob__: Observer} 
+6: {__ob__: Observer} 
+7: {__ob__: Observer} 
+8: {__ob__: Observer} 
+9: {__ob__: Observer} 
+10: {__ob__: Observer} 
+11: {__ob__: Observer} 
+12: {__ob__: Observer} 
+13: {__ob__: Observer} 
+14: {__ob__: Observer} 
+15: {__ob__: Observer} 
+16: {__ob__: Observer} 
+17: {__ob__: Observer} 
+length: 19 
+mv_lengths (…) 
+0: Observer {value: Array(19), dep: Dep, vmCount: 0} 
+__proto__: Array",23.05,qwen3-vl-plus,393,529,922,0.0,

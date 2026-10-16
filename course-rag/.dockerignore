@@ -1,0 +1,20 @@
+# ===== 不进镜像的本地数据 / 密钥 / 产物 =====
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.log
+
+# 密钥与本地配置（.env.example 作为模板进镜像）
+.env
+
+# 运行时数据（由 docker-compose 卷挂载，不打包进镜像）
+data/
+chroma_db/
+.chat_history.json
+.query_log.jsonl
+
+# 本地虚拟环境 / 诊断 / 评估产物
+venv/
+rag_env/
+*.csv
